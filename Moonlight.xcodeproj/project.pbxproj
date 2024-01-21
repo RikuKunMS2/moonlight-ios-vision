@@ -97,11 +97,10 @@
 		F7A119492B5DDF73001E8686 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB4679001A57048000377732 /* CoreFoundation.framework */; };
 		F7A1194A2B5DDF73001E8686 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BE82791275D00E43572 /* libSDL2.a */; };
 		F7A1194B2B5DDF73001E8686 /* libavcodec.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98882A032AF60F5300C5A11C /* libavcodec.a */; };
-		F7A1194D2B5DDF73001E8686 /* iPad.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FB290E7819B37D81004C83CF /* iPad.storyboard */; };
 		F7A1194E2B5DDF73001E8686 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = FB290CFC19B2C406004C83CF /* InfoPlist.strings */; };
-		F7A1194F2B5DDF73001E8686 /* iPhone.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FB290E7A19B38036004C83CF /* iPhone.storyboard */; };
 		F7A119502B5DDF73001E8686 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FB290D0819B2C406004C83CF /* Images.xcassets */; };
-		F7A119512B5DDF73001E8686 /* Launch Screen.xib in Resources */ = {isa = PBXBuildFile; fileRef = FB89463719F6473800339C8A /* Launch Screen.xib */; };
+		F7A1195B2B5DE1E2001E8686 /* MoonlightApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A1195A2B5DE1E2001E8686 /* MoonlightApp.swift */; };
+		F7A1195D2B5DE1FD001E8686 /* MainContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A1195C2B5DE1FD001E8686 /* MainContentView.swift */; };
 		FB1A674D2131E65900507771 /* KeyboardSupport.m in Sources */ = {isa = PBXBuildFile; fileRef = FB1A674C2131E65900507771 /* KeyboardSupport.m */; };
 		FB1A67602132419700507771 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FB1A675E2132419700507771 /* Main.storyboard */; };
 		FB1A67622132419A00507771 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FB1A67612132419A00507771 /* Assets.xcassets */; };
@@ -282,6 +281,9 @@
 		DC1F5A05206436B10037755F /* ConnectionHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ConnectionHelper.h; sourceTree = "<group>"; };
 		DC1F5A06206436B20037755F /* ConnectionHelper.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ConnectionHelper.m; sourceTree = "<group>"; };
 		F7A119552B5DDF73001E8686 /* Moonlight Vision.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Moonlight Vision.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F7A1195A2B5DE1E2001E8686 /* MoonlightApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoonlightApp.swift; sourceTree = "<group>"; };
+		F7A1195C2B5DE1FD001E8686 /* MainContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainContentView.swift; sourceTree = "<group>"; };
+		F7A119EF2B5DE2EA001E8686 /* Moonlight copy-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = "Moonlight copy-Info.plist"; path = "/Users/ahaugland/Documents/github/moonlight-ios/Moonlight copy-Info.plist"; sourceTree = "<absolute>"; };
 		FB1A674B2131E65900507771 /* KeyboardSupport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = KeyboardSupport.h; sourceTree = "<group>"; };
 		FB1A674C2131E65900507771 /* KeyboardSupport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = KeyboardSupport.m; sourceTree = "<group>"; };
 		FB1A67532132419700507771 /* Moonlight TV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Moonlight TV.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -569,6 +571,15 @@
 			path = "Moonlight iOS";
 			sourceTree = "<group>";
 		};
+		F7A119592B5DE1AB001E8686 /* Moonlight Vision */ = {
+			isa = PBXGroup;
+			children = (
+				F7A1195A2B5DE1E2001E8686 /* MoonlightApp.swift */,
+				F7A1195C2B5DE1FD001E8686 /* MainContentView.swift */,
+			);
+			path = "Moonlight Vision";
+			sourceTree = "<group>";
+		};
 		FB1A67542132419700507771 /* Moonlight TV */ = {
 			isa = PBXGroup;
 			children = (
@@ -584,6 +595,7 @@
 		FB290CE519B2C406004C83CF = {
 			isa = PBXGroup;
 			children = (
+				F7A119592B5DE1AB001E8686 /* Moonlight Vision */,
 				F7A119072B5DDECC001E8686 /* Moonlight iOS */,
 				9896219423D15C2900211983 /* X1Kit */,
 				98AB2E7F1CAD46830089BB98 /* moonlight-common.xcodeproj */,
@@ -591,6 +603,7 @@
 				FB1A67542132419700507771 /* Moonlight TV */,
 				FB290CF019B2C406004C83CF /* Frameworks */,
 				FB290CEF19B2C406004C83CF /* Products */,
+				F7A119EF2B5DE2EA001E8686 /* Moonlight copy-Info.plist */,
 			);
 			sourceTree = "<group>";
 		};
@@ -1099,11 +1112,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F7A1194D2B5DDF73001E8686 /* iPad.storyboard in Resources */,
 				F7A1194E2B5DDF73001E8686 /* InfoPlist.strings in Resources */,
-				F7A1194F2B5DDF73001E8686 /* iPhone.storyboard in Resources */,
 				F7A119502B5DDF73001E8686 /* Images.xcassets in Resources */,
-				F7A119512B5DDF73001E8686 /* Launch Screen.xib in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1152,7 +1162,9 @@
 				F7A1191A2B5DDF73001E8686 /* mkcert.c in Sources */,
 				F7A1191B2B5DDF73001E8686 /* HttpResponse.m in Sources */,
 				F7A1191D2B5DDF73001E8686 /* StreamConfiguration.m in Sources */,
+				F7A1195B2B5DE1E2001E8686 /* MoonlightApp.swift in Sources */,
 				F7A119212B5DDF73001E8686 /* HttpManager.m in Sources */,
+				F7A1195D2B5DE1FD001E8686 /* MainContentView.swift in Sources */,
 				F7A119222B5DDF73001E8686 /* MDNSManager.m in Sources */,
 				F7A119232B5DDF73001E8686 /* StreamView.m in Sources */,
 				F7A119242B5DDF73001E8686 /* DiscoveryManager.m in Sources */,
