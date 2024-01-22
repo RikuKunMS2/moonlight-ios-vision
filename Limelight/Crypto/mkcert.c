@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <OpenSSL/provider.h>
 #include <OpenSSL/rsa.h>
@@ -72,17 +73,25 @@ struct CertKeyPair generateCertKeyPair(void) {
     if (_legacy == NULL) {
         printf("Failed to load Legacy provider\n");
     }
-    
-    OSSL_PROVIDER *_defaultProvider = OSSL_PROVIDER_load(NULL, "default");
-    if (_defaultProvider == NULL) {
-        printf("Failed to load default provider\n");
-    }
    
     bio_err = BIO_new_fp(stderr, BIO_NOCLOSE);
     
     mkcert(&x509, &pkey, NUM_BITS, SERIAL, NUM_YEARS);
-
-    p12 = PKCS12_create("limelight", "GameStream", pkey, x509, NULL, 0, 0, 0, 0, 0);
+    
+    char* pass = "limelight";
+    p12 = PKCS12_create(pass,
+                        "GameStream",
+                        pkey,
+                        x509,
+                        NULL,
+                        NID_pbe_WithSHA1And3_Key_TripleDES_CBC,
+                        NID_pbe_WithSHA1And40BitRC2_CBC,
+                        2048,
+                        -1,
+                        0);
+    // mac it ourselves with sha1 since iOS refuses to load the default sha256
+    PKCS12_set_mac(p12, pass, -1, NULL, 0, 1, EVP_sha1());
+    
     if (p12 == NULL) {
         printf("Error generating a valid PKCS12 certificate.\n");
     }
