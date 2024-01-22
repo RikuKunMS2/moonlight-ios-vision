@@ -16,11 +16,6 @@ static const int NUM_YEARS = 20;
 
 void mkcert(X509 **x509p, EVP_PKEY **pkeyp, int bits, int serial, int years) {
     
-    OSSL_PROVIDER *legacy = OSSL_PROVIDER_try_load(NULL, "legacy", 1);
-
-    if (legacy == NULL) {
-        printf("Failed to load Legacy provider\n");
-    }
     X509* cert = X509_new();
     
     EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
@@ -72,6 +67,16 @@ struct CertKeyPair generateCertKeyPair(void) {
     X509 *x509 = NULL;
     EVP_PKEY *pkey = NULL;
     PKCS12 *p12 = NULL;
+    OSSL_PROVIDER *_legacy = OSSL_PROVIDER_try_load(NULL, "legacy", 1);
+
+    if (_legacy == NULL) {
+        printf("Failed to load Legacy provider\n");
+    }
+    
+    OSSL_PROVIDER *_defaultProvider = OSSL_PROVIDER_load(NULL, "default");
+    if (_defaultProvider == NULL) {
+        printf("Failed to load default provider\n");
+    }
    
     bio_err = BIO_new_fp(stderr, BIO_NOCLOSE);
     

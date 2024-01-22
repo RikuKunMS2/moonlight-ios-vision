@@ -94,13 +94,12 @@
 		F7A119502B5DDF73001E8686 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FB290D0819B2C406004C83CF /* Images.xcassets */; };
 		F7A1195B2B5DE1E2001E8686 /* MoonlightApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A1195A2B5DE1E2001E8686 /* MoonlightApp.swift */; };
 		F7A1195D2B5DE1FD001E8686 /* MainContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A1195C2B5DE1FD001E8686 /* MainContentView.swift */; };
-		F7A119F22B5DE632001E8686 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F7A119F12B5DE632001E8686 /* OpenSSL */; };
-		F7A119F42B5DE677001E8686 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F7A119F32B5DE677001E8686 /* OpenSSL */; };
 		F7A119F62B5DE71C001E8686 /* libavutil.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98882A042AF60F5300C5A11C /* libavutil.a */; };
 		F7A119F72B5DE725001E8686 /* libopus.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FB8946EA19F6AFB800339C8A /* libopus.a */; };
 		F7A11A1E2B5DF457001E8686 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F7A11A1D2B5DF457001E8686 /* UIKit.framework */; };
 		F7A11A202B5DF46B001E8686 /* RealityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F7A11A1F2B5DF46B001E8686 /* RealityKit.framework */; };
 		F7A11A232B5DF76F001E8686 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = FB290D0319B2C406004C83CF /* AppDelegate.m */; };
+		F7A356512B5EC14C0040E253 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F7A356502B5EC14C0040E253 /* OpenSSL */; };
 		FB1A674D2131E65900507771 /* KeyboardSupport.m in Sources */ = {isa = PBXBuildFile; fileRef = FB1A674C2131E65900507771 /* KeyboardSupport.m */; };
 		FB1A67602132419700507771 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FB1A675E2132419700507771 /* Main.storyboard */; };
 		FB1A67622132419A00507771 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FB1A67612132419A00507771 /* Assets.xcassets */; };
@@ -482,7 +481,6 @@
 				F7A119F62B5DE71C001E8686 /* libavutil.a in Frameworks */,
 				F7A11A1E2B5DF457001E8686 /* UIKit.framework in Frameworks */,
 				F7A119452B5DDF73001E8686 /* CoreMotion.framework in Frameworks */,
-				F7A119F42B5DE677001E8686 /* OpenSSL in Frameworks */,
 				F7A119462B5DDF73001E8686 /* libavformat.a in Frameworks */,
 				F7A11A202B5DF46B001E8686 /* RealityKit.framework in Frameworks */,
 				F7A119F72B5DE725001E8686 /* libopus.a in Frameworks */,
@@ -514,7 +512,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F7A119F22B5DE632001E8686 /* OpenSSL in Frameworks */,
 				9890CF6B203B7EE1006C4B06 /* libxml2.tbd in Frameworks */,
 				98CFB82F1CAD481B0048EF74 /* libmoonlight-common.a in Frameworks */,
 				FB8946ED19F6AFE800339C8A /* libopus.a in Frameworks */,
@@ -522,6 +519,7 @@
 				FB290CF419B2C406004C83CF /* CoreGraphics.framework in Frameworks */,
 				FB290CF819B2C406004C83CF /* CoreData.framework in Frameworks */,
 				98181BED2791281100E43572 /* CoreMotion.framework in Frameworks */,
+				F7A356512B5EC14C0040E253 /* OpenSSL in Frameworks */,
 				98882A072AF60F7200C5A11C /* libavformat.a in Frameworks */,
 				FB290CF619B2C406004C83CF /* UIKit.framework in Frameworks */,
 				FB290CF219B2C406004C83CF /* Foundation.framework in Frameworks */,
@@ -1012,7 +1010,6 @@
 			);
 			name = "Moonlight Vision";
 			packageProductDependencies = (
-				F7A119F32B5DE677001E8686 /* OpenSSL */,
 			);
 			productName = Limelight;
 			productReference = F7A119552B5DDF73001E8686 /* Moonlight Vision.app */;
@@ -1051,7 +1048,7 @@
 			);
 			name = Moonlight;
 			packageProductDependencies = (
-				F7A119F12B5DE632001E8686 /* OpenSSL */,
+				F7A356502B5EC14C0040E253 /* OpenSSL */,
 			);
 			productName = Limelight;
 			productReference = FB290CEE19B2C406004C83CF /* Moonlight.app */;
@@ -1092,7 +1089,7 @@
 			);
 			mainGroup = FB290CE519B2C406004C83CF;
 			packageReferences = (
-				F7A119F02B5DE632001E8686 /* XCRemoteSwiftPackageReference "OpenSSL" */,
+				F7A3564F2B5EC14C0040E253 /* XCRemoteSwiftPackageReference "OpenSSL" */,
 			);
 			productRefGroup = FB290CEF19B2C406004C83CF /* Products */;
 			projectDirPath = "";
@@ -1874,9 +1871,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		F7A119F02B5DE632001E8686 /* XCRemoteSwiftPackageReference "OpenSSL" */ = {
+		F7A3564F2B5EC14C0040E253 /* XCRemoteSwiftPackageReference "OpenSSL" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/XITRIX/OpenSSL.git";
+			repositoryURL = "https://github.com/alexhaugland/OpenSSL";
 			requirement = {
 				branch = main;
 				kind = branch;
@@ -1885,14 +1882,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		F7A119F12B5DE632001E8686 /* OpenSSL */ = {
+		F7A356502B5EC14C0040E253 /* OpenSSL */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = F7A119F02B5DE632001E8686 /* XCRemoteSwiftPackageReference "OpenSSL" */;
-			productName = OpenSSL;
-		};
-		F7A119F32B5DE677001E8686 /* OpenSSL */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = F7A119F02B5DE632001E8686 /* XCRemoteSwiftPackageReference "OpenSSL" */;
+			package = F7A3564F2B5EC14C0040E253 /* XCRemoteSwiftPackageReference "OpenSSL" */;
 			productName = OpenSSL;
 		};
 /* End XCSwiftPackageProductDependency section */

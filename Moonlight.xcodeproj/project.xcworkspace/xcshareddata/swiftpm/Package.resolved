@@ -3,10 +3,10 @@
     {
       "identity" : "openssl",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/XITRIX/OpenSSL.git",
+      "location" : "https://github.com/alexhaugland/OpenSSL",
       "state" : {
         "branch" : "main",
-        "revision" : "75bc2599ad74161f4fad51fb51493d5c4fd1511e"
+        "revision" : "462fdd5380632cf8bd3e35e2f59b2bb1b6197372"
       }
     }
   ],
