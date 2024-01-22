@@ -42,6 +42,8 @@
 		98D5856D1C0EA79600F6CC00 /* TemporaryHost.m in Sources */ = {isa = PBXBuildFile; fileRef = 98D5856C1C0EA79600F6CC00 /* TemporaryHost.m */; };
 		98D585701C0ED0E800F6CC00 /* TemporarySettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 98D5856F1C0ED0E800F6CC00 /* TemporarySettings.m */; };
 		DC1F5A07206436B20037755F /* ConnectionHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = DC1F5A06206436B20037755F /* ConnectionHelper.m */; };
+		F77B58A92B5EED5900482BD5 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F77B58A82B5EED5900482BD5 /* OpenSSL */; };
+		F77B58AB2B5EED5E00482BD5 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F77B58AA2B5EED5E00482BD5 /* OpenSSL */; };
 		F7A1190C2B5DDF73001E8686 /* Limelight.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = FB290D0519B2C406004C83CF /* Limelight.xcdatamodeld */; };
 		F7A1190D2B5DDF73001E8686 /* AbsoluteTouchHandler.m in Sources */ = {isa = PBXBuildFile; fileRef = 9819CC21254F180F008A7C8E /* AbsoluteTouchHandler.m */; };
 		F7A1190E2B5DDF73001E8686 /* RelativeTouchHandler.m in Sources */ = {isa = PBXBuildFile; fileRef = 9819CC13254F107A008A7C8E /* RelativeTouchHandler.m */; };
@@ -474,6 +476,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F77B58A92B5EED5900482BD5 /* OpenSSL in Frameworks */,
 				F7A1193F2B5DDF73001E8686 /* libxml2.tbd in Frameworks */,
 				F7A119402B5DDF73001E8686 /* libmoonlight-common.a in Frameworks */,
 				F7A119432B5DDF73001E8686 /* CoreGraphics.framework in Frameworks */,
@@ -499,6 +502,7 @@
 				9865DC3C2132922E0005B9B9 /* GameController.framework in Frameworks */,
 				98882A0D2AF60FA000C5A11C /* libavformat.a in Frameworks */,
 				98882A0E2AF60FA300C5A11C /* libavutil.a in Frameworks */,
+				F77B58AB2B5EED5E00482BD5 /* OpenSSL in Frameworks */,
 				FB1A67EA21324DF300507771 /* libxml2.tbd in Frameworks */,
 				FB1A67E821324DE300507771 /* libopus.a in Frameworks */,
 				98181BEB2791278F00E43572 /* libSDL2.a in Frameworks */,
@@ -1010,6 +1014,7 @@
 			);
 			name = "Moonlight Vision";
 			packageProductDependencies = (
+				F77B58A82B5EED5900482BD5 /* OpenSSL */,
 			);
 			productName = Limelight;
 			productReference = F7A119552B5DDF73001E8686 /* Moonlight Vision.app */;
@@ -1029,6 +1034,9 @@
 				FB1A68172132509800507771 /* PBXTargetDependency */,
 			);
 			name = "Moonlight TV";
+			packageProductDependencies = (
+				F77B58AA2B5EED5E00482BD5 /* OpenSSL */,
+			);
 			productName = "Moonlight TV";
 			productReference = FB1A67532132419700507771 /* Moonlight TV.app */;
 			productType = "com.apple.product-type.application";
@@ -1362,6 +1370,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
@@ -1436,6 +1445,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
@@ -1882,6 +1892,16 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		F77B58A82B5EED5900482BD5 /* OpenSSL */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F7A3564F2B5EC14C0040E253 /* XCRemoteSwiftPackageReference "OpenSSL" */;
+			productName = OpenSSL;
+		};
+		F77B58AA2B5EED5E00482BD5 /* OpenSSL */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F7A3564F2B5EC14C0040E253 /* XCRemoteSwiftPackageReference "OpenSSL" */;
+			productName = OpenSSL;
+		};
 		F7A356502B5EC14C0040E253 /* OpenSSL */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F7A3564F2B5EC14C0040E253 /* XCRemoteSwiftPackageReference "OpenSSL" */;
