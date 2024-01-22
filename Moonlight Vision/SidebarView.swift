@@ -4,10 +4,26 @@ import SwiftUI
 
 struct SidebarView: View {
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        VStack {
+            Text("Servers").font(.largeTitle)
+            // servers
+            Spacer()
+            HStack {
+                Text("Add Server")
+                Text("Settings")
+
+            }
+
+        }
     }
 }
 
 #Preview {
-    SidebarView()
+    // embed this in the right vertical size
+    VStack {
+        SidebarView()
+    }
+    .padding()
+    .glassBackgroundEffect()
+    
 }

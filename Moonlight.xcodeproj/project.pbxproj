@@ -44,6 +44,8 @@
 		DC1F5A07206436B20037755F /* ConnectionHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = DC1F5A06206436B20037755F /* ConnectionHelper.m */; };
 		F77B58A92B5EED5900482BD5 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F77B58A82B5EED5900482BD5 /* OpenSSL */; };
 		F77B58AB2B5EED5E00482BD5 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F77B58AA2B5EED5E00482BD5 /* OpenSSL */; };
+		F77B58B02B5EF94900482BD5 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F77B58AF2B5EF94900482BD5 /* SidebarView.swift */; };
+		F77B58B22B5EFC9000482BD5 /* ComputerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F77B58B12B5EFC9000482BD5 /* ComputerView.swift */; };
 		F7A1190C2B5DDF73001E8686 /* Limelight.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = FB290D0519B2C406004C83CF /* Limelight.xcdatamodeld */; };
 		F7A1190D2B5DDF73001E8686 /* AbsoluteTouchHandler.m in Sources */ = {isa = PBXBuildFile; fileRef = 9819CC21254F180F008A7C8E /* AbsoluteTouchHandler.m */; };
 		F7A1190E2B5DDF73001E8686 /* RelativeTouchHandler.m in Sources */ = {isa = PBXBuildFile; fileRef = 9819CC13254F107A008A7C8E /* RelativeTouchHandler.m */; };
@@ -280,6 +282,8 @@
 		D4746EEA1CBC740C006FB401 /* Moonlight-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Moonlight-Bridging-Header.h"; path = "Input/Moonlight-Bridging-Header.h"; sourceTree = "<group>"; };
 		DC1F5A05206436B10037755F /* ConnectionHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ConnectionHelper.h; sourceTree = "<group>"; };
 		DC1F5A06206436B20037755F /* ConnectionHelper.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ConnectionHelper.m; sourceTree = "<group>"; };
+		F77B58AF2B5EF94900482BD5 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		F77B58B12B5EFC9000482BD5 /* ComputerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerView.swift; sourceTree = "<group>"; };
 		F7A119552B5DDF73001E8686 /* Moonlight Vision.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Moonlight Vision.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F7A1195A2B5DE1E2001E8686 /* MoonlightApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoonlightApp.swift; sourceTree = "<group>"; };
 		F7A1195C2B5DE1FD001E8686 /* MainContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainContentView.swift; sourceTree = "<group>"; };
@@ -580,6 +584,8 @@
 			children = (
 				F7A1195A2B5DE1E2001E8686 /* MoonlightApp.swift */,
 				F7A1195C2B5DE1FD001E8686 /* MainContentView.swift */,
+				F77B58B12B5EFC9000482BD5 /* ComputerView.swift */,
+				F77B58AF2B5EF94900482BD5 /* SidebarView.swift */,
 			);
 			path = "Moonlight Vision";
 			sourceTree = "<group>";
@@ -1186,6 +1192,7 @@
 				F7A119182B5DDF73001E8686 /* IdManager.m in Sources */,
 				F7A119192B5DDF73001E8686 /* Controller.m in Sources */,
 				F7A1191A2B5DDF73001E8686 /* mkcert.c in Sources */,
+				F77B58B22B5EFC9000482BD5 /* ComputerView.swift in Sources */,
 				F7A1191B2B5DDF73001E8686 /* HttpResponse.m in Sources */,
 				F7A1191D2B5DDF73001E8686 /* StreamConfiguration.m in Sources */,
 				F7A1195B2B5DE1E2001E8686 /* MoonlightApp.swift in Sources */,
@@ -1196,6 +1203,7 @@
 				F7A119232B5DDF73001E8686 /* StreamView.m in Sources */,
 				F7A119242B5DDF73001E8686 /* DiscoveryManager.m in Sources */,
 				F7A119252B5DDF73001E8686 /* TemporaryHost.m in Sources */,
+				F77B58B02B5EF94900482BD5 /* SidebarView.swift in Sources */,
 				F7A119272B5DDF73001E8686 /* Logger.m in Sources */,
 				F7A1192A2B5DDF73001E8686 /* HapticContext.m in Sources */,
 				F7A1192B2B5DDF73001E8686 /* TemporaryApp.m in Sources */,

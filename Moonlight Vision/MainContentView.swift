@@ -2,9 +2,17 @@
 
 import SwiftUI
 
+
 struct MainContentView: View {
+
+    @State private var items: Set<String> = ["ok"];
+
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        NavigationSplitView {
+            SidebarView()
+        } detail: {
+            ComputerView()
+        }
     }
 }
 
