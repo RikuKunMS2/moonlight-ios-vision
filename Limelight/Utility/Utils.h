@@ -14,6 +14,7 @@ typedef NS_ENUM(int, PairState) {
     PairStatePaired
 };
 
+NS_SWIFT_NAME(HostState)
 typedef NS_ENUM(int, State) {
     StateUnknown,
     StateOffline,

@@ -3,12 +3,12 @@
 import SwiftUI
 
 @main
-struct MoonlightApp: App {
+struct MoonlightApp: SwiftUI.App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
         WindowGroup {
-            MainContentView()
+            MainContentView().environmentObject(MainViewModel())
         }
     }
 }

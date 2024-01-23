@@ -104,6 +104,7 @@
 		F7A11A202B5DF46B001E8686 /* RealityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F7A11A1F2B5DF46B001E8686 /* RealityKit.framework */; };
 		F7A11A232B5DF76F001E8686 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = FB290D0319B2C406004C83CF /* AppDelegate.m */; };
 		F7A356512B5EC14C0040E253 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F7A356502B5EC14C0040E253 /* OpenSSL */; };
+		F7A4A4D12B5F216C001591F3 /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A4A4D02B5F216C001591F3 /* MainViewModel.swift */; };
 		FB1A674D2131E65900507771 /* KeyboardSupport.m in Sources */ = {isa = PBXBuildFile; fileRef = FB1A674C2131E65900507771 /* KeyboardSupport.m */; };
 		FB1A67602132419700507771 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FB1A675E2132419700507771 /* Main.storyboard */; };
 		FB1A67622132419A00507771 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FB1A67612132419A00507771 /* Assets.xcassets */; };
@@ -291,6 +292,7 @@
 		F7A119FF2B5DF387001E8686 /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
 		F7A11A1D2B5DF457001E8686 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = Platforms/XROS.platform/Developer/SDKs/XROS1.0.sdk/System/Library/Frameworks/UIKit.framework; sourceTree = DEVELOPER_DIR; };
 		F7A11A1F2B5DF46B001E8686 /* RealityKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = RealityKit.framework; path = Platforms/XROS.platform/Developer/SDKs/XROS1.0.sdk/System/Library/Frameworks/RealityKit.framework; sourceTree = DEVELOPER_DIR; };
+		F7A4A4D02B5F216C001591F3 /* MainViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewModel.swift; sourceTree = "<group>"; };
 		FB1A674B2131E65900507771 /* KeyboardSupport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = KeyboardSupport.h; sourceTree = "<group>"; };
 		FB1A674C2131E65900507771 /* KeyboardSupport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = KeyboardSupport.m; sourceTree = "<group>"; };
 		FB1A67532132419700507771 /* Moonlight TV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Moonlight TV.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -586,6 +588,7 @@
 				F7A1195C2B5DE1FD001E8686 /* MainContentView.swift */,
 				F77B58B12B5EFC9000482BD5 /* ComputerView.swift */,
 				F77B58AF2B5EF94900482BD5 /* SidebarView.swift */,
+				F7A4A4D02B5F216C001591F3 /* MainViewModel.swift */,
 			);
 			path = "Moonlight Vision";
 			sourceTree = "<group>";
@@ -1222,6 +1225,7 @@
 				F7A1193A2B5DDF73001E8686 /* ServerInfoResponse.m in Sources */,
 				F7A1193B2B5DDF73001E8686 /* StreamManager.m in Sources */,
 				F7A1193C2B5DDF73001E8686 /* KeyboardInputField.m in Sources */,
+				F7A4A4D12B5F216C001591F3 /* MainViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
