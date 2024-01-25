@@ -20,6 +20,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     private var clientCert: Data
     
     private var opQueue = OperationQueue()
+    private var currentlyPairingHost: TemporaryHost?
     
     override init() {
         dataManager = DataManager()
@@ -46,6 +47,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         // do we need to retain this? probably?
         let pairManager = PairManager(manager: httpManager, clientCert: clientCert, callback: self)
         opQueue.addOperation(pairManager!)
+        currentlyPairingHost = host
         print("trying to pair")
     }
     
@@ -58,6 +60,9 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     }
     
     nonisolated func pairSuccessful(_ serverCert: Data!) {
+        Task { @MainActor in
+            currentlyPairingHost?.serverCert = serverCert
+        }
         endPairing()
     }
     
@@ -73,19 +78,24 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         Task { @MainActor in
             pairingInProgress = false
             discoveryManager?.startDiscovery()
+            if let currentlyPairingHost {await  updateHost(host: currentlyPairingHost) }
+            currentlyPairingHost = nil
         }
     }
     
-    func updateHost(host: TemporaryHost) {
+    func updateHost(host: TemporaryHost) async {
+        // Potentially skip this if it's recent?
+        
         Task {
             let httpManager = HttpManager(host: host)
             discoveryManager?.pauseDiscovery(for: host)
-            
+            host.updatePending = true
             let serverInfoResponse = ServerInfoResponse()
             let request = HttpRequest(for: serverInfoResponse, with: httpManager?.newServerInfoRequest(false), fallbackError: 401, fallbackRequest: httpManager?.newHttpServerInfoRequest())
             httpManager?.executeRequestSynchronously(request)
             discoveryManager?.resumeDiscovery(for: host)
             
+            host.updatePending = false
             if !serverInfoResponse.isStatusOk() {
                 print("Failed to get server info: \(serverInfoResponse.statusMessage ?? "unknown error")")
                 // populate state with bad
@@ -140,4 +150,3 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         discoveryManager?.stopDiscovery()
     }
 }
-

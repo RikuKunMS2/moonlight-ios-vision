@@ -9,14 +9,20 @@
 import Foundation
 import SwiftUI
 
+#if os(visionOS)
+@Observable
+#endif
 @objc
-@Observable public class TemporaryHost: NSObject {
-    @objc public var state: HostState = .unknown
-    @objc public var pairState: PairState = .unknown
+@MainActor
+public class TemporaryHost: NSObject {
+    @MainActor @objc public var state: HostState = .unknown
+    @MainActor @objc public var pairState: PairState = .unknown
     @objc public var activeAddress: String?
-    @objc public var currentGame: String?
+    @MainActor @objc public var currentGame: String?
     @objc public var httpsPort: ushort = 0
     @objc public var isNvidiaServerSoftware: Bool = false
+    
+    @MainActor @objc public var updatePending: Bool = false
 
     @objc public var serverCert: Data?
     @objc public var address: String?
@@ -30,10 +36,9 @@ import SwiftUI
     @objc public var uuid = ""
     @objc public var appList = NSMutableSet()
     
-    override init() {}
+    override nonisolated init() {}
     
-    @objc
-    public init(fromHost host: Host) {
+    @objc public init(fromHost host: Host) {
         self.address = host.address
         self.externalAddress = host.externalAddress
         self.localAddress = host.localAddress
@@ -82,9 +87,12 @@ import SwiftUI
         if self.serverCert != nil {
             parentHost.serverCert = self.serverCert
         }
+        
+        parentHost.serverCodecModeSupport = self.serverCodecModeSupport
+        
         parentHost.name = self.name
         parentHost.uuid = self.uuid
-        parentHost.serverCodecModeSupport = self.serverCodecModeSupport
+            
         parentHost.pairState = NSNumber(value: self.pairState.rawValue)
     }
 }

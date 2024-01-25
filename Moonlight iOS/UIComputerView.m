@@ -7,6 +7,7 @@
 //
 
 #import "UIComputerView.h"
+#import "Moonlight-Swift.h"
 
 @implementation UIComputerView {
     TemporaryHost* _host;

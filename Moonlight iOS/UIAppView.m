@@ -9,6 +9,8 @@
 #import "UIAppView.h"
 #import "AppAssetManager.h"
 
+#import "Moonlight-Swift.h"
+
 static const float REFRESH_CYCLE = 1.0f;
 
 @implementation UIAppView {
