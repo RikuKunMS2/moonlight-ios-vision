@@ -7,7 +7,8 @@
 //
 
 #import "MDNSManager.h"
-#import "TemporaryHost.h"
+
+@class TemporaryHost;
 
 @protocol DiscoveryCallback <NSObject>
 

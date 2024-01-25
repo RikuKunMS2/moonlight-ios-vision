@@ -5,39 +5,50 @@ import SwiftUI
 struct ComputerView: View {
     @EnvironmentObject private var viewModel: MainViewModel
 
-    @Binding public var host: TemporaryHost?
+    public var host: TemporaryHost
 
     var body: some View {
         // put pairing state here
-        if let host {
-            switch host.pairState {
-            case PairState.paired:
-                Text("Paired")
-            case PairState.unpaired:
-                Button("Start Pairing") {
-                    viewModel.tryPairHost(host);
-                }.alert(
-                    "Pairing",
-                    isPresented: $viewModel.pairingInProgress
-                ) {
+        switch host.pairState {
+        case PairState.paired:
+            Text("Paired")
+        case PairState.unpaired:
+            Text(host.name).onAppear {
+                viewModel.updateHost(host: host)
+            }
+            Button("Start Pairing") {
+                host.name = "renamed"
+//                    viewModel.tryPairHost(host)
+            }.alert(
+                "Pairing",
+                isPresented: $viewModel.pairingInProgress
+            ) {
+                Button(role: .cancel) {
+                    viewModel.endPairing()
+                } label: {
+                    Text("Cancel")
                 }
-            default:
-                Text("UNK")
+            } message: {
+                Text("""
+                Enter the following PIN on the host machine:
+                \(viewModel.currentPin).\n If your host PC is running Sunshine,
+                navigate to the Sunshine web UI to enter the PIN.
+                """)
             }
-            ForEach(Array(host.appList as? Set<TemporaryApp> ?? []), id: \.self) { app in
-                Text(app.name ?? "UNKNOWN")
-            }
+        default:
+            Text("UNK")
+        }
+        ForEach(Array(host.appList as? Set<TemporaryApp> ?? []), id: \.self) { app in
+            Text(app.name ?? "UNKNOWN")
         }
     }
 }
 
 #Preview {
-    struct Preview: View {
-        @SwiftUI.State var host: TemporaryHost? = TemporaryHost()
-        var body: some View {
-            ComputerView(host: $host)
-        }
-    }
+    let viewModel = MainViewModel()
+    viewModel.pairingInProgress = true
+    var outerHost: TemporaryHost = TemporaryHost()
+    outerHost.pairState = PairState.unpaired
 
-    return Preview()
+    return ComputerView(host: outerHost).environmentObject(viewModel)
 }

@@ -8,7 +8,8 @@
 
 #import "TemporaryApp.h"
 #import "HttpManager.h"
-#import "TemporaryHost.h"
+
+@class TemporaryHost;
 
 @protocol AppAssetCallback <NSObject>
 

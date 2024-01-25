@@ -7,7 +7,8 @@
 //
 
 #import "HttpResponse.h"
-#import "TemporaryHost.h"
+
+@class TemporaryHost;
 
 #define TAG_HOSTNAME @"hostname"
 #define TAG_EXTERNAL_IP @"ExternalIP"

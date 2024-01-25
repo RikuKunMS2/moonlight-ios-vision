@@ -26,6 +26,7 @@
 #import "TemporaryApp.h"
 #import "IdManager.h"
 #import "ConnectionHelper.h"
+#import "Moonlight-Swift.h"
 
 #if !TARGET_OS_TV
 #import "SettingsViewController.h"

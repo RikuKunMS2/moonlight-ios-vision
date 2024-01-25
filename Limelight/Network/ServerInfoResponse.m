@@ -7,6 +7,7 @@
 //
 
 #import "ServerInfoResponse.h"
+#import "Moonlight-Swift.h"
 #import <libxml2/libxml/xmlreader.h>
 
 @implementation ServerInfoResponse

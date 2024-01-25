@@ -12,6 +12,7 @@
 #import "ServerInfoResponse.h"
 #import "HttpRequest.h"
 #import "DataManager.h"
+#import "Moonlight-Swift.h"
 
 @implementation DiscoveryWorker {
     TemporaryHost* _host;

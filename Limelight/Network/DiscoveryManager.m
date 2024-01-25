@@ -14,6 +14,7 @@
 #import "DiscoveryWorker.h"
 #import "ServerInfoResponse.h"
 #import "IdManager.h"
+#import "Moonlight-Swift.h"
 
 #include <Limelight.h>
 #include <arpa/inet.h>

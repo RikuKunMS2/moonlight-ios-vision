@@ -7,7 +7,7 @@
 //
 
 #import "MDNSManager.h"
-#import "TemporaryHost.h"
+#import "Moonlight-Swift.h"
 
 #include <arpa/inet.h>
 

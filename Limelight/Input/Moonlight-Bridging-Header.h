@@ -3,7 +3,13 @@
 //
 
 #import "AppDelegate.h"
+#import "CryptoManager.h"
 #import "DataManager.h"
 #import "DiscoveryManager.h"
+#import "HttpManager.h"
+#import "HttpRequest.h"
+#import "PairManager.h"
+#import "ServerInfoResponse.h"
+#import "Utils.h"
 
-#import "TemporaryHost.h"
+#import "Host+CoreDataClass.h"

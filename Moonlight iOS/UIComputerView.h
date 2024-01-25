@@ -7,7 +7,8 @@
 //
 
 #import <UIKit/UIKit.h>
-#import "TemporaryHost.h"
+
+@class TemporaryHost;
 
 @protocol HostCallback <NSObject>
 

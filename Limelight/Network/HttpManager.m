@@ -11,6 +11,7 @@
 #import "CryptoManager.h"
 #import "TemporaryApp.h"
 #import "ServerInfoResponse.h"
+#import "Moonlight-Swift.h"
 
 #include <libxml2/libxml/xmlreader.h>
 #include <string.h>

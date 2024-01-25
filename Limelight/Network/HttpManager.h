@@ -9,7 +9,8 @@
 #import "HttpResponse.h"
 #import "HttpRequest.h"
 #import "StreamConfiguration.h"
-#import "TemporaryHost.h"
+
+@class TemporaryHost;
 
 @interface HttpManager : NSObject <NSURLSessionDelegate>
 

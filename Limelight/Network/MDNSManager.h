@@ -6,7 +6,7 @@
 //  Copyright (c) 2014 Moonlight Stream. All rights reserved.
 //
 
-#import "TemporaryHost.h"
+@class TemporaryHost;
 
 @protocol MDNSCallback <NSObject>
 

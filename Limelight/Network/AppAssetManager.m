@@ -11,6 +11,7 @@
 #import "Utils.h"
 #import "HttpResponse.h"
 #import "AppAssetRetriever.h"
+#import "Moonlight-Swift.h"
 
 @implementation AppAssetManager {
     NSOperationQueue* _opQueue;

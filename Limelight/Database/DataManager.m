@@ -10,6 +10,8 @@
 #import "TemporaryApp.h"
 #import "TemporarySettings.h"
 
+#import "Moonlight-Swift.h"
+
 @implementation DataManager {
     NSManagedObjectContext *_managedObjectContext;
     AppDelegate *_appDelegate;

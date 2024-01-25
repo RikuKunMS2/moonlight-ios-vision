@@ -7,9 +7,10 @@
 //
 
 #import "AppDelegate.h"
-#import "TemporaryHost.h"
 #import "TemporaryApp.h"
 #import "TemporarySettings.h"
+
+@class TemporaryHost;
 
 @interface DataManager : NSObject
 

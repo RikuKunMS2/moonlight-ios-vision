@@ -6,7 +6,7 @@
 //  Copyright (c) 2015 Moonlight Stream. All rights reserved.
 //
 
-#import "TemporaryHost.h"
+@class TemporaryHost;
 
 @interface WakeOnLanManager : NSObject
 

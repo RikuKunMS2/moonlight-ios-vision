@@ -26,8 +26,8 @@ struct MainContentView: View {
             }
             
         } detail: {
-            if selectedHost != nil {
-                ComputerView(host: $selectedHost)
+            if let selectedHost {
+                ComputerView(host: selectedHost)
             }
             
         }.task {

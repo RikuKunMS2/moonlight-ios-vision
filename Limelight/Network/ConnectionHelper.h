@@ -7,7 +7,8 @@
 //
 
 #import "AppListResponse.h"
-#import "TemporaryHost.h"
+
+@class TemporaryHost;
 
 #ifndef ConnectionHelper_h
 #define ConnectionHelper_h

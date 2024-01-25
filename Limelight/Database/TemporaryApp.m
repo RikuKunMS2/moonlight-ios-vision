@@ -7,6 +7,7 @@
 //
 
 #import "TemporaryApp.h"
+#import "Moonlight-Swift.h"
 
 @implementation TemporaryApp
 
