@@ -14,7 +14,7 @@ struct MainContentView: View {
         if viewModel.activelyStreaming {
             let streamView = StreamView(streamConfig: $viewModel.currentStreamConfig)
             streamView
-                .ornament(attachmentAnchor: .scene(alignment: .bottom)) {
+                .ornament(attachmentAnchor: .scene(alignment: .top)) {
                     Button("Close") {
                         viewModel.activelyStreaming = false
                     }

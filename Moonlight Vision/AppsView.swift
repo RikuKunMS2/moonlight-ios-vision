@@ -17,8 +17,6 @@ struct AppsView: View {
     var body: some View {
         ScrollView {
             VStack {
-                Text(String(host.appList.count))
-                
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150))]) {
                     ForEach(host.appList, id: \.id) { app in
                         Button(app.name ?? "Unknown") {
