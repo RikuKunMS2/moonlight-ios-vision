@@ -600,7 +600,6 @@
 		F7A119592B5DE1AB001E8686 /* Moonlight Vision */ = {
 			isa = PBXGroup;
 			children = (
-				F7A4A4D22B61D65A001591F3 /* Data */,
 				F7A1195A2B5DE1E2001E8686 /* MoonlightVisionApp.swift */,
 				F71801542B658B5E00A9336B /* StreamView.swift */,
 				F7A1195C2B5DE1FD001E8686 /* MainContentView.swift */,
@@ -620,13 +619,6 @@
 				F7A119FF2B5DF387001E8686 /* RealityKitContent */,
 			);
 			path = Packages;
-			sourceTree = "<group>";
-		};
-		F7A4A4D22B61D65A001591F3 /* Data */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Data;
 			sourceTree = "<group>";
 		};
 		FB1A67542132419700507771 /* Moonlight TV */ = {
