@@ -14,6 +14,7 @@
 #import "RelativeTouchHandler.h"
 #import "AbsoluteTouchHandler.h"
 #import "KeyboardInputField.h"
+#import "Moonlight-Swift.h"
 
 static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 

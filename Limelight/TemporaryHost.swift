@@ -9,6 +9,8 @@
 import Foundation
 import SwiftUI
 
+import OrderedCollections
+
 #if os(visionOS)
 @Observable
 #endif
@@ -34,11 +36,22 @@ public class TemporaryHost: NSObject {
 
     @objc public var name = ""
     @objc public var uuid = ""
-    @objc public var appList = NSMutableSet()
+    public var appList = OrderedSet<TemporaryApp>()
+    
+    @objc(appList) public func getAppList() -> NSSet {
+        return NSSet(array: appList.elements)
+    }
+    
+    @objc public func setAppList(_ newList: NSSet) {
+        appList.removeAll()
+        for case let app as TemporaryApp in newList {
+            appList.append(app)
+        }
+    }
     
     override nonisolated init() {}
     
-    @objc public init(fromHost host: Host) {
+    @objc public init(fromHost host: MoonlightHost) {
         self.address = host.address
         self.externalAddress = host.externalAddress
         self.localAddress = host.localAddress
@@ -59,13 +72,13 @@ public class TemporaryHost: NSObject {
         
         if let hostAppList = host.appList {
             for app in hostAppList {
-                let tempApp = TemporaryApp(from: app, withTempHost: self)
-                self.appList.add(tempApp)
+                let tempApp = TemporaryApp(from: app, with: self)
+                self.appList.append(tempApp)
             }
         }
     }
     
-    @objc public func propagateChanges(toParent parentHost: Host) {
+    @objc public func propagateChanges(toParent parentHost: MoonlightHost) {
         // Avoid overwriting existing data with nil if
         // we don't have everything populated in the temporary
         // host.

@@ -1,5 +1,6 @@
 //
 
+import OrderedCollections
 import SwiftUI
 
 struct ComputerView: View {
@@ -12,10 +13,10 @@ struct ComputerView: View {
             if host.updatePending {
                 ProgressView()
             } else {
-                // put pairing state here
+                // do something if disconnected too
                 switch host.pairState {
                 case PairState.paired:
-                    Text("Paired")
+                    AppsView(host: host)
                 case PairState.unpaired:
                     Text(host.name)
                     Button("Start Pairing") {
@@ -38,9 +39,6 @@ struct ComputerView: View {
                     }
                 default:
                     Text("UNK")
-                }
-                ForEach(Array(host.appList as? Set<TemporaryApp> ?? []), id: \.self) { app in
-                    Text(app.name ?? "UNKNOWN")
                 }
             }
         }.task {

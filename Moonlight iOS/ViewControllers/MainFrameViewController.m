@@ -23,7 +23,6 @@
 #import "StreamFrameViewController.h"
 #import "LoadingFrameViewController.h"
 #import "ComputerScrollView.h"
-#import "TemporaryApp.h"
 #import "IdManager.h"
 #import "ConnectionHelper.h"
 #import "Moonlight-Swift.h"
@@ -1327,7 +1326,7 @@ static NSMutableSet* hostList;
         return;
     }
     
-    _sortedAppList = [host.appList allObjects];
+    _sortedAppList = [host.appList copy];
     _sortedAppList = [_sortedAppList sortedArrayUsingSelector:@selector(compareName:)];
     
     if (!_showHiddenApps) {

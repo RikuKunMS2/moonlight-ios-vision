@@ -7,7 +7,8 @@
 //
 
 #import <UIKit/UIKit.h>
-#import "TemporaryApp.h"
+
+@class TemporaryApp;
 
 @protocol AppCallback <NSObject>
 

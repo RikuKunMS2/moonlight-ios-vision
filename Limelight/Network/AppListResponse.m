@@ -7,9 +7,9 @@
 //
 
 #import "AppListResponse.h"
-#import "TemporaryApp.h"
 #import "DataManager.h"
 #import <libxml2/libxml/xmlreader.h>
+#import "Moonlight-Swift.h"
 
 @implementation AppListResponse {
     NSMutableSet* _appList;

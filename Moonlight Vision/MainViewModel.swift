@@ -7,26 +7,41 @@
 //
 
 import Foundation
+import OrderedCollections
 
 @MainActor
-class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback {
+class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback, AppAssetCallback {
     @Published var hosts: [TemporaryHost] = []
     
     @Published var pairingInProgress = false
     @Published var currentPin = ""
     
+    @Published var errorAddingHost = false
+    @Published var addHostErrorMessage = ""
+    
+    @Published var currentStreamConfig = StreamConfiguration()
+    @Published var activelyStreaming = false
+    
     private var dataManager: DataManager
     private var discoveryManager: DiscoveryManager? = nil
+    private var appManager: AppAssetManager?
+    private var boxArtCache: NSCache<TemporaryApp, UIImage>
     private var clientCert: Data
+    private var uniqueId: String
     
     private var opQueue = OperationQueue()
     private var currentlyPairingHost: TemporaryHost?
     
     override init() {
+        boxArtCache = NSCache<TemporaryApp, UIImage>()
         dataManager = DataManager()
         // should this be in viewDidLoad and not init?
+        CryptoManager.generateKeyPairUsingSSL()
         clientCert = CryptoManager.readCertFromFile()
+        uniqueId = IdManager.getUniqueId()
+        
         super.init()
+        appManager = AppAssetManager(callback: self)
         discoveryManager = DiscoveryManager(hosts: hosts, andCallback: self)
     }
     
@@ -39,8 +54,31 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         hosts.append(newHost)
     }
     
+    // MARK: App Icons
+
+    nonisolated func receivedAsset(for app: TemporaryApp!) {
+        // pass
+    }
+    
     // MARK: Pairing
 
+    func manuallyDiscoverHost(hostOrIp: String) {
+        discoveryManager?.discoverHost(hostOrIp, withCallback: hostMaybeFound)
+    }
+    
+    nonisolated func hostMaybeFound(host: TemporaryHost?, error: String?) {
+        Task { @MainActor in
+            if let host {
+                self.addHost(newHost: host)
+                await self.updateHost(host: host)
+                
+            } else {
+                self.errorAddingHost = true
+                self.addHostErrorMessage = error ?? "Unknown Error"
+            }
+        }
+    }
+    
     func tryPairHost(_ host: TemporaryHost) {
         discoveryManager?.stopDiscoveryBlocking()
         let httpManager = HttpManager(host: host)
@@ -78,13 +116,14 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         Task { @MainActor in
             pairingInProgress = false
             discoveryManager?.startDiscovery()
-            if let currentlyPairingHost {await  updateHost(host: currentlyPairingHost) }
+            if let currentlyPairingHost { await updateHost(host: currentlyPairingHost) }
             currentlyPairingHost = nil
         }
     }
     
     func updateHost(host: TemporaryHost) async {
         // Potentially skip this if it's recent?
+        // Populate online/offline correctly?
         
         Task {
             let httpManager = HttpManager(host: host)
@@ -102,6 +141,48 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             } else {
                 serverInfoResponse.populateHost(host)
             }
+        }
+    }
+    
+    func refreshAppsFor(host: TemporaryHost) {
+        // possibly put loading stuff somewhere?
+        discoveryManager?.pauseDiscovery(for: host)
+        let appListResponse = ConnectionHelper.getAppList(for: host)
+        discoveryManager?.resumeDiscovery(for: host)
+        if appListResponse?.isStatusOk() == true {
+            let serverApps = (appListResponse!.getAppList() as! Set<TemporaryApp>)
+            
+            var newAppList = OrderedSet<TemporaryApp>()
+            // Only new apps we have received are valid, but keep the old object and state if it exists.
+            for serverApp in serverApps {
+                var matchFound = false
+                for oldApp in host.appList {
+                    if serverApp.id == oldApp.id {
+                        oldApp.name = serverApp.name
+                        oldApp.hdrSupported = serverApp.hdrSupported
+                        oldApp.setHost(host)
+                        // Ignore hidden, we want to respect the saved state.
+                        matchFound = true
+                        newAppList.append(oldApp)
+                        break
+                    }
+                }
+                if !matchFound {
+                    serverApp.setHost(host)
+                    newAppList.append(serverApp)
+                }
+            }
+            
+            let removedApps = host.appList.subtracting(newAppList)
+            let database = DataManager()
+            for removedApp in removedApps {
+                database.remove(removedApp)
+            }
+            
+            database.updateApps(forExisting: host)
+            
+            // self.updateHostShortcuts
+            host.appList = newAppList
         }
     }
 
@@ -148,5 +229,57 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     
     func stopRefresh() {
         discoveryManager?.stopDiscovery()
+    }
+    
+    // MARK: Stream Control
+    
+    func stream(app: TemporaryApp) {
+        let config = StreamConfiguration()
+        
+        guard let host = app.host() else {
+            return
+        }
+        
+        config.host = host.activeAddress
+        config.httpsPort = host.httpsPort
+        config.appID = app.id
+        config.appName = app.name
+        config.serverCert = host.serverCert
+        
+        let dataManager = DataManager()
+        let streamSettings = dataManager.getSettings()
+        
+        config.frameRate = (streamSettings?.framerate.int32Value)!
+        
+        #if os(visionOS)
+        // leave framerate as is
+        #else
+        // clamp framerate to maximum
+        #endif
+        
+        config.height = (streamSettings?.height.int32Value)!
+        config.width = (streamSettings?.width.int32Value)!
+        
+        config.bitRate = (streamSettings?.bitrate.int32Value)!
+        config.optimizeGameSettings = (streamSettings?.optimizeGames)!
+        config.playAudioOnPC = (streamSettings?.playAudioOnPC)!
+        config.useFramePacing = (streamSettings?.useFramePacing)!
+        config.swapABXYButtons = (streamSettings?.swapABXYButtons)!
+        config.multiController = (streamSettings?.multiController)!
+        config.gamepadMask = ControllerSupport.getConnectedGamepadMask(config)
+        
+        // 7.1, always
+        config.audioConfiguration = (0x63F << 16) | (8 << 8) | 0xCA
+        
+        // all of them? i guess?
+        config.serverCodecModeSupport = host.serverCodecModeSupport
+        config.supportedVideoFormats |= 0x0001
+        config.supportedVideoFormats |= 0x0100
+        config.supportedVideoFormats |= 0x0200
+        config.supportedVideoFormats |= 0x1000
+        config.supportedVideoFormats |= 0x2000
+        
+        currentStreamConfig = config
+        activelyStreaming = true
     }
 }

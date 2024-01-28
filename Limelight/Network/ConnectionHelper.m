@@ -9,6 +9,7 @@
 #import "ConnectionHelper.h"
 #import "ServerInfoResponse.h"
 #import "HttpManager.h"
+#import "HttpRequest.h"
 #import "PairManager.h"
 #import "DiscoveryManager.h"
 

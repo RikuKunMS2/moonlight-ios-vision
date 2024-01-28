@@ -12,6 +12,7 @@
 #import "StreamManager.h"
 #import "ControllerSupport.h"
 #import "DataManager.h"
+#import "Moonlight-Swift.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -48,7 +49,7 @@
     BOOL _userIsInteracting;
     CGSize _keyboardSize;
     
-#if !TARGET_OS_TV
+#if !TARGET_OS_TV && !TARGET_OS_VISION
     UIScreenEdgePanGestureRecognizer *_exitSwipeRecognizer;
 #endif
 }
@@ -57,7 +58,7 @@
 {
     [super viewDidAppear:animated];
     
-#if !TARGET_OS_TV
+#if !TARGET_OS_TV && !TARGET_OS_VISION
     [[self revealViewController] setPrimaryViewController:self];
 #endif
 }
@@ -98,7 +99,7 @@
 #if TARGET_OS_TV
     [_spinner setActivityIndicatorViewStyle:UIActivityIndicatorViewStyleWhiteLarge];
 #else
-    [_spinner setActivityIndicatorViewStyle:UIActivityIndicatorViewStyleWhite];
+    [_spinner setActivityIndicatorViewStyle:UIActivityIndicatorViewStyleMedium];
 #endif
     [_spinner sizeToFit];
     [_spinner startAnimating];
@@ -109,7 +110,8 @@
     
     _streamView = [[StreamView alloc] initWithFrame:self.view.frame];
     [_streamView setupStreamView:_controllerSupport interactionDelegate:self config:self.streamConfig];
-    
+    self.view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    _streamView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
 #if TARGET_OS_TV
     if (!_menuTapGestureRecognizer || !_menuDoubleTapGestureRecognizer || !_playPauseTapGestureRecognizer) {
         _menuTapGestureRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(controllerPauseButtonPressed:)];
@@ -128,7 +130,7 @@
     [self.view addGestureRecognizer:_menuDoubleTapGestureRecognizer];
     [self.view addGestureRecognizer:_playPauseTapGestureRecognizer];
 
-#else
+#elif !TARGET_OS_VISION
     _exitSwipeRecognizer = [[UIScreenEdgePanGestureRecognizer alloc] initWithTarget:self action:@selector(edgeSwiped)];
     _exitSwipeRecognizer.edges = UIRectEdgeLeft;
     _exitSwipeRecognizer.delaysTouchesBegan = NO;
@@ -710,5 +712,27 @@
     return [GCMouse mice].count > 0;
 }
 #endif
+
+- (void) viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    _streamView.layer.bounds = self.view.frame;
+    for (CALayer* layer in _streamView.layer.sublayers) {
+        if ([layer isKindOfClass:[AVSampleBufferDisplayLayer class]]) {
+            // i need to respect aspect ratio, lmao
+            
+            layer.frame = self.view.frame;
+            
+            CGSize videoSize;
+            float streamAspectRatio = (float)_streamConfig.width / (float)_streamConfig.height;
+            if (_streamView.bounds.size.width > _streamView.bounds.size.height * streamAspectRatio) {
+                videoSize = CGSizeMake(_streamView.bounds.size.height * streamAspectRatio, _streamView.bounds.size.height);
+            } else {
+                videoSize = CGSizeMake(_streamView.bounds.size.width, _streamView.bounds.size.width / streamAspectRatio);
+            }
+            layer.position = CGPointMake(CGRectGetMidX(_streamView.bounds), CGRectGetMidY(_streamView.bounds));
+            layer.bounds = CGRectMake(0, 0, videoSize.width, videoSize.height);
+        }
+    }
+}
 
 @end

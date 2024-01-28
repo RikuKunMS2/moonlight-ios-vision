@@ -11,7 +11,7 @@
 
 @implementation TemporarySettings
 
-- (id) initFromSettings:(Settings*)settings {
+- (id) initFromSettings:(MoonlightSettings*)settings {
     self = [self init];
     
     self.parent = settings;

@@ -7,8 +7,8 @@
 //
 
 #import "HttpResponse.h"
-#import "TemporaryApp.h"
 #import <libxml2/libxml/xmlreader.h>
+#import "Moonlight-Swift.h"
 
 @implementation HttpResponse {
     NSMutableDictionary* _elements;

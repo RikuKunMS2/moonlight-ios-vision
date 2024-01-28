@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22225" systemVersion="23A344" minimumToolsVersion="Xcode 7.3" sourceLanguage="Objective-C" userDefinedModelVersionIdentifier="">
-    <entity name="App" representedClassName="App" syncable="YES" codeGenerationType="class">
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22213.2" systemVersion="23D56" minimumToolsVersion="Xcode 7.3" sourceLanguage="Objective-C" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+    <entity name="App" representedClassName="MoonlightApp" syncable="YES" codeGenerationType="class">
         <attribute name="hdrSupported" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES" syncable="YES"/>
         <attribute name="hidden" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES" syncable="YES"/>
         <attribute name="id" attributeType="String" syncable="YES"/>
         <attribute name="name" attributeType="String" syncable="YES"/>
         <relationship name="host" maxCount="1" deletionRule="Nullify" destinationEntity="Host" inverseName="appList" inverseEntity="Host" syncable="YES"/>
     </entity>
-    <entity name="Host" representedClassName="Host" syncable="YES" codeGenerationType="class">
+    <entity name="Host" representedClassName="MoonlightHost" syncable="YES" codeGenerationType="class">
         <attribute name="address" optional="YES" attributeType="String" syncable="YES"/>
         <attribute name="externalAddress" optional="YES" attributeType="String" syncable="YES"/>
         <attribute name="ipv6Address" optional="YES" attributeType="String" syncable="YES"/>
@@ -20,7 +20,7 @@
         <attribute name="uuid" optional="YES" attributeType="String" syncable="YES"/>
         <relationship name="appList" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="App" inverseName="host" inverseEntity="App" syncable="YES"/>
     </entity>
-    <entity name="Settings" representedClassName="Settings" syncable="YES" codeGenerationType="class">
+    <entity name="Settings" representedClassName="MoonlightSettings" syncable="YES" codeGenerationType="class">
         <attribute name="absoluteTouchMode" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES" syncable="YES"/>
         <attribute name="audioConfig" attributeType="Integer 32" defaultValueString="2" usesScalarValueType="NO" syncable="YES"/>
         <attribute name="bitrate" attributeType="Integer 32" defaultValueString="10000" usesScalarValueType="NO" syncable="YES"/>

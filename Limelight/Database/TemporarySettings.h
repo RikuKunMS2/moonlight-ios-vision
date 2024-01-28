@@ -6,11 +6,11 @@
 //  Copyright © 2015 Moonlight Stream. All rights reserved.
 //
 
-#import "Settings+CoreDataClass.h"
+#import "MoonlightSettings+CoreDataClass.h"
 
 @interface TemporarySettings : NSObject
 
-@property (nonatomic, retain) Settings * parent;
+@property (nonatomic, retain) MoonlightSettings * parent;
 
 @property (nonatomic, retain) NSNumber * bitrate;
 @property (nonatomic, retain) NSNumber * framerate;
@@ -35,6 +35,6 @@
 @property (nonatomic) BOOL absoluteTouchMode;
 @property (nonatomic) BOOL statsOverlay;
 
-- (id) initFromSettings:(Settings*)settings;
+- (id) initFromSettings:(MoonlightSettings*)settings;
 
 @end

@@ -12,6 +12,7 @@
 #import "AppAssetResponse.h"
 #import "HttpRequest.h"
 #import "IdManager.h"
+#import "Moonlight-Swift.h"
 
 @implementation AppAssetRetriever
 static const double RETRY_DELAY = 2; // seconds
