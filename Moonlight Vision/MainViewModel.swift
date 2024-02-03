@@ -247,9 +247,9 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         config.serverCert = host.serverCert
         
         let dataManager = DataManager()
-        let streamSettings = dataManager.getSettings()
+        guard let streamSettings = dataManager.getSettings() else {return}
         
-        config.frameRate = (streamSettings?.framerate.int32Value)!
+        config.frameRate = streamSettings.framerate.int32Value
         
         #if os(visionOS)
         // leave framerate as is
@@ -257,15 +257,15 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         // clamp framerate to maximum
         #endif
         
-        config.height = (streamSettings?.height.int32Value)!
-        config.width = (streamSettings?.width.int32Value)!
+        config.height = streamSettings.height.int32Value
+        config.width = streamSettings.width.int32Value
         
-        config.bitRate = (streamSettings?.bitrate.int32Value)!
-        config.optimizeGameSettings = (streamSettings?.optimizeGames)!
-        config.playAudioOnPC = (streamSettings?.playAudioOnPC)!
-        config.useFramePacing = (streamSettings?.useFramePacing)!
-        config.swapABXYButtons = (streamSettings?.swapABXYButtons)!
-        config.multiController = (streamSettings?.multiController)!
+        config.bitRate = streamSettings.bitrate.int32Value
+        config.optimizeGameSettings = streamSettings.optimizeGames
+        config.playAudioOnPC = streamSettings.playAudioOnPC
+        config.useFramePacing = streamSettings.useFramePacing
+        config.swapABXYButtons = streamSettings.swapABXYButtons
+        config.multiController = streamSettings.multiController
         config.gamepadMask = ControllerSupport.getConnectedGamepadMask(config)
         
         // 7.1, always
