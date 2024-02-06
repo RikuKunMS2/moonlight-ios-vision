@@ -19,6 +19,7 @@ struct MainContentView: View {
                         viewModel.activelyStreaming = false
                     }
                 }
+                .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 3.0))
         } else {
             TabView {
                 NavigationSplitView {
