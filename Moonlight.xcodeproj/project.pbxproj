@@ -52,6 +52,7 @@
 		F71801532B657DCF00A9336B /* OrderedCollections in Frameworks */ = {isa = PBXBuildFile; productRef = F71801522B657DCF00A9336B /* OrderedCollections */; };
 		F71801552B658B5E00A9336B /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71801542B658B5E00A9336B /* StreamView.swift */; };
 		F71801562B658C0900A9336B /* StreamFrameViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = FB89462719F646E200339C8A /* StreamFrameViewController.m */; };
+		F7199AFB2B72F33000E6D62D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7199AFA2B72F33000E6D62D /* SettingsView.swift */; };
 		F778956E2B65975900F02568 /* SDLMainWrapper.m in Sources */ = {isa = PBXBuildFile; fileRef = F778956D2B65975900F02568 /* SDLMainWrapper.m */; };
 		F77B58A92B5EED5900482BD5 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F77B58A82B5EED5900482BD5 /* OpenSSL */; };
 		F77B58AB2B5EED5E00482BD5 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F77B58AA2B5EED5E00482BD5 /* OpenSSL */; };
@@ -293,6 +294,7 @@
 		F71801432B654D9100A9336B /* TemporaryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemporaryApp.swift; sourceTree = "<group>"; };
 		F71801492B655C1F00A9336B /* Utils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utils.swift; sourceTree = "<group>"; };
 		F71801542B658B5E00A9336B /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
+		F7199AFA2B72F33000E6D62D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F778956D2B65975900F02568 /* SDLMainWrapper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SDLMainWrapper.m; sourceTree = "<group>"; };
 		F778956F2B65979500F02568 /* SDLMainWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SDLMainWrapper.h; sourceTree = "<group>"; };
 		F77B58AF2B5EF94900482BD5 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
@@ -605,6 +607,7 @@
 				F7A1195C2B5DE1FD001E8686 /* MainContentView.swift */,
 				F77B58B12B5EFC9000482BD5 /* ComputerView.swift */,
 				F71801412B65483D00A9336B /* AppsView.swift */,
+				F7199AFA2B72F33000E6D62D /* SettingsView.swift */,
 				F77B58AF2B5EF94900482BD5 /* SidebarView.swift */,
 				F7A4A4D02B5F216C001591F3 /* MainViewModel.swift */,
 				F778956D2B65975900F02568 /* SDLMainWrapper.m */,
@@ -1220,6 +1223,7 @@
 				F71801562B658C0900A9336B /* StreamFrameViewController.m in Sources */,
 				F7A1191A2B5DDF73001E8686 /* mkcert.c in Sources */,
 				F77B58B22B5EFC9000482BD5 /* ComputerView.swift in Sources */,
+				F7199AFB2B72F33000E6D62D /* SettingsView.swift in Sources */,
 				F7A1191B2B5DDF73001E8686 /* HttpResponse.m in Sources */,
 				F718014A2B655C1F00A9336B /* Utils.swift in Sources */,
 				F7A1191D2B5DDF73001E8686 /* StreamConfiguration.m in Sources */,

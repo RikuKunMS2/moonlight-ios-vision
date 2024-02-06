@@ -16,7 +16,6 @@ struct SidebarView: View {
             HStack {
                 Text("Add Server")
                 Text("Settings")
-
             }
 
         }
