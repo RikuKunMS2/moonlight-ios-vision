@@ -30,6 +30,17 @@ public class TemporarySettings: NSObject {
 
     @objc public var parent: MoonlightSettings?
 
+    override public init() {
+        self.bitrate = 0
+        self.framerate = 0
+        self.height = 0
+        self.width = 0
+        self.audioConfig = 0
+        self.uniqueId = ""
+        self.onscreenControls = 0
+        super.init()
+    }
+
     @objc public init(fromSettings settings: MoonlightSettings) {
         #if TARGET_OS_TV
         let settingsBundle = NSBundle.main.path(forResource: "Settings", ofType: "bundle")

@@ -247,9 +247,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         config.appID = app.id
         config.appName = app.name
         config.serverCert = host.serverCert
-        
-        let dataManager = DataManager()
-        
+                
         config.frameRate = streamSettings.framerate
         
         #if os(visionOS)
@@ -270,7 +268,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         config.gamepadMask = ControllerSupport.getConnectedGamepadMask(config)
         
         // 7.1, always
-        config.audioConfiguration = (0x63F << 16) | (8 << 8) | 0xCA
+        config.audioConfiguration = (0x63f << 16) | (8 << 8) | 0xca
         
         // all of them? i guess?
         config.serverCodecModeSupport = host.serverCodecModeSupport
