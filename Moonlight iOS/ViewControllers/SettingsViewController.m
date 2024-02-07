@@ -138,7 +138,7 @@ BOOL isCustomResolution(CGSize res) {
     TemporarySettings* currentSettings = [dataMan getSettings];
     
     // Ensure we pick a bitrate that falls exactly onto a slider notch
-    _bitrate = bitrateTable[[self getSliderValueForBitrate:[currentSettings.bitrate intValue]]];
+    _bitrate = bitrateTable[[self getSliderValueForBitrate:currentSettings.bitrate]];
 
     // Get the size of the screen with and without safe area insets
     UIWindow *window = UIApplication.sharedApplication.windows.firstObject;
@@ -158,7 +158,7 @@ BOOL isCustomResolution(CGSize res) {
     resolutionTable[3] = CGSizeMake(3840, 2160);
     resolutionTable[4] = CGSizeMake(safeAreaWidth, fullScreenHeight);
     resolutionTable[5] = CGSizeMake(fullScreenWidth, fullScreenHeight);
-    resolutionTable[6] = CGSizeMake([currentSettings.width integerValue], [currentSettings.height integerValue]); // custom initial value
+    resolutionTable[6] = CGSizeMake(currentSettings.width, currentSettings.height); // custom initial value
     
     // Don't populate the custom entry unless we have a custom resolution
     if (!isCustomResolution(resolutionTable[6])) {
@@ -166,7 +166,7 @@ BOOL isCustomResolution(CGSize res) {
     }
     
     NSInteger framerate;
-    switch ([currentSettings.framerate integerValue]) {
+    switch (currentSettings.framerate) {
         case 30:
             framerate = 0;
             break;
@@ -181,8 +181,8 @@ BOOL isCustomResolution(CGSize res) {
 
     NSInteger resolution = 1;
     for (int i = 0; i < RESOLUTION_TABLE_SIZE; i++) {
-        if ((int) resolutionTable[i].height == [currentSettings.height intValue]
-            && (int) resolutionTable[i].width == [currentSettings.width intValue]) {
+        if ((int) resolutionTable[i].height == currentSettings.height
+            && (int) resolutionTable[i].width == currentSettings.width) {
             resolution = i;
             break;
         }
@@ -214,19 +214,19 @@ BOOL isCustomResolution(CGSize res) {
         [self.resolutionSelector setEnabled:NO forSegmentAtIndex:3];
     }
     switch (currentSettings.preferredCodec) {
-        case CODEC_PREF_AUTO:
+        case PreferredCodecAuto:
             [self.codecSelector setSelectedSegmentIndex:self.codecSelector.numberOfSegments - 1];
             break;
             
-        case CODEC_PREF_AV1:
+        case PreferredCodecAv1:
             [self.codecSelector setSelectedSegmentIndex:2];
             break;
             
-        case CODEC_PREF_HEVC:
+        case PreferredCodecHevc:
             [self.codecSelector setSelectedSegmentIndex:1];
             break;
             
-        case CODEC_PREF_H264:
+        case PreferredCodecH264:
             [self.codecSelector setSelectedSegmentIndex:0];
             break;
     }
@@ -249,7 +249,7 @@ BOOL isCustomResolution(CGSize res) {
     [self.multiControllerSelector setSelectedSegmentIndex:currentSettings.multiController ? 1 : 0];
     [self.swapABXYButtonsSelector setSelectedSegmentIndex:currentSettings.swapABXYButtons ? 1 : 0];
     [self.audioOnPCSelector setSelectedSegmentIndex:currentSettings.playAudioOnPC ? 1 : 0];
-    NSInteger onscreenControls = [currentSettings.onscreenControls integerValue];
+    NSInteger onscreenControls = currentSettings.onscreenControls;
     _lastSelectedResolutionIndex = resolution;
     [self.resolutionSelector setSelectedSegmentIndex:resolution];
     [self.resolutionSelector addTarget:self action:@selector(newResolutionChosen) forControlEvents:UIControlEventValueChanged];
@@ -483,18 +483,18 @@ BOOL isCustomResolution(CGSize res) {
 - (uint32_t) getChosenCodecPreference {
     // Auto is always the last segment
     if (self.codecSelector.selectedSegmentIndex == self.codecSelector.numberOfSegments - 1) {
-        return CODEC_PREF_AUTO;
+        return PreferredCodecAuto;
     }
     else {
         switch (self.codecSelector.selectedSegmentIndex) {
             case 0:
-                return CODEC_PREF_H264;
+                return PreferredCodecH264;
                 
             case 1:
-                return CODEC_PREF_HEVC;
+                return PreferredCodecHevc;
                 
             case 2:
-                return CODEC_PREF_AV1;
+                return PreferredCodecAv1;
                 
             default:
                 abort();

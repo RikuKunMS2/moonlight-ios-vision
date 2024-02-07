@@ -12,6 +12,8 @@
 #import "OnScreenControls.h"
 
 #import "DataManager.h"
+#import "Moonlight-Swift.h"
+
 #include "Limelight.h"
 
 @import GameController;
@@ -1056,7 +1058,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     
     DataManager* dataMan = [[DataManager alloc] init];
     TemporarySettings* settings = [dataMan getSettings];
-    OnScreenControlsLevel level = (OnScreenControlsLevel)[settings.onscreenControls integerValue];
+    OnScreenControlsLevel level = (OnScreenControlsLevel)settings.onscreenControls;
     
     // Even if no gamepads are present, we will always count one if OSC is enabled,
     // or it's set to auto and no keyboard or mouse is present. Absolute touch mode
@@ -1088,7 +1090,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     _oscController.playerIndex = 0;
 
     DataManager* dataMan = [[DataManager alloc] init];
-    _oscEnabled = (OnScreenControlsLevel)[[dataMan getSettings].onscreenControls integerValue] != OnScreenControlsLevelOff;
+    _oscEnabled = (OnScreenControlsLevel)[dataMan getSettings].onscreenControls != OnScreenControlsLevelOff;
     
     Log(LOG_I, @"Number of supported controllers connected: %d", [ControllerSupport getGamepadCount]);
     Log(LOG_I, @"Multi-controller: %d", _multiController);
