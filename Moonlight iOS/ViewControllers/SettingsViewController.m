@@ -7,8 +7,8 @@
 //
 
 #import "SettingsViewController.h"
-#import "TemporarySettings.h"
 #import "DataManager.h"
+#import "Moonlight-Swift.h"
 
 #import <VideoToolbox/VideoToolbox.h>
 #import <AVFoundation/AVFoundation.h>

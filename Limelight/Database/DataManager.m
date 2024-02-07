@@ -7,7 +7,6 @@
 //
 
 #import "DataManager.h"
-#import "TemporarySettings.h"
 
 #import "Moonlight-Swift.h"
 

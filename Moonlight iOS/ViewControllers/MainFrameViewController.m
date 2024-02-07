@@ -16,7 +16,6 @@
 #import "UIComputerView.h"
 #import "UIAppView.h"
 #import "DataManager.h"
-#import "TemporarySettings.h"
 #import "WakeOnLanManager.h"
 #import "AppListResponse.h"
 #import "ServerInfoResponse.h"

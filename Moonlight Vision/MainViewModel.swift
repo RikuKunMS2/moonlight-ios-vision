@@ -249,7 +249,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         let dataManager = DataManager()
         guard let streamSettings = dataManager.getSettings() else {return}
         
-        config.frameRate = streamSettings.framerate.int32Value
+        config.frameRate = streamSettings.framerate
         
         #if os(visionOS)
         // leave framerate as is
@@ -257,10 +257,10 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         // clamp framerate to maximum
         #endif
         
-        config.height = streamSettings.height.int32Value
-        config.width = streamSettings.width.int32Value
+        config.height = streamSettings.height
+        config.width = streamSettings.width
         
-        config.bitRate = streamSettings.bitrate.int32Value
+        config.bitRate = streamSettings.bitrate
         config.optimizeGameSettings = streamSettings.optimizeGames
         config.playAudioOnPC = streamSettings.playAudioOnPC
         config.useFramePacing = streamSettings.useFramePacing

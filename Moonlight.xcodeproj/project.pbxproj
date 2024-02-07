@@ -53,6 +53,9 @@
 		F71801552B658B5E00A9336B /* StreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71801542B658B5E00A9336B /* StreamView.swift */; };
 		F71801562B658C0900A9336B /* StreamFrameViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = FB89462719F646E200339C8A /* StreamFrameViewController.m */; };
 		F7199AFB2B72F33000E6D62D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7199AFA2B72F33000E6D62D /* SettingsView.swift */; };
+		F7199AFE2B72FC1400E6D62D /* TemporarySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7199AFD2B72FC1400E6D62D /* TemporarySettings.swift */; };
+		F7199AFF2B72FC1400E6D62D /* TemporarySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7199AFD2B72FC1400E6D62D /* TemporarySettings.swift */; };
+		F7199B002B72FC1400E6D62D /* TemporarySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7199AFD2B72FC1400E6D62D /* TemporarySettings.swift */; };
 		F778956E2B65975900F02568 /* SDLMainWrapper.m in Sources */ = {isa = PBXBuildFile; fileRef = F778956D2B65975900F02568 /* SDLMainWrapper.m */; };
 		F77B58A92B5EED5900482BD5 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F77B58A82B5EED5900482BD5 /* OpenSSL */; };
 		F77B58AB2B5EED5E00482BD5 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F77B58AA2B5EED5E00482BD5 /* OpenSSL */; };
@@ -295,6 +298,7 @@
 		F71801492B655C1F00A9336B /* Utils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utils.swift; sourceTree = "<group>"; };
 		F71801542B658B5E00A9336B /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
 		F7199AFA2B72F33000E6D62D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F7199AFD2B72FC1400E6D62D /* TemporarySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemporarySettings.swift; sourceTree = "<group>"; };
 		F778956D2B65975900F02568 /* SDLMainWrapper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SDLMainWrapper.m; sourceTree = "<group>"; };
 		F778956F2B65979500F02568 /* SDLMainWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SDLMainWrapper.h; sourceTree = "<group>"; };
 		F77B58AF2B5EF94900482BD5 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
@@ -1019,6 +1023,7 @@
 				FBD349601A0089F6002D2A60 /* DataManager.h */,
 				FBD349611A0089F6002D2A60 /* DataManager.m */,
 				F71801432B654D9100A9336B /* TemporaryApp.swift */,
+				F7199AFD2B72FC1400E6D62D /* TemporarySettings.swift */,
 				98D5856E1C0ED0E800F6CC00 /* TemporarySettings.h */,
 				98D5856F1C0ED0E800F6CC00 /* TemporarySettings.m */,
 				F7A4A4D52B61E2F2001591F3 /* TemporaryHost.swift */,
@@ -1250,6 +1255,7 @@
 				F7A119352B5DDF73001E8686 /* DiscoveryWorker.m in Sources */,
 				F7A119362B5DDF73001E8686 /* ControllerSupport.m in Sources */,
 				F71801422B65483D00A9336B /* AppsView.swift in Sources */,
+				F7199B002B72FC1400E6D62D /* TemporarySettings.swift in Sources */,
 				F7A119372B5DDF73001E8686 /* AppAssetResponse.m in Sources */,
 				F7A119382B5DDF73001E8686 /* DataManager.m in Sources */,
 				F7A1193A2B5DDF73001E8686 /* ServerInfoResponse.m in Sources */,
@@ -1271,6 +1277,7 @@
 				9865DC36213287F30005B9B9 /* AppDelegate.m in Sources */,
 				FB1A6819213284FB00507771 /* UIComputerView.m in Sources */,
 				FB1A681A213284FB00507771 /* UIAppView.m in Sources */,
+				F7199AFF2B72FC1400E6D62D /* TemporarySettings.swift in Sources */,
 				FB1A681B213284FB00507771 /* ComputerScrollView.m in Sources */,
 				FB1A681C213284FB00507771 /* AppCollectionView.m in Sources */,
 				9865DC37213287FE0005B9B9 /* StreamFrameViewController.m in Sources */,
@@ -1361,6 +1368,7 @@
 				FB290D0019B2C406004C83CF /* main.m in Sources */,
 				9896219723D15C7000211983 /* X1Kit.swift in Sources */,
 				FBD3494319FC9C04002D2A60 /* AppAssetManager.m in Sources */,
+				F7199AFE2B72FC1400E6D62D /* TemporarySettings.swift in Sources */,
 				FB6549561A57907E001C8F39 /* DiscoveryWorker.m in Sources */,
 				FB89462A19F646E200339C8A /* ControllerSupport.m in Sources */,
 				FB9AFD3D1A7E111600872C98 /* AppAssetResponse.m in Sources */,
