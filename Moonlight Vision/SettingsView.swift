@@ -3,13 +3,20 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject private var viewModel: MainViewModel
-
+    
+    @Binding public var settings: TemporarySettings
+    
     var body: some View {
-        Text(/*@START_MENU_TOKEN@*/"Hello, World!"/*@END_MENU_TOKEN@*/)
+        VStack {
+            Toggle(isOn: $settings.enableHdr) {
+                Text("Enable HDR")
+            }
+        }.onDisappear() {
+            settings.save()
+        }
     }
 }
 
-#Preview {
-    SettingsView()
-}
+//#Preview {
+//    SettingsView(TemporarySettings())
+//}

@@ -18,7 +18,6 @@ public class TemporarySettings: NSObject {
     @objc public var uniqueId: String
     @objc public var preferredCodec = PreferredCodec.auto
 
-    
     @objc public var useFramePacing = false
     @objc public var multiController = false
     @objc public var swapABXYButtons = false
@@ -28,17 +27,16 @@ public class TemporarySettings: NSObject {
     @objc public var btMouseSupport = false
     @objc public var absoluteTouchMode = false
     @objc public var statsOverlay = false
-    
+
     @objc public var parent: MoonlightSettings?
 
     @objc public init(fromSettings settings: MoonlightSettings) {
-        
         #if TARGET_OS_TV
         let settingsBundle = NSBundle.main.path(forResource: "Settings", ofType: "bundle")
         let settingsData = NSDictionary(contentsOf: settingsBundle)
         // TODO: Finish the tvos part
         #else
-        
+
         self.bitrate = settings.bitrate?.int32Value ?? 0
         self.framerate = settings.framerate?.int32Value ?? 0
         self.height = settings.height?.int32Value ?? 0
@@ -47,7 +45,7 @@ public class TemporarySettings: NSObject {
         self.preferredCodec = PreferredCodec(rawValue: Int(settings.preferredCodec)) ?? PreferredCodec.auto
         self.onscreenControls = settings.onscreenControls?.int32Value ?? 0
         self.uniqueId = settings.uniqueId ?? ""
-        
+
         self.useFramePacing = settings.useFramePacing
         self.multiController = settings.multiController
         self.swapABXYButtons = settings.swapABXYButtons
@@ -58,10 +56,15 @@ public class TemporarySettings: NSObject {
         self.absoluteTouchMode = settings.absoluteTouchMode
         self.statsOverlay = settings.statsOverlay
         #endif
-        
+
         super.init()
     }
-    
+
+    @objc public func save() {
+        // save settings to parent
+        let dataManager = DataManager()
+        dataManager.saveSettings(withBitrate: Int(bitrate), framerate: Int(framerate), height: Int(height), width: Int(width), audioConfig: Int(audioConfig), onscreenControls: Int(onscreenControls), optimizeGames: optimizeGames, multiController: multiController, swapABXYButtons: swapABXYButtons, audioOnPC: playAudioOnPC, preferredCodec: UInt32(preferredCodec.rawValue), useFramePacing: useFramePacing, enableHdr: enableHdr, btMouseSupport: btMouseSupport, absoluteTouchMode: absoluteTouchMode, statsOverlay: statsOverlay)
+    }
 }
 
 @objc public enum PreferredCodec: Int {

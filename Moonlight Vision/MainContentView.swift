@@ -82,9 +82,7 @@ struct MainContentView: View {
                     NotificationCenter.default.removeObserver(self)
                 }
             
-                VStack {
-                    Text("ok")
-                }.tabItem {
+                SettingsView(settings: $viewModel.streamSettings).tabItem {
                     Label("Settings", systemImage: "gear")
                 }
             }

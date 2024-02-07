@@ -611,7 +611,7 @@ static NSMutableSet* hostList;
     DataManager* dataMan = [[DataManager alloc] init];
     TemporarySettings* streamSettings = [dataMan getSettings];
     
-    _streamConfig.frameRate = [streamSettings.framerate intValue];
+    _streamConfig.frameRate = streamSettings.framerate;
     if (@available(iOS 10.3, *)) {
         // Don't stream more FPS than the display can show
         if (_streamConfig.frameRate > [UIScreen mainScreen].maximumFramesPerSecond) {
@@ -620,8 +620,8 @@ static NSMutableSet* hostList;
         }
     }
     
-    _streamConfig.height = [streamSettings.height intValue];
-    _streamConfig.width = [streamSettings.width intValue];
+    _streamConfig.height = streamSettings.height;
+    _streamConfig.width = streamSettings.width;
 #if TARGET_OS_TV
     // Don't allow streaming 4K on the Apple TV HD
     struct utsname systemInfo;
@@ -633,7 +633,7 @@ static NSMutableSet* hostList;
     }
 #endif
     
-    _streamConfig.bitRate = [streamSettings.bitrate intValue];
+    _streamConfig.bitRate = streamSettings.bitrate;
     _streamConfig.optimizeGameSettings = streamSettings.optimizeGames;
     _streamConfig.playAudioOnPC = streamSettings.playAudioOnPC;
     _streamConfig.useFramePacing = streamSettings.useFramePacing;
@@ -647,7 +647,7 @@ static NSMutableSet* hostList;
     int physicalOutputChannels = (int)[AVAudioSession sharedInstance].maximumOutputNumberOfChannels;
     Log(LOG_I, @"Audio device supports %d channels", physicalOutputChannels);
     
-    int numberOfChannels = MIN([streamSettings.audioConfig intValue], physicalOutputChannels);
+    int numberOfChannels = MIN(streamSettings.audioConfig, physicalOutputChannels);
     Log(LOG_I, @"Selected number of audio channels %d", numberOfChannels);
     if (numberOfChannels >= 8) {
         _streamConfig.audioConfiguration = AUDIO_CONFIGURATION_71_SURROUND;
@@ -662,7 +662,7 @@ static NSMutableSet* hostList;
     _streamConfig.serverCodecModeSupport = app.host.serverCodecModeSupport;
     
     switch (streamSettings.preferredCodec) {
-        case CODEC_PREF_AV1:
+        case PreferredCodecAv1:
 #if defined(__IPHONE_16_0) || defined(__TVOS_16_0)
             if (VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1)) {
                 _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_AV1_MAIN8;
@@ -670,14 +670,14 @@ static NSMutableSet* hostList;
 #endif
             // Fall-through
             
-        case CODEC_PREF_AUTO:
-        case CODEC_PREF_HEVC:
+        case PreferredCodecAuto:
+        case PreferredCodecHevc:
             if (VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)) {
                 _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_H265;
             }
             // Fall-through
             
-        case CODEC_PREF_H264:
+        case PreferredCodecH264:
             _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_H264;
             break;
     }

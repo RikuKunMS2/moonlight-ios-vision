@@ -21,6 +21,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     
     @Published var currentStreamConfig = StreamConfiguration()
     @Published var activelyStreaming = false
+    @Published var streamSettings: TemporarySettings
     
     private var dataManager: DataManager
     private var discoveryManager: DiscoveryManager? = nil
@@ -39,6 +40,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         CryptoManager.generateKeyPairUsingSSL()
         clientCert = CryptoManager.readCertFromFile()
         uniqueId = IdManager.getUniqueId()
+        streamSettings = dataManager.getSettings()
         
         super.init()
         appManager = AppAssetManager(callback: self)
@@ -247,7 +249,6 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         config.serverCert = host.serverCert
         
         let dataManager = DataManager()
-        guard let streamSettings = dataManager.getSettings() else {return}
         
         config.frameRate = streamSettings.framerate
         
