@@ -153,7 +153,6 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 }
 
 - (void) layoutSublayersOfLayer:(CALayer* ) layer {
-//    _streamView.layer.bounds = self.frame;
     for (CALayer* layer in self.layer.sublayers) {
         if ([layer isKindOfClass:[AVSampleBufferDisplayLayer class]]) {
             
