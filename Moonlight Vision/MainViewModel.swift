@@ -270,13 +270,11 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         // 7.1, always
         config.audioConfiguration = (0x63f << 16) | (8 << 8) | 0xca
         
-        // all of them? i guess?
+        // all of them? i guess? this forces hdr on
         config.serverCodecModeSupport = host.serverCodecModeSupport
         config.supportedVideoFormats |= 0x0001
         config.supportedVideoFormats |= 0x0100
         config.supportedVideoFormats |= 0x0200
-        config.supportedVideoFormats |= 0x1000
-        config.supportedVideoFormats |= 0x2000
         
         currentStreamConfig = config
         activelyStreaming = true

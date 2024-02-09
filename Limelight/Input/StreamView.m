@@ -51,6 +51,8 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
      interactionDelegate:(id<UserInteractionDelegate>)interactionDelegate
                   config:(StreamConfiguration*)streamConfig {
     self->interactionDelegate = interactionDelegate;
+    // Required to handle resizing of the underlying CALayers.
+    self.layer.delegate = self;
     self->streamAspectRatio = (float)streamConfig.width / (float)streamConfig.height;
     
     TemporarySettings* settings = [[[DataManager alloc] init] getSettings];
@@ -147,6 +149,28 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     // Notify the delegate if this was a new user interaction
     if (!timerAlreadyRunning) {
         [interactionDelegate userInteractionBegan];
+    }
+}
+
+- (void) layoutSublayersOfLayer:(CALayer* ) layer {
+//    _streamView.layer.bounds = self.frame;
+    for (CALayer* layer in self.layer.sublayers) {
+        if ([layer isKindOfClass:[AVSampleBufferDisplayLayer class]]) {
+            
+
+            CGSize videoSize;
+            if (self.bounds.size.width > self.bounds.size.height * streamAspectRatio) {
+                videoSize = CGSizeMake(self.bounds.size.height * streamAspectRatio, self.bounds.size.height);
+            } else {
+                videoSize = CGSizeMake(self.bounds.size.width, self.bounds.size.width / streamAspectRatio);
+            }
+            [CATransaction begin];
+            [ CATransaction setValue:(id)kCFBooleanTrue forKey:kCATransactionDisableActions];
+            layer.frame = self.frame;
+            layer.position = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
+            layer.bounds = CGRectMake(0, 0, videoSize.width, videoSize.height);
+            [CATransaction commit];
+        }
     }
 }
 

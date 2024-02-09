@@ -713,26 +713,4 @@
 }
 #endif
 
-- (void) viewDidLayoutSubviews {
-    [super viewDidLayoutSubviews];
-    _streamView.layer.bounds = self.view.frame;
-    for (CALayer* layer in _streamView.layer.sublayers) {
-        if ([layer isKindOfClass:[AVSampleBufferDisplayLayer class]]) {
-            // i need to respect aspect ratio, lmao
-            
-            layer.frame = self.view.frame;
-            
-            CGSize videoSize;
-            float streamAspectRatio = (float)_streamConfig.width / (float)_streamConfig.height;
-            if (_streamView.bounds.size.width > _streamView.bounds.size.height * streamAspectRatio) {
-                videoSize = CGSizeMake(_streamView.bounds.size.height * streamAspectRatio, _streamView.bounds.size.height);
-            } else {
-                videoSize = CGSizeMake(_streamView.bounds.size.width, _streamView.bounds.size.width / streamAspectRatio);
-            }
-            layer.position = CGPointMake(CGRectGetMidX(_streamView.bounds), CGRectGetMidY(_streamView.bounds));
-            layer.bounds = CGRectMake(0, 0, videoSize.width, videoSize.height);
-        }
-    }
-}
-
 @end
