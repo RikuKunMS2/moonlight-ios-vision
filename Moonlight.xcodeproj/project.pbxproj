@@ -1430,7 +1430,7 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = 9F7HSLF799;
+				DEVELOPMENT_TEAM = 67Q3TZKGC8;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
 				HEADER_SEARCH_PATHS = (
@@ -1477,7 +1477,7 @@
 				);
 				MARKETING_VERSION = 9.0.1;
 				OTHER_LDFLAGS = "-ld64";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight-vision";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.metricexpansion.moonlight-stream.Moonlight-vision";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SDKROOT = xros;
@@ -1506,7 +1506,7 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = 9F7HSLF799;
+				DEVELOPMENT_TEAM = 67Q3TZKGC8;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
 				HEADER_SEARCH_PATHS = (
@@ -1553,7 +1553,7 @@
 				);
 				MARKETING_VERSION = 9.0.1;
 				OTHER_LDFLAGS = "-ld64";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight-vision";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.metricexpansion.moonlight-stream.Moonlight-vision";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SDKROOT = xros;

@@ -17,7 +17,6 @@ struct SidebarView: View {
                 Text("Add Server")
                 Text("Settings")
             }
-
         }
     }
 }
@@ -29,5 +28,4 @@ struct SidebarView: View {
     }
     .padding()
     .glassBackgroundEffect()
-    
 }

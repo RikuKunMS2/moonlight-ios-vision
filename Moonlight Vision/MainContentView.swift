@@ -12,14 +12,26 @@ struct MainContentView: View {
     
     var body: some View {
         if viewModel.activelyStreaming {
-            let streamView = StreamView(streamConfig: $viewModel.currentStreamConfig)
-            streamView
-                .ornament(attachmentAnchor: .scene(.top)) {
-                    Button("Close") {
-                        viewModel.activelyStreaming = false
-                    }
+            ZStack {
+                StreamView(streamConfig: $viewModel.currentStreamConfig)
+            }
+            .onAppear() {
+                guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+                let geometryRequest = UIWindowScene.GeometryPreferences.Vision(resizingRestrictions: .uniform)
+                windowScene.requestGeometryUpdate(geometryRequest)
+            }
+            .onDisappear() {
+                guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+                let geometryRequest = UIWindowScene.GeometryPreferences.Vision(resizingRestrictions: .freeform)
+                windowScene.requestGeometryUpdate(geometryRequest)
+            }
+            .ornament(attachmentAnchor: .scene(.top), contentAlignment: .bottom) {
+                Button("Close") {
+                    viewModel.activelyStreaming = false
                 }
-                .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 3.0))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 15.0))
+            .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 15.0))
         } else {
             TabView {
                 NavigationSplitView {
@@ -27,34 +39,36 @@ struct MainContentView: View {
                         Text("Computers").font(.largeTitle)
                         List(viewModel.hosts, selection: $selectedHost) { host in
                             NavigationLink(value: host) {
-                                Text(host.name)
+                                Label(host.name, systemImage: host.currentGame == nil ? "desktopcomputer" : "play.desktopcomputer")
+                                    .foregroundColor(.primary)
                             }
                         }
-                        Spacer()
-                        HStack {
-                            Button("Add Server") {
-                                addingHost = true
-                            }.alert(
-                                "Enter server",
-                                isPresented: $addingHost
-                            ) {
-                                TextField("IP or Host", text: $newHostIp)
-                                Button("Add") {
-                                    addingHost = false
-                                    viewModel.manuallyDiscoverHost(hostOrIp: newHostIp)
+                        .toolbar {
+                            ToolbarItem(placement: .primaryAction) {
+                                Button("Add Server", systemImage: "laptopcomputer.and.arrow.down") {
+                                    addingHost = true
+                                }.alert(
+                                    "Enter server",
+                                    isPresented: $addingHost
+                                ) {
+                                    TextField("IP or Host", text: $newHostIp)
+                                    Button("Add") {
+                                        addingHost = false
+                                        viewModel.manuallyDiscoverHost(hostOrIp: newHostIp)
+                                    }
+                                    Button("Cancel", role: .cancel) {
+                                        addingHost = false
+                                    }
+                                }.alert(
+                                    "Unable to add host",
+                                    isPresented: $viewModel.errorAddingHost
+                                ) {
+                                    Button("Ok", role: .cancel) {
+                                        viewModel.errorAddingHost = true
+                                    }
+                                } message: {
+                                    Text(viewModel.addHostErrorMessage)
                                 }
-                                Button("Cancel", role: .cancel) {
-                                    addingHost = false
-                                }
-                            }.alert(
-                                "Unable to add host",
-                                isPresented: $viewModel.errorAddingHost
-                            ) {
-                                Button("Ok", role: .cancel) {
-                                    viewModel.errorAddingHost = true
-                                }
-                            } message: {
-                                Text(viewModel.addHostErrorMessage)
                             }
                         }
                     }
@@ -69,7 +83,8 @@ struct MainContentView: View {
                 }
                 .task {
                     viewModel.loadSavedHosts()
-                }.onAppear {
+                }
+                .onAppear {
                     NotificationCenter.default.addObserver(
                         self,
                         selector: #selector(viewModel.beginRefresh),

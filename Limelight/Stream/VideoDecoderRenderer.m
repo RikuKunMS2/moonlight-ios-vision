@@ -35,6 +35,8 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     
     CADisplayLink* _displayLink;
     BOOL framePacing;
+    
+    CGRect _lastKnownSize;
 }
 
 - (void)reinitializeDisplayLayer
@@ -75,6 +77,10 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
         CFRelease(formatDesc);
         formatDesc = nil;
     }
+    
+    [_view.widthAnchor constraintEqualToAnchor:_view.heightAnchor multiplier:_streamAspectRatio].active = true;
+    
+    _lastKnownSize = _view.bounds;
 }
 
 - (id)initWithView:(StreamView*)view callbacks:(id<ConnectionCallbacks>)callbacks streamAspectRatio:(float)aspectRatio useFramePacing:(BOOL)useFramePacing
@@ -514,6 +520,12 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         free(data);
         return DR_NEED_IDR;
     }
+    
+    // Check if we need to resize the display layer
+//    if (!CGRectEqualToRect(_lastKnownSize, _view.bounds)) {
+//        NSLog(@"Reinitialize display layer");
+//        [self reinitializeDisplayLayer];
+//    }
     
     // Check for previous decoder errors before doing anything
     if (displayLayer.status == AVQueuedSampleBufferRenderingStatusFailed) {

@@ -127,6 +127,15 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         [x1mouse start];
     }
     
+    UIScene * scene = UIApplication.sharedApplication.connectedScenes.allObjects.firstObject;
+    if (scene && [scene isKindOfClass:[UIWindowScene class]]) {
+        UIWindowScene * windowScene = (UIWindowScene *) scene;
+        UIWindowSceneGeometryPreferencesVision * geometry = [[UIWindowSceneGeometryPreferencesVision alloc] initWithSize:CGSizeMake(self.bounds.size.height * streamAspectRatio, self.bounds.size.height)];
+        [windowScene requestGeometryUpdateWithPreferences:geometry errorHandler:^(NSError * error) {
+            
+        }];
+    }
+    
     // This is critical to ensure keyboard events are delivered to this
     // StreamView and not our parent UIView, especially on tvOS.
     [self becomeFirstResponder];
@@ -152,11 +161,14 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     }
 }
 
+- (void)layoutIfNeeded {
+    NSLog(@"layout");
+}
+
 - (void) layoutSublayersOfLayer:(CALayer* ) layer {
+    NSLog(@"LayoutSublayersOfLayer");
     for (CALayer* layer in self.layer.sublayers) {
         if ([layer isKindOfClass:[AVSampleBufferDisplayLayer class]]) {
-            
-
             CGSize videoSize;
             if (self.bounds.size.width > self.bounds.size.height * streamAspectRatio) {
                 videoSize = CGSizeMake(self.bounds.size.height * streamAspectRatio, self.bounds.size.height);
@@ -169,6 +181,9 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
             layer.position = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
             layer.bounds = CGRectMake(0, 0, videoSize.width, videoSize.height);
             [CATransaction commit];
+            NSLog(@"STREAM LAYER: %fx%f", self.layer.frame.size.width, self.layer.frame.size.height);
+            NSLog(@"RENDER LAYER: %fx%f", layer.frame.size.width, layer.frame.size.height);
+            NSLog(@"VSIZE: %fx%f", videoSize.width, videoSize.height);
         }
     }
 }

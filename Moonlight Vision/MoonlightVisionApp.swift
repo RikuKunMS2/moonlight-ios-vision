@@ -7,8 +7,10 @@ struct MoonlightVisionApp: SwiftUI.App {
 
     var body: some Scene {
         WindowGroup {
-            MainContentView().environmentObject(MainViewModel())
+            MainContentView()
+                .environmentObject(MainViewModel())
         }
+        .windowResizability(.contentSize)
     }
 
 }

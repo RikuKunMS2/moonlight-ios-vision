@@ -15,22 +15,40 @@ struct AppsView: View {
     public var host: TemporaryHost
     
     var body: some View {
-        ScrollView {
-            VStack {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150))]) {
-                    ForEach(host.appList, id: \.id) { app in
-                        Button(app.name ?? "Unknown") {
-                            viewModel.stream(app: app)
-                        }
-                    }
+        List {
+            ForEach(host.appList.sorted(by: { $0.name ?? "" < $1.name ?? "" }), id: \.id) { app in
+                AppButtonView(host: host, app: app) {
+                    viewModel.stream(app: app)
                 }
             }
-        }.onAppear() {
+        }
+        .navigationTitle(host.name)
+        .onAppear() {
             // this MUST be async lmao
             
             viewModel.refreshAppsFor(host: host)
         }.refreshable() {
             viewModel.refreshAppsFor(host: host)
         }
+    }
+}
+
+struct AppButtonView: View {
+    var host: TemporaryHost
+    var app: TemporaryApp
+    var action: () -> Void
+    
+    var body: some View {
+        Button(app.name ?? "Unknown", action: action)
+            .badge(Text(app.id == host.currentGame ? "Running" : ""))
+            .contextMenu {
+                if app.id == host.currentGame {
+                    Button {
+                        print("Should stop here")
+                    } label: {
+                        Label("Stop (INOP)", systemImage: "stop.circle")
+                    }
+                }
+            }
     }
 }

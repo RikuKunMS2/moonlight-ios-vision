@@ -189,7 +189,7 @@
 #endif
     
     // Only enable scroll and zoom in absolute touch mode
-    if (_settings.absoluteTouchMode) {
+    if (false) {
         _scrollView = [[UIScrollView alloc] initWithFrame:self.view.frame];
 #if !TARGET_OS_TV
         [_scrollView.panGestureRecognizer setMinimumNumberOfTouches:2];
@@ -211,6 +211,14 @@
     [self.view addSubview:_stageLabel];
     [self.view addSubview:_spinner];
     [self.view addSubview:_tipLabel];
+}
+
+- (void)viewDidLayoutSubviews {
+    if (_scrollView) {
+        _scrollView.frame = self.view.frame;
+    }
+    _streamView.frame = self.view.frame;
+
 }
 
 - (UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView {

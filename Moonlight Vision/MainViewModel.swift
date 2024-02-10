@@ -193,6 +193,10 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     func loadSavedHosts() {
         if let savedHosts = dataManager.getHosts() as? [TemporaryHost] {
             for host in savedHosts {
+                // Remove any existing copy of this host
+                if let existingIndex = hosts.firstIndex(where: { $0.uuid == host.uuid }) {
+                    hosts.remove(at: existingIndex)
+                }
                 hosts.append(host)
             }
         } else {
