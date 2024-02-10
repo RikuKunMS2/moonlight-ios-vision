@@ -39,13 +39,13 @@ public class TemporaryHost: NSObject {
     public var appList = OrderedSet<TemporaryApp>()
     
     @objc(appList) public func getAppList() -> NSSet {
-        return NSSet(array: appList.elements)
+        return NSSet(array: self.appList.elements)
     }
     
     @objc public func setAppList(_ newList: NSSet) {
-        appList.removeAll()
+        self.appList.removeAll()
         for case let app as TemporaryApp in newList {
-            appList.append(app)
+            self.appList.append(app)
         }
     }
     
@@ -108,6 +108,24 @@ public class TemporaryHost: NSObject {
             
         parentHost.pairState = NSNumber(value: self.pairState.rawValue)
     }
+    
+    static func ==(lhs: TemporaryHost, rhs: TemporaryHost) -> Bool {
+        lhs.id == rhs.id
+    }
+    
+    public override var hash: Int {
+        return id.hash
+    }
+    
+    override public func isEqual(_ object: Any?) -> Bool {
+        if let other = object as? TemporaryHost {
+            return other.id == self.id
+        } else {
+            return false
+        }
+    }
 }
 
-extension TemporaryHost: Identifiable {}
+extension TemporaryHost: Identifiable {
+    public var id: String { self.uuid }
+}

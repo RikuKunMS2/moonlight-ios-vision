@@ -53,7 +53,9 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     }
     
     func addHost(newHost: TemporaryHost) {
-        hosts.append(newHost)
+        if !hosts.contains(newHost) {
+            hosts.append(newHost)
+        }
     }
     
     // MARK: App Icons
@@ -193,7 +195,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     func loadSavedHosts() {
         if let savedHosts = dataManager.getHosts() as? [TemporaryHost] {
             for host in savedHosts {
-                hosts.append(host)
+                addHost(newHost: host)
             }
         } else {
             print("Unable to fetch saved hosts")
