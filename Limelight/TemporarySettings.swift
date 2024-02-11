@@ -14,7 +14,7 @@ public class TemporarySettings: NSObject {
     @objc public var height: Int32
     @objc public var width: Int32
     @objc public var audioConfig: Int32
-    @objc public var onscreenControls: Int32
+    @objc public var onscreenControls: OnScreenControlsLevel
     @objc public var uniqueId: String
     @objc public var preferredCodec = PreferredCodec.auto
 
@@ -37,7 +37,7 @@ public class TemporarySettings: NSObject {
         self.width = 0
         self.audioConfig = 0
         self.uniqueId = ""
-        self.onscreenControls = 0
+        self.onscreenControls = OnScreenControlsLevel.auto
         super.init()
     }
 
@@ -54,7 +54,7 @@ public class TemporarySettings: NSObject {
         self.width = settings.width?.int32Value ?? 0
         self.audioConfig = settings.audioConfig?.int32Value ?? 0
         self.preferredCodec = PreferredCodec(rawValue: Int(settings.preferredCodec)) ?? PreferredCodec.auto
-        self.onscreenControls = settings.onscreenControls?.int32Value ?? 0
+        self.onscreenControls = OnScreenControlsLevel(rawValue: settings.onscreenControls?.intValue ?? 0) ?? OnScreenControlsLevel.auto
         self.uniqueId = settings.uniqueId ?? ""
 
         self.useFramePacing = settings.useFramePacing
@@ -74,7 +74,7 @@ public class TemporarySettings: NSObject {
     @objc public func save() {
         // save settings to parent
         let dataManager = DataManager()
-        dataManager.saveSettings(withBitrate: Int(bitrate), framerate: Int(framerate), height: Int(height), width: Int(width), audioConfig: Int(audioConfig), onscreenControls: Int(onscreenControls), optimizeGames: optimizeGames, multiController: multiController, swapABXYButtons: swapABXYButtons, audioOnPC: playAudioOnPC, preferredCodec: UInt32(preferredCodec.rawValue), useFramePacing: useFramePacing, enableHdr: enableHdr, btMouseSupport: btMouseSupport, absoluteTouchMode: absoluteTouchMode, statsOverlay: statsOverlay)
+        dataManager.saveSettings(withBitrate: Int(bitrate), framerate: Int(framerate), height: Int(height), width: Int(width), audioConfig: Int(audioConfig), onscreenControls: Int(onscreenControls.rawValue), optimizeGames: optimizeGames, multiController: multiController, swapABXYButtons: swapABXYButtons, audioOnPC: playAudioOnPC, preferredCodec: UInt32(preferredCodec.rawValue), useFramePacing: useFramePacing, enableHdr: enableHdr, btMouseSupport: btMouseSupport, absoluteTouchMode: absoluteTouchMode, statsOverlay: statsOverlay)
     }
 }
 
