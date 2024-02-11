@@ -9,8 +9,12 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Picker("Resolution", selection: $settings.resolution) {
-                    ForEach(Self.resolutionTable, id: \.self) { resolution in
-                        Text(resolution.description)
+                    ForEach(Self.resolutionsGroupedByType, id: \.0) { aspectRatio, resolutions in
+                        Section(aspectRatio.casualDescription) {
+                            ForEach(resolutions, id: \.self) { resolution in
+                                Text(resolution.description)
+                            }
+                        }
                     }
                 }
                 Picker("Framerate", selection: $settings.framerate) {
@@ -61,25 +65,65 @@ struct SettingsView: View {
             }
         }
     }
-    }
+}
 
-fileprivate extension TemporarySettings {
+private extension TemporarySettings {
     var resolution: SettingsView.Resolution {
         get {
-            SettingsView.Resolution(width: width, height: height)
+            SettingsView.Resolution(width: Int(width), height: Int(height))
         }
         set {
-            width = newValue.width
-            height = newValue.height
+            width = Int32(newValue.width)
+            height = Int32(newValue.height)
         }
     }
 }
 
 extension SettingsView {
+    struct AspectRatio: Equatable, Hashable, Comparable {
+        // Always stored as reduced values
+        private let width: Int
+        private let height: Int
+
+        init(width: Int, height: Int) {
+            let reduced = simplifyFraction(numerator: width, denominator: height)
+            self.width = reduced.numerator
+            self.height = reduced.denominator
+        }
+
+        var casualDescription: LocalizedStringKey {
+            switch self {
+            case AspectRatio(width: 16, height: 9):
+                "Widescreen (TV)"
+            case AspectRatio(width: 16, height: 10):
+                "Widescreen (PC)"
+            case AspectRatio(width: 4, height: 3):
+                "4:3"
+            case AspectRatio(width: 64, height: 27):
+                "Ultrawide (64:27)"
+            case AspectRatio(width: 43, height: 18):
+                "Ultrawide (43:18)"
+            case AspectRatio(width: 32, height: 9):
+                "Super-Ultrawide"
+            default:
+                "\(width)-by-\(height)"
+            }
+        }
+
+        // "Wider" means "larger"
+        static func < (lhs: SettingsView.AspectRatio, rhs: SettingsView.AspectRatio) -> Bool {
+            (Double(lhs.width) / Double(lhs.height)) < (Double(rhs.width) / Double(rhs.height))
+        }
+    }
+
     struct Resolution: Equatable, Hashable, CustomStringConvertible {
-        let width: Int32
-        let height: Int32
-        
+        let width: Int
+        let height: Int
+
+        var aspectRatio: AspectRatio {
+            AspectRatio(width: width, height: height)
+        }
+
         var description: String {
             switch self {
             case Resolution(width: 3840, height: 2160):
@@ -93,19 +137,41 @@ extension SettingsView {
     }
 
     static let resolutionTable = [
-        Resolution(width: 640, height: 360),
+        // 4:3
+        Resolution(width: 640, height: 480),
+        Resolution(width: 800, height: 600),
+        Resolution(width: 1024, height: 768),
+        Resolution(width: 1920, height: 1440),
+        // 16:9
         Resolution(width: 1280, height: 720),
+        Resolution(width: 1600, height: 900),
         Resolution(width: 1920, height: 1080),
-        Resolution(width: 3840, height: 2160)
+        Resolution(width: 2560, height: 1440),
+        Resolution(width: 3840, height: 2160),
+        // 16:10
+        Resolution(width: 1280, height: 800),
+        Resolution(width: 1920, height: 1200),
+        Resolution(width: 2560, height: 1600),
+        // "21:9"
+        Resolution(width: 2560, height: 1080),
+        Resolution(width: 3440, height: 1440),
+        Resolution(width: 5120, height: 2160),
+        // 32:9
+        Resolution(width: 5120, height: 1440),
+        Resolution(width: 7680, height: 2160),
     ]
-    
+
+    static var resolutionsGroupedByType: [(AspectRatio, [Resolution])] {
+        Dictionary(grouping: resolutionTable, by: \.aspectRatio).sorted { $0.key < $1.key }
+    }
+
     static let framerateTable: [Int32] = [30, 60, 90, 120]
-    
+
     static let bitrateTable: [Int32] = [5000, 10000, 30000, 50000, 75000, 100000, 120000, 200000]
 }
 
 // Functions to help with aspect ratio calculation
-fileprivate func gcd<I: BinaryInteger>(_ a: I, _ b: I) -> I {
+private func gcd<I: BinaryInteger>(_ a: I, _ b: I) -> I {
     var a = a
     var b = b
     while b != 0 {
@@ -116,7 +182,7 @@ fileprivate func gcd<I: BinaryInteger>(_ a: I, _ b: I) -> I {
     return a
 }
 
-fileprivate func simplifyFraction<I: BinaryInteger>(numerator: I, denominator: I) -> (I, I) {
+private func simplifyFraction<I: BinaryInteger>(numerator: I, denominator: I) -> (numerator: I, denominator: I) {
     let divisor = gcd(numerator, denominator)
     return (numerator / divisor, denominator / divisor)
 }
