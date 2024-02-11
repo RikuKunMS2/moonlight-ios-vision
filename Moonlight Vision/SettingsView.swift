@@ -4,48 +4,24 @@ import SwiftUI
 
 struct SettingsView: View {
     @Binding public var settings: TemporarySettings
-    
-    // TODO: round trip these to the raw settings values lol
-    @State public var resolutionIndex: Int = 3
-    
-    @State public var framerateIndex: Int = 2
-    
-    @State public var bitrateIndex: Int = 7
-    
-    @State public var customWidth: Int = 0
-    @State public var customHeight: Int = 0
-    
+
     var body: some View {
         NavigationStack {
             Form {
-                Picker("Resolution", selection: $resolutionIndex) {
-                    Text("360p").tag(0)
-                    Text("720p").tag(1)
-                    Text("1080p").tag(2)
-                    Text("4K").tag(3)
-                }.onChange(of: resolutionIndex) {
-                    updateResolution()
+                Picker("Resolution", selection: $settings.resolution) {
+                    ForEach(Self.resolutionTable, id: \.self) { resolution in
+                        Text(resolution.description)
+                    }
                 }
-                Picker("Framerate", selection: $framerateIndex) {
-                    Text("30").tag(0)
-                    Text("60").tag(1)
-                    Text("90").tag(2)
-                    Text("120").tag(3)
-                }.onChange(of: framerateIndex) {
-                    updateFramerate()
+                Picker("Framerate", selection: $settings.framerate) {
+                    ForEach(Self.framerateTable, id: \.self) { framerate in
+                        Text("\(framerate)")
+                    }
                 }
-                Picker("Bitrate", selection: $bitrateIndex) {
-                    Text("5Mbps").tag(0)
-                    Text("10Mbps").tag(1)
-                    Text("30Mbps").tag(2)
-                    Text("50Mbps").tag(3)
-                    Text("75Mbps").tag(4)
-                    Text("100Mbps").tag(5)
-                    Text("120Mbps").tag(6)
-                    Text("200Mbps").tag(7)
-                }
-                .onChange(of: bitrateIndex) {
-                    updateBitrate()
+                Picker("Bitrate", selection: $settings.bitrate) {
+                    ForEach(Self.bitrateTable, id: \.self) { bitrate in
+                        Text("\(bitrate / 1000)Mbps")
+                    }
                 }
                 Picker("Touch Mode", selection: $settings.absoluteTouchMode) {
                     Text("Touchpad").tag(false)
@@ -77,65 +53,72 @@ struct SettingsView: View {
                 }
                 Toggle("Citrix X1 Mouse Support", isOn: $settings.btMouseSupport)
                 Toggle("Statistics Overlay", isOn: $settings.statsOverlay)
-            }.frame(width: 450)
-                .onAppear {
-                    initSettingsState()
-                }
-                .navigationTitle("Settings")
-                .onDisappear {
-                    settings.save()
-                }
+            }
+            .frame(width: 450)
+            .navigationTitle("Settings")
+            .onDisappear {
+                settings.save()
+            }
         }
     }
-    
-    static let customResolution = CGSize()
-    
-    // TODO: add custom resolutions
-    let resolutionTable = [CGSize(width: 640, height: 360), CGSize(width: 1280, height: 720), CGSize(width: 1920, height: 1080), CGSize(width: 3840, height: 2160)]
-    
-    let framerateTable: [Int32] = [30, 60, 90, 120]
-    
-    let bitrateTable: [Int32] = [5000, 10000, 30000, 50000, 75000, 100000, 120000, 200000]
-    
-    @MainActor func updateResolution() {
-        let resolution = resolutionTable[resolutionIndex]
-        if resolution == SettingsView.customResolution {
-            settings.width = Int32(customWidth)
-            settings.width = Int32(customHeight)
-        } else {
-            settings.width = Int32(resolution.width)
-            settings.height = Int32(resolution.height)
+    }
+
+fileprivate extension TemporarySettings {
+    var resolution: SettingsView.Resolution {
+        get {
+            SettingsView.Resolution(width: width, height: height)
+        }
+        set {
+            width = newValue.width
+            height = newValue.height
         }
     }
-    
-    @MainActor func updateFramerate() {
-        settings.framerate = Int32(framerateTable[framerateIndex])
-    }
-    
-    @MainActor func updateBitrate() {
-        settings.bitrate = Int32(bitrateTable[bitrateIndex])
-    }
-    
-    @MainActor func initSettingsState() {
-        if let found = bitrateTable.enumerated().first(where: { $0.element == settings.bitrate }) {
-            bitrateIndex = found.offset
-        } else {
-            bitrateIndex = 0
-        }
+}
+
+extension SettingsView {
+    struct Resolution: Equatable, Hashable, CustomStringConvertible {
+        let width: Int32
+        let height: Int32
         
-        if let found = framerateTable.enumerated().first(where: { $0.element == settings.framerate }) {
-            framerateIndex = found.offset
-        } else {
-            framerateIndex = 0
-        }
-        
-        if let found = resolutionTable.enumerated().first(where: { NSInteger($0.element.width) == settings.width && NSInteger($0.element.height) == settings.height }) {
-            resolutionIndex = found.offset
-        } else {
-            // last index is "custom"
-            resolutionIndex = resolutionTable.count - 1
+        var description: String {
+            switch self {
+            case Resolution(width: 3840, height: 2160):
+                "4K"
+            case _ where simplifyFraction(numerator: width, denominator: height) == simplifyFraction(numerator: 16, denominator: 9):
+                "\(height)p"
+            default:
+                "\(width)x\(height)"
+            }
         }
     }
+
+    static let resolutionTable = [
+        Resolution(width: 640, height: 360),
+        Resolution(width: 1280, height: 720),
+        Resolution(width: 1920, height: 1080),
+        Resolution(width: 3840, height: 2160)
+    ]
+    
+    static let framerateTable: [Int32] = [30, 60, 90, 120]
+    
+    static let bitrateTable: [Int32] = [5000, 10000, 30000, 50000, 75000, 100000, 120000, 200000]
+}
+
+// Functions to help with aspect ratio calculation
+fileprivate func gcd<I: BinaryInteger>(_ a: I, _ b: I) -> I {
+    var a = a
+    var b = b
+    while b != 0 {
+        let temp = b
+        b = a % b
+        a = temp
+    }
+    return a
+}
+
+fileprivate func simplifyFraction<I: BinaryInteger>(numerator: I, denominator: I) -> (I, I) {
+    let divisor = gcd(numerator, denominator)
+    return (numerator / divisor, denominator / divisor)
 }
 
 #Preview {
