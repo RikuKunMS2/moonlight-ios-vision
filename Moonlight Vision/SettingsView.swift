@@ -12,100 +12,64 @@ struct SettingsView: View {
     
     @State public var bitrateIndex: Int = 3
 
-
     var body: some View {
         NavigationStack {
             Form {
-                HStack {
-                    Text("Resolution")
-                    Picker("", selection: $resolutionIndex) {
-                        Text("360p").tag(0)
-                        Text("720p").tag(1)
-                        Text("1080p").tag(2)
-                        Text("4K").tag(3)
-                    }.onChange(of: resolutionIndex) {
-                        updateResolution()
-                    }
+                Picker("Resolution", selection: $resolutionIndex) {
+                    Text("360p").tag(0)
+                    Text("720p").tag(1)
+                    Text("1080p").tag(2)
+                    Text("4K").tag(3)
+                }.onChange(of: resolutionIndex) {
+                    updateResolution()
                 }
-                HStack {
-                    Text("Framerate")
-                    Picker("", selection: $framerateIndex) {
-                        Text("30").tag(0)
-                        Text("60").tag(1)
-                        Text("90").tag(2)
-                        Text("120").tag(3)
-                    }.onChange(of: framerateIndex) {
-                        updateFramerate()
-                    }
+                Picker("Framerate", selection: $framerateIndex) {
+                    Text("30").tag(0)
+                    Text("60").tag(1)
+                    Text("90").tag(2)
+                    Text("120").tag(3)
+                }.onChange(of: framerateIndex) {
+                    updateFramerate()
                 }
-                HStack {
-                    Text("Bitrate")
-                    Picker("", selection: $bitrateIndex) {
-                        Text("10Mbps").tag(0)
-                        Text("30Mbps").tag(1)
-                        Text("120Mbps").tag(2)
-                        Text("200Mbps").tag(3)
-                    }.onChange(of: bitrateIndex) {
-                        updateBitrate()
-                    }
+                Picker("Bitrate", selection: $bitrateIndex) {
+                    Text("10Mbps").tag(0)
+                    Text("30Mbps").tag(1)
+                    Text("120Mbps").tag(2)
+                    Text("200Mbps").tag(3)
                 }
-                HStack {
-                    Text("Touch Mode")
-                    Picker("", selection: $settings.absoluteTouchMode) {
-                        Text("Touchpad").tag(false)
-                        Text("Touchscreen").tag(true)
-                    }
+                .onChange(of: bitrateIndex) {
+                    updateBitrate()
                 }
-                HStack {
-                    Text("On Screen Controls")
-                    Picker("", selection: $settings.onscreenControls) {
-                        Text("Off").tag(0)
-                        Text("Auto").tag(1)
-                        Text("Simple").tag(2)
-                        Text("Full").tag(3)
-                    }
+                Picker("Touch Mode", selection: $settings.absoluteTouchMode) {
+                    Text("Touchpad").tag(false)
+                    Text("Touchscreen").tag(true)
                 }
-                Toggle(isOn: $settings.optimizeGames) {
-                    Text("Optimize Game Settings")
+                Picker("On-Screen Controls", selection: $settings.onscreenControls) {
+                    Text("Off").tag(0)
+                    Text("Auto").tag(1)
+                    Text("Simple").tag(2)
+                    Text("Full").tag(3)
                 }
-                HStack {
-                    Text("Multi-Controller Mode")
-                    Picker("", selection: $settings.multiController) {
-                        Text("Single").tag(false)
-                        Text("Auto").tag(true)
-                    }
+                Toggle("Optimize Game Settings", isOn: $settings.optimizeGames)
+                Picker("Multi-Controller Mode", selection: $settings.multiController) {
+                    Text("Single").tag(false)
+                    Text("Auto").tag(true)
                 }
-                Toggle(isOn: $settings.swapABXYButtons) {
-                    Text("Swap A/B and X/Y Buttons")
+                Toggle("Swap A/B and X/Y Buttons", isOn: $settings.swapABXYButtons)
+                Toggle("Play Audio on PC", isOn: $settings.playAudioOnPC)
+                Picker("Preferred Codec", selection: $settings.preferredCodec) {
+                    Text("H.264").tag(PreferredCodec.h264)
+                    Text("HEVC").tag(PreferredCodec.hevc)
+                    Text("AV1").tag(PreferredCodec.av1)
+                    Text("Auto").tag(PreferredCodec.auto)
                 }
-                Toggle(isOn: $settings.playAudioOnPC) {
-                    Text("Play Audio on PC")
+                Toggle("Enable HDR", isOn: $settings.enableHdr)
+                Picker("Frame Pacing", selection: $settings.useFramePacing) {
+                    Text("Lowest Latency").tag(false)
+                    Text("Smoothest Video").tag(true)
                 }
-                HStack {
-                    Text("Preferred Codec")
-                    Picker("", selection: $settings.preferredCodec) {
-                        Text("H.264").tag(PreferredCodec.h264)
-                        Text("HEVC").tag(PreferredCodec.hevc)
-                        Text("AV1").tag(PreferredCodec.av1)
-                        Text("Auto").tag(PreferredCodec.auto)
-                    }
-                }
-                Toggle(isOn: $settings.enableHdr) {
-                    Text("Enable HDR")
-                }
-                HStack {
-                    Text("Frame Pacing")
-                    Picker("", selection: $settings.useFramePacing) {
-                        Text("Lowest Latency").tag(false)
-                        Text("Smoothest Video").tag(true)
-                    }
-                }
-                Toggle(isOn: $settings.btMouseSupport) {
-                    Text("Citrix X1 Mouse Support")
-                }
-                Toggle(isOn: $settings.statsOverlay) {
-                    Text("Statistics Overlay")
-                }
+                Toggle("Citrix X1 Mouse Support", isOn: $settings.btMouseSupport)
+                Toggle("Statistics Overlay", isOn: $settings.statsOverlay)
             }
             .navigationTitle("Settings")
             .onDisappear {

@@ -12,7 +12,7 @@
 
 @implementation DataManager {
     NSManagedObjectContext *_managedObjectContext;
-    AppDelegate *_appDelegate;
+    __weak AppDelegate *_appDelegate;
 }
 
 - (id) init {

@@ -47,44 +47,51 @@ struct MainContentView: View {
         } else {
             TabView {
                 NavigationSplitView {
-                    VStack {
-                        Text("Computers").font(.largeTitle)
-                        List(viewModel.hosts, selection: $selectedHost) { host in
-                            NavigationLink(value: host) {
-                                Label(host.name, systemImage: host.currentGame == nil ? "desktopcomputer" : "play.desktopcomputer")
-                                    .foregroundColor(.primary)
-                            }
+                    List(viewModel.hosts, selection: $selectedHost) { host in
+                        NavigationLink(value: host) {
+                            Label(host.name, 
+                                  systemImage: host.pairState == .paired ? 
+                                  "desktopcomputer" : "lock.desktopcomputer")
+                                .foregroundColor(.primary)
                         }
-                        .toolbar {
-                            ToolbarItem(placement: .primaryAction) {
-                                Button("Add Server", systemImage: "laptopcomputer.and.arrow.down") {
-                                    addingHost = true
-                                }.alert(
-                                    "Enter server",
-                                    isPresented: $addingHost
-                                ) {
-                                    TextField("IP or Host", text: $newHostIp)
-                                    Button("Add") {
-                                        addingHost = false
-                                        viewModel.manuallyDiscoverHost(hostOrIp: newHostIp)
-                                    }
-                                    Button("Cancel", role: .cancel) {
-                                        addingHost = false
-                                    }
-                                }.alert(
-                                    "Unable to add host",
-                                    isPresented: $viewModel.errorAddingHost
-                                ) {
-                                    Button("Ok", role: .cancel) {
-                                        viewModel.errorAddingHost = true
-                                    }
-                                } message: {
-                                    Text(viewModel.addHostErrorMessage)
+                    }
+                    .onChange(of: viewModel.hosts) {
+                        // If the hosts list changes and no host is selected,
+                        // try to select the first paired host automatically.
+                        if selectedHost == nil,
+                            let firstHost = viewModel.hosts.first(where: { $0.pairState == .paired }) {
+                            selectedHost = firstHost
+                        }
+                    }
+                    .navigationTitle("Computers")
+                    .toolbar {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button("Add Server", systemImage: "laptopcomputer.and.arrow.down") {
+                                addingHost = true
+                            }.alert(
+                                "Enter server",
+                                isPresented: $addingHost
+                            ) {
+                                TextField("IP or Host", text: $newHostIp)
+                                Button("Add") {
+                                    addingHost = false
+                                    viewModel.manuallyDiscoverHost(hostOrIp: newHostIp)
                                 }
+                                Button("Cancel", role: .cancel) {
+                                    addingHost = false
+                                }
+                            }.alert(
+                                "Unable to add host",
+                                isPresented: $viewModel.errorAddingHost
+                            ) {
+                                Button("Ok", role: .cancel) {
+                                    viewModel.errorAddingHost = true
+                                }
+                            } message: {
+                                Text(viewModel.addHostErrorMessage)
                             }
                         }
                     }
-                    
                 } detail: {
                     if let selectedHost {
                         ComputerView(host: selectedHost)

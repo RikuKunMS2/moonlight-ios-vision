@@ -8,8 +8,11 @@
 
 #import "AppDelegate.h"
 
+#import "Moonlight-Swift.h"
+
 @implementation AppDelegate
 
+@synthesize mainViewModel = _mainViewModel;
 @synthesize managedObjectContext = _managedObjectContext;
 @synthesize managedObjectModel = _managedObjectModel;
 @synthesize persistentStoreCoordinator = _persistentStoreCoordinator;
@@ -86,6 +89,16 @@ static NSString* DB_NAME = @"Limelight_iOS.sqlite";
 #endif
         }];
     }
+}
+
+#pragma mark - MainViewModel
+
+- (MainViewModel *)mainViewModel {
+    if (_mainViewModel != nil) {
+        return _mainViewModel;
+    }
+    _mainViewModel = [[MainViewModel alloc] init];
+    return _mainViewModel;
 }
 
 #pragma mark - Core Data stack
