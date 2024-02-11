@@ -8,14 +8,31 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Picker("Resolution", selection: $settings.resolution) {
-                    ForEach(Self.resolutionsGroupedByType, id: \.0) { aspectRatio, resolutions in
-                        Section(aspectRatio.casualDescription) {
-                            ForEach(resolutions, id: \.self) { resolution in
-                                Text(resolution.description)
+                HStack {
+                    Text("Resolution")
+                    Spacer()
+                    HStack {
+                        TextField("Width", value: $settings.resolution.width, format: .number.grouping(.never))
+                        Text("by")
+                        TextField("Height", value: $settings.resolution.height, format: .number.grouping(.never))
+                    }
+                    .textFieldStyle(.roundedBorder)
+                    .keyboardType(.numberPad)
+                    .fixedSize(horizontal: true, vertical: false)
+                    Menu {
+                        ForEach(Self.resolutionsGroupedByType, id: \.0) { aspectRatio, resolutions in
+                            Section(aspectRatio.casualDescription) {
+                                ForEach(resolutions, id: \.self) { resolution in
+                                    Button(resolution.description) {
+                                        settings.resolution = resolution
+                                    }
+                                }
                             }
                         }
+                    } label: {
+                        Label("Resolution Options", systemImage: "list.bullet")
                     }
+                    .labelStyle(.iconOnly)
                 }
                 Picker("Framerate", selection: $settings.framerate) {
                     ForEach(Self.framerateTable, id: \.self) { framerate in
@@ -58,7 +75,7 @@ struct SettingsView: View {
                 Toggle("Citrix X1 Mouse Support", isOn: $settings.btMouseSupport)
                 Toggle("Statistics Overlay", isOn: $settings.statsOverlay)
             }
-            .frame(width: 450)
+            .frame(width: 600)
             .navigationTitle("Settings")
             .onDisappear {
                 settings.save()
@@ -117,8 +134,8 @@ extension SettingsView {
     }
 
     struct Resolution: Equatable, Hashable, CustomStringConvertible {
-        let width: Int
-        let height: Int
+        var width: Int
+        var height: Int
 
         var aspectRatio: AspectRatio {
             AspectRatio(width: width, height: height)
