@@ -9,6 +9,7 @@ struct MainContentView: View {
     
     @State private var addingHost = false
     @State private var newHostIp = ""
+    @State private var dimPassthrough = true
     
     var body: some View {
         if viewModel.activelyStreaming {
@@ -25,13 +26,24 @@ struct MainContentView: View {
                 let geometryRequest = UIWindowScene.GeometryPreferences.Vision(resizingRestrictions: .freeform)
                 windowScene.requestGeometryUpdate(geometryRequest)
             }
-            .ornament(attachmentAnchor: .scene(.top), contentAlignment: .bottom) {
-                Button("Close") {
-                    viewModel.activelyStreaming = false
-                }
+            .toolbar {
+                
             }
-            .clipShape(RoundedRectangle(cornerRadius: 15.0))
-            .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 15.0))
+            .ornament(attachmentAnchor: .scene(.topLeading), contentAlignment: .bottomLeading) {
+                HStack {
+                    Button("Close", systemImage: "xmark") {
+                        viewModel.activelyStreaming = false
+                    }
+                    Button("Toggle Dimming", systemImage: dimPassthrough ? "moon.fill" : "moon") {
+                        dimPassthrough.toggle()
+                    }
+                }
+                .labelStyle(.iconOnly)
+                .padding()
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 30.0))
+            .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 30.0))
+            .preferredSurroundingsEffect(dimPassthrough ? .systemDark : nil)
         } else {
             TabView {
                 NavigationSplitView {
