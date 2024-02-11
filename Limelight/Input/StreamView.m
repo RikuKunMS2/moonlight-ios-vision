@@ -161,12 +161,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     }
 }
 
-- (void)layoutIfNeeded {
-    NSLog(@"layout");
-}
-
 - (void) layoutSublayersOfLayer:(CALayer* ) layer {
-    NSLog(@"LayoutSublayersOfLayer");
     for (CALayer* layer in self.layer.sublayers) {
         if ([layer isKindOfClass:[AVSampleBufferDisplayLayer class]]) {
             CGSize videoSize;
@@ -181,9 +176,6 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
             layer.position = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
             layer.bounds = CGRectMake(0, 0, videoSize.width, videoSize.height);
             [CATransaction commit];
-            NSLog(@"STREAM LAYER: %fx%f", self.layer.frame.size.width, self.layer.frame.size.height);
-            NSLog(@"RENDER LAYER: %fx%f", layer.frame.size.width, layer.frame.size.height);
-            NSLog(@"VSIZE: %fx%f", videoSize.width, videoSize.height);
         }
     }
 }

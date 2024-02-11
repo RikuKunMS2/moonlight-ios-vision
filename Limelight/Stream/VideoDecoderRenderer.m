@@ -521,12 +521,6 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         return DR_NEED_IDR;
     }
     
-    // Check if we need to resize the display layer
-//    if (!CGRectEqualToRect(_lastKnownSize, _view.bounds)) {
-//        NSLog(@"Reinitialize display layer");
-//        [self reinitializeDisplayLayer];
-//    }
-    
     // Check for previous decoder errors before doing anything
     if (displayLayer.status == AVQueuedSampleBufferRenderingStatusFailed) {
         Log(LOG_E, @"Display layer rendering failed: %@", displayLayer.error);
