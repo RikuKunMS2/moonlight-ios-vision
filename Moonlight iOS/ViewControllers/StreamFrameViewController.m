@@ -85,16 +85,9 @@
     [UIApplication sharedApplication].idleTimerDisabled = YES;
     
     _settings = [[[DataManager alloc] init] getSettings];
-    
-    _stageLabel = [[UILabel alloc] init];
-    [_stageLabel setUserInteractionEnabled:NO];
-    [_stageLabel setText:[NSString stringWithFormat:@"Starting %@...", self.streamConfig.appName]];
-    [_stageLabel sizeToFit];
-    _stageLabel.textAlignment = NSTextAlignmentCenter;
-    _stageLabel.textColor = [UIColor whiteColor];
-    _stageLabel.center = CGPointMake(self.view.frame.size.width / 2, self.view.frame.size.height / 2);
-    
+
     _spinner = [[UIActivityIndicatorView alloc] init];
+    [self.view addSubview:_spinner];
     [_spinner setUserInteractionEnabled:NO];
 #if TARGET_OS_TV
     [_spinner setActivityIndicatorViewStyle:UIActivityIndicatorViewStyleWhiteLarge];
@@ -103,8 +96,21 @@
 #endif
     [_spinner sizeToFit];
     [_spinner startAnimating];
-    _spinner.center = CGPointMake(self.view.frame.size.width / 2, self.view.frame.size.height / 2 - _stageLabel.frame.size.height - _spinner.frame.size.height);
+    _spinner.translatesAutoresizingMaskIntoConstraints = NO;
+    [_spinner.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor].active = YES;
+    [_spinner.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor].active = YES;
     
+    _stageLabel = [[UILabel alloc] init];
+    [self.view addSubview:_stageLabel];
+    [_stageLabel setUserInteractionEnabled:NO];
+    [_stageLabel setText:[NSString stringWithFormat:@"Starting %@...", self.streamConfig.appName]];
+    [_stageLabel sizeToFit];
+    _stageLabel.textAlignment = NSTextAlignmentCenter;
+    _stageLabel.textColor = [UIColor whiteColor];
+    _stageLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [_stageLabel.topAnchor constraintEqualToAnchor:_spinner.bottomAnchor constant:20.0].active = YES;
+    [_stageLabel.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor].active = YES;
+
     _controllerSupport = [[ControllerSupport alloc] initWithConfig:self.streamConfig delegate:self];
     _inactivityTimer = nil;
     
@@ -140,6 +146,7 @@
 #endif
     
     _tipLabel = [[UILabel alloc] init];
+    [self.view addSubview:_tipLabel];
     [_tipLabel setUserInteractionEnabled:NO];
     
 #if TARGET_OS_TV
@@ -151,8 +158,10 @@
     [_tipLabel sizeToFit];
     _tipLabel.textColor = [UIColor whiteColor];
     _tipLabel.textAlignment = NSTextAlignmentCenter;
-    _tipLabel.center = CGPointMake(self.view.frame.size.width / 2, self.view.frame.size.height * 0.9);
-    
+    _tipLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    [_tipLabel.topAnchor constraintEqualToAnchor:_stageLabel.bottomAnchor constant:20.0].active = YES;
+    [_tipLabel.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor].active = YES;
+
     _streamMan = [[StreamManager alloc] initWithConfig:self.streamConfig
                                             renderView:_streamView
                                    connectionCallbacks:self];
@@ -207,10 +216,6 @@
         // Add StreamView directly in relative mode
         [self.view addSubview:_streamView];
     }
-    
-    [self.view addSubview:_stageLabel];
-    [self.view addSubview:_spinner];
-    [self.view addSubview:_tipLabel];
 }
 
 - (void)viewDidLayoutSubviews {

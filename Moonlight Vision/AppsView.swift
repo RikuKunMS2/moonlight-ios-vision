@@ -44,9 +44,15 @@ struct AppButtonView: View {
             .contextMenu {
                 if app.id == host.currentGame {
                     Button {
-                        print("Should stop here")
+                        let httpManager = HttpManager(host: app.host())
+                        let httpResponse = HttpResponse()
+                        let quitRequest = HttpRequest(for: httpResponse, with: httpManager?.newQuitAppRequest())
+                        Task {
+                            httpManager?.executeRequestSynchronously(quitRequest)
+                            // lol no error handling...
+                        }
                     } label: {
-                        Label("Stop (INOP)", systemImage: "stop.circle")
+                        Label("Stop", systemImage: "stop.circle")
                     }
                 }
             }
