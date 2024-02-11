@@ -66,7 +66,7 @@ struct MainContentView: View {
                     .navigationTitle("Computers")
                     .toolbar {
                         ToolbarItem(placement: .primaryAction) {
-                            Button("Add Server", systemImage: "laptopcomputer.and.arrow.down") {
+                            Button("Add Server", systemImage: "plus") {
                                 addingHost = true
                             }.alert(
                                 "Enter server",

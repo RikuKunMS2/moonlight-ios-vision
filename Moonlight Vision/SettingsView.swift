@@ -78,7 +78,7 @@ struct SettingsView: View {
                 }
                 Toggle("Citrix X1 Mouse Support", isOn: $settings.btMouseSupport)
                 Toggle("Statistics Overlay", isOn: $settings.statsOverlay)
-            }
+            }.frame(width: 450)
             .navigationTitle("Settings")
             .onDisappear {
                 settings.save()
