@@ -55,8 +55,8 @@ struct SettingsView: View {
             HStack {
                 Text("Touch Mode")
                 Picker("", selection: $settings.absoluteTouchMode) {
-                    Text("Touchpad").tag(0)
-                    Text("Touchscreen").tag(1)
+                    Text("Touchpad").tag(false)
+                    Text("Touchscreen").tag(true)
                 }
             }
             HStack {
@@ -74,8 +74,8 @@ struct SettingsView: View {
             HStack {
                 Text("Multi-Controller Mode")
                 Picker("", selection: $settings.multiController) {
-                    Text("Single").tag(0)
-                    Text("Auto").tag(1)
+                    Text("Single").tag(false)
+                    Text("Auto").tag(true)
                 }
             }
             Toggle(isOn: $settings.swapABXYButtons) {
@@ -99,8 +99,8 @@ struct SettingsView: View {
             HStack {
                 Text("Frame Pacing")
                 Picker("", selection: $settings.useFramePacing) {
-                    Text("Lowest Latency").tag(0)
-                    Text("Smoothest Video").tag(1)
+                    Text("Lowest Latency").tag(false)
+                    Text("Smoothest Video").tag(true)
                 }
             }
             Toggle(isOn: $settings.btMouseSupport) {
