@@ -56,7 +56,6 @@ struct SettingsView: View {
                     Text("Auto").tag(OnScreenControlsLevel.auto)
                     Text("Simple").tag(OnScreenControlsLevel.simple)
                     Text("Full").tag(OnScreenControlsLevel.full)
-                    
                 }
                 Toggle("Optimize Game Settings", isOn: $settings.optimizeGames)
                 Picker("Multi-Controller Mode", selection: $settings.multiController) {
@@ -79,10 +78,13 @@ struct SettingsView: View {
                 Toggle("Citrix X1 Mouse Support", isOn: $settings.btMouseSupport)
                 Toggle("Statistics Overlay", isOn: $settings.statsOverlay)
             }.frame(width: 450)
-            .navigationTitle("Settings")
-            .onDisappear {
-                settings.save()
-            }
+                .onAppear {
+                    initSettingsState()
+                }
+                .navigationTitle("Settings")
+                .onDisappear {
+                    settings.save()
+                }
         }
     }
     
@@ -91,9 +93,9 @@ struct SettingsView: View {
     // TODO: add custom resolutions
     let resolutionTable = [CGSize(width: 640, height: 360), CGSize(width: 1280, height: 720), CGSize(width: 1920, height: 1080), CGSize(width: 3840, height: 2160)]
     
-    let framerateTable = [30, 60, 90, 120]
+    let framerateTable: [Int32] = [30, 60, 90, 120]
     
-    let bitrateTable = [5000, 10000, 30000, 50000, 75000, 100000, 120000, 200000]
+    let bitrateTable: [Int32] = [5000, 10000, 30000, 50000, 75000, 100000, 120000, 200000]
     
     @MainActor func updateResolution() {
         let resolution = resolutionTable[resolutionIndex]
