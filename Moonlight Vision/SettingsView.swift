@@ -8,31 +8,38 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                HStack {
-                    Text("Resolution")
-                    Spacer()
-                    HStack {
-                        TextField("Width", value: $settings.resolution.width, format: .number.grouping(.never))
-                        Text("by")
-                        TextField("Height", value: $settings.resolution.height, format: .number.grouping(.never))
-                    }
-                    .textFieldStyle(.roundedBorder)
-                    .keyboardType(.numberPad)
-                    .fixedSize(horizontal: true, vertical: false)
-                    Menu {
-                        ForEach(Self.resolutionsGroupedByType, id: \.0) { aspectRatio, resolutions in
-                            Section(aspectRatio.casualDescription) {
+                NavigationLink {
+                    Form {
+                        Picker("Resolution", selection: $settings.resolution) {
+                            ForEach(Self.resolutionsGroupedByType, id: \.0) { aspectRatio, resolutions in
                                 ForEach(resolutions, id: \.self) { resolution in
-                                    Button(resolution.description) {
-                                        settings.resolution = resolution
-                                    }
+                                    Text(resolution.description)
+                                        .badge(aspectRatio.casualDescription)
                                 }
                             }
                         }
-                    } label: {
-                        Label("Resolution Options", systemImage: "list.bullet")
+                        .labelsHidden()
+                        .pickerStyle(.inline)
                     }
-                    .labelStyle(.iconOnly)
+                    .ornament(attachmentAnchor: .scene(.bottom)) {
+                        HStack {
+                            TextField("Width", value: $settings.resolution.width, format: .number)
+                            Text("by")
+                            TextField("Height", value: $settings.resolution.height, format: .number)
+                        }
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numberPad)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding()
+                        .glassBackgroundEffect()
+                    }
+                    .navigationTitle("Resolution")
+                } label: {
+                    HStack {
+                        Text("Resolution")
+                        Spacer()
+                        Text(settings.resolution.description)
+                    }
                 }
                 Picker("Framerate", selection: $settings.framerate) {
                     ForEach(Self.framerateTable, id: \.self) { framerate in
@@ -75,12 +82,12 @@ struct SettingsView: View {
                 Toggle("Citrix X1 Mouse Support", isOn: $settings.btMouseSupport)
                 Toggle("Statistics Overlay", isOn: $settings.statsOverlay)
             }
-            .frame(width: 600)
             .navigationTitle("Settings")
             .onDisappear {
                 settings.save()
             }
         }
+    .frame(width: 600)
     }
 }
 
@@ -154,28 +161,19 @@ extension SettingsView {
     }
 
     static let resolutionTable = [
-        // 4:3
-        Resolution(width: 640, height: 480),
-        Resolution(width: 800, height: 600),
-        Resolution(width: 1024, height: 768),
-        Resolution(width: 1920, height: 1440),
         // 16:9
         Resolution(width: 1280, height: 720),
-        Resolution(width: 1600, height: 900),
         Resolution(width: 1920, height: 1080),
         Resolution(width: 2560, height: 1440),
         Resolution(width: 3840, height: 2160),
         // 16:10
-        Resolution(width: 1280, height: 800),
         Resolution(width: 1920, height: 1200),
         Resolution(width: 2560, height: 1600),
         // "21:9"
         Resolution(width: 2560, height: 1080),
         Resolution(width: 3440, height: 1440),
-        Resolution(width: 5120, height: 2160),
         // 32:9
         Resolution(width: 5120, height: 1440),
-        Resolution(width: 7680, height: 2160),
     ]
 
     static var resolutionsGroupedByType: [(AspectRatio, [Resolution])] {
