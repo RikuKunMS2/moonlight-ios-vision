@@ -8,6 +8,7 @@
 
 import Foundation
 import OrderedCollections
+import VideoToolbox
 
 @MainActor
 class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback, AppAssetCallback {
@@ -274,9 +275,46 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         
         // all of them? i guess? this forces hdr on
         config.serverCodecModeSupport = host.serverCodecModeSupport
-        config.supportedVideoFormats |= 0x0001
-        config.supportedVideoFormats |= 0x0100
-        config.supportedVideoFormats |= 0x0200
+        
+        // figure out how to nicely import the c++ headers
+        
+        let AV1_MAIN8: Int32 = 0x1000
+        let AV1_MAIN10: Int32 = 0x2000
+        let H265: Int32 = 0x0100
+        let H264: Int32 = 0x0001
+        let H265_MAIN10: Int32 = 0x0200
+        
+        let av1_supported = VideoToolbox.VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1)
+        let hdr10_supported = AVPlayer.availableHDRModes.contains(AVPlayer.HDRMode.hdr10)
+        switch streamSettings.preferredCodec {
+        case .av1:
+            if av1_supported {
+                config.supportedVideoFormats |= AV1_MAIN8
+            }
+        case .auto:
+            fallthrough
+        case .hevc:
+            if VideoToolbox.VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC) {
+                config.supportedVideoFormats |= H265
+            }
+        case .h264:
+            config.supportedVideoFormats |= H264
+        }
+        
+        if config.width > 4096 || config.height > 4096 || streamSettings.enableHdr {
+            if VideoToolbox.VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC) {
+                config.supportedVideoFormats |= H265
+            }
+            
+            if streamSettings.enableHdr && hdr10_supported {
+                config.supportedVideoFormats |= H265_MAIN10
+            }
+            
+            let av1_enabled = config.supportedVideoFormats & 0xF000 != 0
+            if av1_enabled && streamSettings.enableHdr && av1_supported && hdr10_supported {
+                config.supportedVideoFormats |= AV1_MAIN10
+            }
+        }
         
         currentStreamConfig = config
         activelyStreaming = true
