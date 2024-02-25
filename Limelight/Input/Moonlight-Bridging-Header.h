@@ -16,6 +16,7 @@
 #import "ServerInfoResponse.h"
 #import "StreamFrameViewController.h"
 #import "Utils.h"
+#import "WakeOnLanManager.h"
 
 #import "MoonlightApp+CoreDataClass.h"
 #import "MoonlightHost+CoreDataClass.h"

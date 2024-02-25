@@ -58,6 +58,18 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             hosts.append(newHost)
         }
     }
+
+    func removeHost(_ host: TemporaryHost) {
+        if hosts.contains(host) {
+            discoveryManager?.removeHost(fromDiscovery: host)
+            dataManager.remove(host)
+            hosts.removeAll(where: { $0 == host })
+        }
+    }
+    
+    func wakeHost(_ host: TemporaryHost) {
+        WakeOnLanManager.wake(host)
+    }
     
     // MARK: App Icons
 
@@ -310,7 +322,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
                 config.supportedVideoFormats |= H265_MAIN10
             }
             
-            let av1_enabled = config.supportedVideoFormats & 0xF000 != 0
+            let av1_enabled = config.supportedVideoFormats & 0xf000 != 0
             if av1_enabled && streamSettings.enableHdr && av1_supported && hdr10_supported {
                 config.supportedVideoFormats |= AV1_MAIN10
             }
