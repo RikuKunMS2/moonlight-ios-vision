@@ -18,6 +18,12 @@
 
 static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 
+@interface StreamView ()
+@property (nonatomic, strong) NSTimer *buttonTimer;
+@property (nonatomic, strong) NSDate *startTime;
+@end
+
+
 @implementation StreamView {
     OnScreenControls* onScreenControls;
     
@@ -479,21 +485,22 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 }
 
 - (BOOL)handleMouseButtonEvent:(int)buttonAction forTouches:(NSSet *)touches withEvent:(UIEvent *)event {
-#if !TARGET_OS_TV
+#if !TARGET_OS_TV || TARGET_OS_VISION
     if (@available(iOS 13.4, *)) {
         UITouch* touch = [touches anyObject];
         if (touch.type == UITouchTypeIndirectPointer) {
-            if (@available(iOS 14.0, *)) {
-                if ([GCMouse current] != nil) {
+            //disable gc mouse because it doesn't work with vision os
+            //if (@available(iOS 14.0, *)) {
+              //  if ([GCMouse current] != nil) {
                     // We'll handle this with GCMouse. Do nothing here.
-                    return YES;
-                }
-            }
-            
+               //     return YES;
+              //  }
+        //    }
+
             UIEventButtonMask normalizedButtonMask;
             
-            // iOS 14 includes the released button in the buttonMask for the release
-            // event, while iOS 13 does not. Normalize that behavior here.
+            // iOS 14 includes the released button in the button Mask for the release
+            // event, while iOS 13 does not.
             if (@available(iOS 14.0, *)) {
                 if (buttonAction == BUTTON_ACTION_RELEASE) {
                     normalizedButtonMask = lastMouseButtonMask & ~event.buttonMask;
@@ -507,37 +514,51 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
             }
             
             UIEventButtonMask changedButtons = lastMouseButtonMask ^ normalizedButtonMask;
-                        
-            for (int i = BUTTON_LEFT; i <= BUTTON_X2; i++) {
-                UIEventButtonMask buttonFlag;
-                
-                switch (i) {
-                    // Right and Middle are reversed from what iOS uses
-                    case BUTTON_RIGHT:
-                        buttonFlag = UIEventButtonMaskForButtonNumber(2);
-                        break;
-                    case BUTTON_MIDDLE:
-                        buttonFlag = UIEventButtonMaskForButtonNumber(3);
-                        break;
-                        
-                    default:
-                        buttonFlag = UIEventButtonMaskForButtonNumber(i);
-                        break;
+
+            UIEventButtonMask buttonFlag = UIEventButtonMaskForButtonNumber(1); // Button number for left is 1.
+
+            if (changedButtons & buttonFlag) {
+                if (buttonAction == BUTTON_ACTION_PRESS) {
+                    LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
+                    usleep(100 * 1000);
+                    LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+                    Log(LOG_I, @"Left Click occurred");
+                    
+                    self.startTime = [NSDate date]; // Start time recorded here
+                    self.buttonTimer = [NSTimer scheduledTimerWithTimeInterval:0.5 target:self selector:@selector(sendRightClick) userInfo:nil repeats:NO];
                 }
-                
-                if (changedButtons & buttonFlag) {
-                    LiSendMouseButtonEvent(buttonAction, i);
+                else if (buttonAction == BUTTON_ACTION_RELEASE) {
+                    // Left button release detected
+                    Log(LOG_I, @"Left Click Let Go");
+
+                    if (self.buttonTimer) {
+                        [self.buttonTimer invalidate];
+                        self.buttonTimer = nil;
+
+
+                        NSTimeInterval elapsedTime = [[NSDate date] timeIntervalSinceDate:self.startTime];
+                        Log(LOG_I, [NSString stringWithFormat:@"Elapsed time is %f", elapsedTime]);
+
+           }
                 }
             }
-            
+
             lastMouseButtonMask = normalizedButtonMask;
             return YES;
         }
     }
 #endif
-    
     return NO;
 }
+
+#if TARGET_OS_VISION
+- (void)sendRightClick {
+    Log(LOG_I, @"Right Click Action Taken - Type B");
+    LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
+    usleep(100 * 1000);
+    LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
+}
+#end
 
 - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
 #if !TARGET_OS_TV
@@ -552,12 +573,13 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         
         UITouch *touch = [touches anyObject];
         if (touch.type == UITouchTypeIndirectPointer) {
-            if (@available(iOS 14.0, *)) {
-                if ([GCMouse current] != nil) {
+            //disable gcmouse because it doesn't work with vision os
+            //if (@available(iOS 14.0, *)) {
+             //   if ([GCMouse current] != nil) {
                     // We'll handle this with GCMouse. Do nothing here.
-                    return;
-                }
-            }
+               //     return;
+                //}
+           // }
             
             // We must handle this event to properly support
             // drags while the middle, X1, or X2 mouse buttons are
@@ -688,12 +710,13 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 - (UIPointerRegion *)pointerInteraction:(UIPointerInteraction *)interaction
                        regionForRequest:(UIPointerRegionRequest *)request
                           defaultRegion:(UIPointerRegion *)defaultRegion API_AVAILABLE(ios(13.4)) {
-    if (@available(iOS 14.0, *)) {
-        if ([GCMouse current] != nil) {
+    //disable gcmouse because it doesn't work with vision os
+    // if (@available(iOS 14.0, *)) {
+     //   if ([GCMouse current] != nil) {
             // We'll handle this with GCMouse. Do nothing here.
-            return nil;
-        }
-    }
+       //     return nil;
+     //   }
+   // }
     
     // This logic mimics what iOS does with AVLayerVideoGravityResizeAspect
     CGSize videoSize;

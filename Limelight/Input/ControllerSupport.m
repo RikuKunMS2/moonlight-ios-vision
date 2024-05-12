@@ -1180,20 +1180,21 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     }];
     
     if (@available(iOS 14.0, tvOS 14.0, *)) {
-        _mouseConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            Log(LOG_I, @"Mouse connected!");
+        //disable gcmouse because it doesn't work with vision os
+       // _mouseConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+         //   Log(LOG_I, @"Mouse connected!");
             
-            GCMouse* mouse = note.object;
+           // GCMouse* mouse = note.object;
             
             // Register for mouse events
-            [self registerMouseCallbacks: mouse];
+            //[self registerMouseCallbacks: mouse];
 
             // Re-evaluate the on-screen control mode
-            [self updateAutoOnScreenControlMode];
+            //[self updateAutoOnScreenControlMode];
             
             // Notify the delegate
-            [self->_delegate mousePresenceChanged];
-        }];
+           // [self->_delegate mousePresenceChanged];
+       //}];
         _mouseDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
             Log(LOG_I, @"Mouse disconnected!");
             
