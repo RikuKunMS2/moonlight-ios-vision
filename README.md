@@ -1,13 +1,4 @@
-# Moonlight iOS/tvOS/visionOS
-
-## ! visionOS support is in beta !
-Feel free to test it out:
-https://testflight.apple.com/join/4eE59dyH
-
-This is a fork I'm working on in my spare time that I would eventually like to upstream. If you encounter issues with the build please feel free to file an issue - or even better send a PR :D
-The visionOS code is located in the [`visionos` branch](https://github.com/alexhaugland/moonlight-ios/tree/visionos).
-
---------
+# Moonlight iOS/tvOS
 
 [![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/kwv8vpwr457lqn25/branch/master?svg=true)](https://ci.appveyor.com/project/cgutman/moonlight-ios/branch/master)
 
@@ -21,13 +12,17 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 
 ## Building
 * Install Xcode from the [App Store page](https://apps.apple.com/us/app/xcode/id497799835)
-* Run `git clone --recursive https://github.com/moonlight-stream/moonlight-ios.git`
-  *  If you've already clone the repo without `--recursive`, run `git submodule update --init --recursive`
-* Open Moonlight.xcodeproj in Xcode
-* To run on a real device, you will need to locally modify the signing options:
+* Run `git clone -b visionos --recursive https://github.com/RikuKunMS2/moonlight-ios-vision.git`
+  *  If you've already cloned the repo without `--recursive`, run `git submodule update --init --recursive`
+* Open Moonlight.xcodeproj in Xcode (it would download by default to your user folder on MacOS)
+* To run on a real device, you will need to locally modify the signing options and add your device:
+    * Go to the top menu bar, then in 'Window' open Devices and Simulators
+    * Add your Vision Pro
+    * In the project select to the folder icon in the sidebar to browser files
     * Click on "Moonlight" at the top of the left sidebar
+    * Under "Targets", select "Moonlight Vision"
     * Click on the "Signing & Capabilities" tab
-    * Under "Targets", select "Moonlight" (for iOS/iPadOS) or "Moonlight TV" (for tvOS)
     * In the "Team" dropdown, select your name. If your name doesn't appear, you may need to sign into Xcode with your Apple account.
-    * Change the "Bundle Identifier" to something different. You can add your name or some random letters to make it unique.
-    * Now you can select your Apple device in the top bar as a target and click the Play button to run.
+    * Change the "Bundle Identifier" to something different (unique). You can add your name or some random letters to make it unique.
+    * Select your Vision Pro (not the simlator or 'any device' but the one your registered earlier) in the top bar as a target and click the Play button to run. It will start the build and install it to your headset
+    * If you didn't pay for a developer account you will have to re-install it using x-code every 7 days.
