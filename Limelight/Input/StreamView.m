@@ -522,14 +522,14 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
                     LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
                     usleep(100 * 1000);
                     LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
-                    Log(LOG_I, @"Left Click occurred");
+                   // Log(LOG_I, @"Left Click occurred");
                     
                     self.startTime = [NSDate date]; // Start time recorded here
                     self.buttonTimer = [NSTimer scheduledTimerWithTimeInterval:0.5 target:self selector:@selector(sendRightClick) userInfo:nil repeats:NO];
                 }
                 else if (buttonAction == BUTTON_ACTION_RELEASE) {
                     // Left button release detected
-                    Log(LOG_I, @"Left Click Let Go");
+                   // Log(LOG_I, @"Left Click Let Go");
 
                     if (self.buttonTimer) {
                         [self.buttonTimer invalidate];
@@ -537,7 +537,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 
 
                         NSTimeInterval elapsedTime = [[NSDate date] timeIntervalSinceDate:self.startTime];
-                        Log(LOG_I, [NSString stringWithFormat:@"Elapsed time is %f", elapsedTime]);
+                       // Log(LOG_I, [NSString stringWithFormat:@"Elapsed time is %f", elapsedTime]);
 
            }
                 }
@@ -553,12 +553,12 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 
 #if TARGET_OS_VISION
 - (void)sendRightClick {
-    Log(LOG_I, @"Right Click Action Taken - Type B");
+  //  Log(LOG_I, @"Right Click Action Taken - Type B");
     LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
     usleep(100 * 1000);
     LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
 }
-#end
+#endif
 
 - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
 #if !TARGET_OS_TV
