@@ -10,8 +10,15 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 
 [![Moonlight for iOS and tvOS](https://moonlight-stream.org/images/App_Store_Badge_135x40.svg)](https://apps.apple.com/us/app/moonlight-game-streaming/id1000551566)
 
+## Requirements
+* XCode developer account (to get the XCode Beta)
+* Tested on Vision OS 2.0 Beta 2
+* XCode Beta
+
 ## Building
-* Install Xcode from the [App Store page](https://apps.apple.com/us/app/xcode/id497799835)
+* Install Xcode beta from the [App Store page](https://developer.apple.com/download/all/?q=xcode)
+* You need to be signed into a developer account to download (and build) you don’t have to pay, just do all the steps right up to paying and then don’t pay
+* You should delete your old xcode and rename xcode-beta to xcode
 * Run `git clone -b visionos --recursive https://github.com/RikuKunMS2/moonlight-ios-vision.git`
   *  If you've already cloned the repo without `--recursive`, run `git submodule update --init --recursive`
 * Open Moonlight.xcodeproj in Xcode (it would download by default to your user folder on MacOS)
@@ -27,6 +34,13 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
     * Select your Vision Pro (not the simlator or 'any device' but the one your registered earlier) in the top bar as a target and click the Play button to run. It will start the build and install it to your headset
     * If you didn't pay for a developer account you will have to re-install it using x-code every 7 days.
 
- ## FAQ
+## FAQ
 * How do I right click?: You press and hold on the trackpad for more than half a second and it will right click, both magic trackpad and eye clicking will do the same thing
 * Why does my cursor snap to where I'm looking: I have no idea, this is an OS level thing that I don't think we have control over, oh boy I sure wish I could adjust the snapping delay though ha!
+
+## What isn’t working: 
+* Right clicking is broken because I am working on a new version
+
+## New Planned Features
+* Better magic trackpad support for right clicking + more
+* Microphone forwarding via VBAN to Voicemeter on windows
