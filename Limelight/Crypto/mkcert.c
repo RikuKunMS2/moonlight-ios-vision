@@ -4,10 +4,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <openssl/crypto.h>
+#include <openssl/err.h>
+#include <openssl/pkcs12.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <OpenSSL/provider.h>
-#include <OpenSSL/rsa.h>
+#include <openssl/rsa.h>
 #include <openssl/x509.h>
 #include <OpenSSL/rand.h>
 
@@ -15,18 +18,36 @@ static const int NUM_BITS = 2048;
 static const int SERIAL = 0;
 static const int NUM_YEARS = 20;
 
+void print_openssl_errors() {
+    unsigned long err;
+    while ((err = ERR_get_error()) != 0) {
+        fprintf(stderr, "OpenSSL error: %s\n", ERR_error_string(err, NULL));
+    }
+}
+
 void mkcert(X509 **x509p, EVP_PKEY **pkeyp, int bits, int serial, int years) {
-    
     X509* cert = X509_new();
     
     EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
 
-    EVP_PKEY_keygen_init(ctx);
-    EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, bits);
+    if (ctx == NULL || EVP_PKEY_keygen_init(ctx) <= 0) {
+        fprintf(stderr, "Failed to initialize keygen context\n");
+        return;
+    }
+
+    if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, bits) <= 0) {
+        fprintf(stderr, "Failed to set RSA keygen bits\n");
+        EVP_PKEY_CTX_free(ctx);
+        return;
+    }
 
     // pk must be initialized on input
     EVP_PKEY* pk = NULL;
-    EVP_PKEY_keygen(ctx, &pk);
+    if (EVP_PKEY_keygen(ctx, &pk) <= 0) {
+        fprintf(stderr, "Failed to generate key\n");
+        EVP_PKEY_CTX_free(ctx);
+        return;
+    }
 
     EVP_PKEY_CTX_free(ctx);
     
@@ -71,35 +92,29 @@ struct CertKeyPair generateCertKeyPair(void) {
     // OpenSSL3 has default algorithms that iOS refuses to load so we
     // must load the legacy provider and override all the algorithms
     // in this cert.
-
-    OSSL_PROVIDER *_legacy = OSSL_PROVIDER_try_load(NULL, "legacy", 1);
-
-    if (_legacy == NULL) {
-        printf("Failed to load Legacy provider\n");
-    }
-   
+    
+    // Print the OpenSSL version
+    printf("OpenSSL version: %s\n", OpenSSL_version(OPENSSL_VERSION));
+    
     bio_err = BIO_new_fp(stderr, BIO_NOCLOSE);
     
     mkcert(&x509, &pkey, NUM_BITS, SERIAL, NUM_YEARS);
     
-    char* pass = "limelight";
-    p12 = PKCS12_create(pass,
-                        "GameStream",
-                        pkey,
-                        x509,
-                        NULL,
-                        NID_pbe_WithSHA1And3_Key_TripleDES_CBC,
-                        NID_pbe_WithSHA1And40BitRC2_CBC,
-                        2048,
-                        -1, // disable the automatic MAC
-                        0);
-    // MAC it ourselves with SHA1 since iOS refuses to load anything else.
-    PKCS12_set_mac(p12, pass, -1, NULL, 0, 1, EVP_sha1());
-    
+    p12 = PKCS12_create("limelight", "GameStream", pkey, x509, NULL, 0, 0, 0, 0, 0);
+
     if (p12 == NULL) {
-        printf("Error generating a valid PKCS12 certificate.\n");
+        fprintf(stderr, "Error generating a valid PKCS12 certificate.\n");
     }
-    
+   
+    char* pass = "limelight";
+
+    // MAC it ourselves with SHA1 since iOS refuses to load anything else.
+    if (!PKCS12_set_mac(p12, pass, -1, NULL, 0, 1, EVP_sha1())) {
+        fprintf(stderr, "Error setting MAC.\n");
+        PKCS12_free(p12);
+        p12 = NULL;
+    }
+
     BIO_free(bio_err);
     
     return (CertKeyPair){x509, pkey, p12};

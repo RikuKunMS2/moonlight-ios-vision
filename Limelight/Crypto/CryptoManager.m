@@ -9,6 +9,7 @@
 #import "CryptoManager.h"
 #import "mkcert.h"
 
+#include <openssl/pkcs12.h>
 #include <openssl/sha.h>
 #include <openssl/x509.h>
 #include <openssl/pem.h>
