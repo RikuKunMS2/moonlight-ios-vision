@@ -44,3 +44,11 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 ## New Planned Features
 * Better magic trackpad support for right clicking + more
 * Microphone forwarding via VBAN to Voicemeter on windows
+
+# Donations
+* Some people expressed intrest in donations so:
+* I set up a ko-fi for donations!
+https://ko-fi.com/lumanaire
+
+Thanks again for your support :)
+
