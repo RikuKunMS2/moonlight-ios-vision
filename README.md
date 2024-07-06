@@ -35,6 +35,7 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
     * If you didn't pay for a developer account you will have to re-install it using x-code every 7 days.
 
 ## FAQ
+* how do I enable mouse support? SET THE SCREEN MODE TO TOUCHSCREEN in the moonlight settings in the app. confusing I know, but until apple fixes actual mouse supports its going to have to be set to touch screen mode.
 * How do I right click?: You press and hold on the trackpad for more than half a second and it will right click, both magic trackpad and eye clicking will do the same thing
 * Why does my cursor snap to where I'm looking: I have no idea, this is an OS level thing that I don't think we have control over, oh boy I sure wish I could adjust the snapping delay though ha!
 
