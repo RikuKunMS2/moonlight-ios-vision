@@ -303,7 +303,7 @@
 		F778956F2B65979500F02568 /* SDLMainWrapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SDLMainWrapper.h; sourceTree = "<group>"; };
 		F77B58AF2B5EF94900482BD5 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		F77B58B12B5EFC9000482BD5 /* ComputerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerView.swift; sourceTree = "<group>"; };
-		F7A119552B5DDF73001E8686 /* Moonlight Vision.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Moonlight Vision.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F7A119552B5DDF73001E8686 /* Moonlight XrOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Moonlight XrOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F7A1195A2B5DE1E2001E8686 /* MoonlightVisionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoonlightVisionApp.swift; sourceTree = "<group>"; };
 		F7A1195C2B5DE1FD001E8686 /* MainContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainContentView.swift; sourceTree = "<group>"; };
 		F7A119EF2B5DE2EA001E8686 /* Moonlight copy-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Moonlight copy-Info.plist"; sourceTree = "<group>"; };
@@ -661,7 +661,7 @@
 			children = (
 				FB290CEE19B2C406004C83CF /* Moonlight.app */,
 				FB1A67532132419700507771 /* Moonlight TV.app */,
-				F7A119552B5DDF73001E8686 /* Moonlight Vision.app */,
+				F7A119552B5DDF73001E8686 /* Moonlight XrOS.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -1054,7 +1054,7 @@
 				F72DD4D52BEEB16A0003CD8A /* OpenSSL */,
 			);
 			productName = Limelight;
-			productReference = F7A119552B5DDF73001E8686 /* Moonlight Vision.app */;
+			productReference = F7A119552B5DDF73001E8686 /* Moonlight XrOS.app */;
 			productType = "com.apple.product-type.application";
 		};
 		FB1A67522132419700507771 /* Moonlight TV */ = {
@@ -1477,8 +1477,8 @@
 				);
 				MARKETING_VERSION = 9.0.1;
 				OTHER_LDFLAGS = "-ld64";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Visionluma";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";
+				PRODUCT_NAME = "Moonlight XrOS";
 				PROVISIONING_PROFILE = "";
 				SDKROOT = xros;
 				SKIP_INSTALL = NO;
@@ -1493,6 +1493,7 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 7;
 				WRAPPER_EXTENSION = app;
+				XROS_DEPLOYMENT_TARGET = 1.2;
 			};
 			name = Debug;
 		};
@@ -1506,7 +1507,7 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 7;
 				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = 9F7HSLF799;
+				DEVELOPMENT_TEAM = 2423V7K2Y5;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
 				HEADER_SEARCH_PATHS = (
@@ -1553,8 +1554,8 @@
 				);
 				MARKETING_VERSION = 9.0.1;
 				OTHER_LDFLAGS = "-ld64";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";
+				PRODUCT_NAME = "Moonlight XrOS";
 				PROVISIONING_PROFILE = "";
 				SDKROOT = xros;
 				SKIP_INSTALL = NO;
@@ -1570,6 +1571,7 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 7;
 				WRAPPER_EXTENSION = app;
+				XROS_DEPLOYMENT_TARGET = 1.2;
 			};
 			name = Release;
 		};
@@ -1587,7 +1589,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = 9F7HSLF799;
+				DEVELOPMENT_TEAM = 2423V7K2Y5;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_INCREASE_PRECOMPILED_HEADER_SHARING = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -1617,7 +1619,7 @@
 				);
 				MARKETING_VERSION = 9.0.1;
 				MTL_ENABLE_DEBUG_INFO = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight-luma";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = appletvos;
 				SWIFT_OBJC_BRIDGING_HEADER = "Limelight/Input/Moonlight-Bridging-Header.h";
@@ -1804,7 +1806,7 @@
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = 9F7HSLF799;
+				DEVELOPMENT_TEAM = 2423V7K2Y5;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
 				HEADER_SEARCH_PATHS = (
@@ -1833,7 +1835,7 @@
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
 				);
 				MARKETING_VERSION = 9.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight-luma";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SKIP_INSTALL = NO;

@@ -39,9 +39,12 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 * How do I right click?: You press and hold on the trackpad for more than half a second and it will right click, both magic trackpad and eye clicking will do the same thing
 * Why does my cursor snap to where I'm looking: I have no idea, this is an OS level thing that I don't think we have control over, oh boy I sure wish I could adjust the snapping delay though ha!
 
+## What isn’t working: 
+* B button on controller might click, need to test this
 
 ## New Planned Features
-* Better magic trackpad support for right clicking + more options for adjusting click to hold etc
+* Theater mode during play
+* Better magic trackpad support for right clicking + more
 * Microphone forwarding via VBAN to Voicemeter on windows
 
 # Donations
