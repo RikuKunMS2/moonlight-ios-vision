@@ -35,7 +35,9 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
     * If you didn't pay for a developer account you will have to re-install it using x-code every 7 days.
 
 #updates
-* Game controllers now fixed but the app only works on vision OS 2.0 beta and up 
+* Game controllers now fixed but the app only works on vision OS 2.0 beta and up
+* Docking mode during stream view is not possible due to support only being for AVPlayerViewController and I quote "Today, AVPlayerViewController scenes are the only scenes adhere to docking." source: https://developer.apple.com/documentation/RealityKit/DockingRegionComponent
+
 
 ## FAQ
 * how do I enable mouse support? SET THE SCREEN MODE TO TOUCHSCREEN in the moonlight settings in the app. confusing I know, but until apple fixes actual mouse supports its going to have to be set to touch screen mode.
@@ -43,7 +45,6 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 * Why does my cursor snap to where I'm looking: I have no idea, this is an OS level thing that I don't think we have control over, oh boy I sure wish I could adjust the snapping delay though ha!
 
 ## New Planned Features
-* Theater mode during play
 * Better magic trackpad support for right clicking + more
 * Microphone forwarding via VBAN to Voicemeter on windows
 
