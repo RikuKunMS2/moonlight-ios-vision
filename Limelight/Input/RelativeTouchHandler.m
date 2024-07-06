@@ -43,8 +43,17 @@ static const int REFERENCE_HEIGHT = 720;
     [self->view addGestureRecognizer:remoteLongPressRecognizer];
 #endif
     
+#if TARGET_OS_VISION
+    //long press to right click because i can't figure out another way to do this yet
+        UILongPressGestureRecognizer* longPressRecognizer = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(longPressTriggered:)];
+        [self->view addGestureRecognizer:longPressRecognizer];
+//attempt to get right click from context menu interaction
+    UIContextMenuInteraction* contextInteraction = [[UIContextMenuInteraction alloc] initWithDelegate:self];
+    [self->view addInteraction:contextInteraction];
+    
     return self;
 }
+#endif
 
 - (BOOL)isConfirmedMove:(CGPoint)currentPoint from:(CGPoint)originalPoint {
     // Movements of greater than 5 pixels are considered confirmed
@@ -65,7 +74,7 @@ static const int REFERENCE_HEIGHT = 720;
         UITouch *touch = [[event allTouches] anyObject];
         originalLocation = touchLocation = [touch locationInView:view];
         if (!isDragging) {
-            dragTimer = [NSTimer scheduledTimerWithTimeInterval:0.650
+            dragTimer = [NSTimer scheduledTimerWithTimeInterval:0.750
                                                      target:self
                                                    selector:@selector(onDragStart:)
                                                    userInfo:nil
@@ -179,6 +188,42 @@ static const int REFERENCE_HEIGHT = 720;
     }
     peakTouchCount = 0;
 }
+#if TARGET_OS_VISION
+//vision os long press to right click
+- (void)longPressTriggered:(UILongPressGestureRecognizer*)gestureRecognizer {
+    if (gestureRecognizer.state == UIGestureRecognizerStateBegan) {
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+            Log(LOG_I, @"Sending right mouse button press");
+            LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
+
+            // Wait 100ms to simulate a real button press
+            usleep(100 * 1000);
+
+            LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
+        });
+    }
+}
+
+//visionos right click trackpad
+
+- (nullable UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction configurationForMenuAtLocation:(CGPoint)location {
+ 
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+        Log(LOG_I, @"Sending right mouse button press");
+        LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
+
+        // Wait 100 ms to simulate a real button press
+        usleep(100 * 1000);
+
+        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
+    });
+    
+    // Returning nil tells iOS that we don't actually want to present a context menu
+    return nil;
+}
+
+#endif
+
 
 #if TARGET_OS_TV
 - (void)remoteButtonPressed:(id)sender {
