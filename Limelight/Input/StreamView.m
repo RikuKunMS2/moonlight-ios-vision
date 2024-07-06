@@ -145,6 +145,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     // This is critical to ensure keyboard events are delivered to this
     // StreamView and not our parent UIView, especially on tvOS.
     [self becomeFirstResponder];
+    [controllerSupport attachGCEventInteractionToView:self];
 }
 
 - (void)startInteractionTimer {
