@@ -1,3 +1,8 @@
+#IMPORTANT
+
+Make sure you are on the visionos branch! https://github.com/RikuKunMS2/moonlight-ios-vision/tree/visionos
+
+
 # Moonlight iOS/tvOS
 
 [![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/kwv8vpwr457lqn25/branch/master?svg=true)](https://ci.appveyor.com/project/cgutman/moonlight-ios/branch/master)
@@ -38,11 +43,9 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 * How do I right click?: You press and hold on the trackpad for more than half a second and it will right click, both magic trackpad and eye clicking will do the same thing
 * Why does my cursor snap to where I'm looking: I have no idea, this is an OS level thing that I don't think we have control over, oh boy I sure wish I could adjust the snapping delay though ha!
 
-## What isn’t working: 
-* Right clicking is broken because I am working on a new version
 
 ## New Planned Features
-* Better magic trackpad support for right clicking + more
+* Better magic trackpad support for right clicking + more options for adjusting click to hold etc
 * Microphone forwarding via VBAN to Voicemeter on windows
 
 # Donations
