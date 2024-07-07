@@ -488,78 +488,80 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 
 - (BOOL)handleMouseButtonEvent:(int)buttonAction forTouches:(NSSet *)touches withEvent:(UIEvent *)event {
 #if !TARGET_OS_TV || TARGET_OS_VISION
-    if (@available(iOS 13.4, *)) {
-        UITouch* touch = [touches anyObject];
-        if (touch.type == UITouchTypeIndirectPointer) {
-            //disable gc mouse because it doesn't work with vision os
-            //if (@available(iOS 14.0, *)) {
-            //  if ([GCMouse current] != nil) {
-            // We'll handle this with GCMouse. Do nothing here.
-            //     return YES;
-            //  }
-            //    }
-            
-            UIEventButtonMask normalizedButtonMask;
-            
-            // iOS 14 includes the released button in the button Mask for the release
-            // event, while iOS 13 does not.
-            if (@available(iOS 14.0, *)) {
-                if (buttonAction == BUTTON_ACTION_RELEASE) {
-                    normalizedButtonMask = lastMouseButtonMask & ~event.buttonMask;
-                }
-                else {
-                    normalizedButtonMask = event.buttonMask;
-                }
-            }
-            else {
-                normalizedButtonMask = event.buttonMask;
-            }
-            
-            UIEventButtonMask changedButtons = lastMouseButtonMask ^ normalizedButtonMask;
-            
-            UIEventButtonMask buttonFlag = UIEventButtonMaskForButtonNumber(1); // Button number for left is 1.
-            
-            if (changedButtons & buttonFlag) {
-                if (buttonAction == BUTTON_ACTION_PRESS) {
-                    // Check if a scroll gesture is recognized
-                    if (self.isScrolling) {
-                        Log(LOG_I, @"Right Click Action Taken - Scroll");
-                        LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
-                        usleep(100 * 1000);
-                        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
-                    }else {
-                        Log(LOG_I, @"Normal Left Click Action");
-                        LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
-                        usleep(100 * 1000);
-                        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
-                        // Log(LOG_I, @"Left Click occurred");
-                        
-                        self.startTime = [NSDate date]; // Start time recorded here
-                        self.buttonTimer = [NSTimer scheduledTimerWithTimeInterval:0.5 target:self selector:@selector(sendRightClick) userInfo:nil repeats:NO];
-                    }
-                }
-                else if (buttonAction == BUTTON_ACTION_RELEASE) {
-                    // Left button release detected
-                    // Log(LOG_I, @"Left Click Let Go");
-                    
-                    if (self.buttonTimer) {
-                        [self.buttonTimer invalidate];
-                        self.buttonTimer = nil;
-                        
-                        
-                        NSTimeInterval elapsedTime = [[NSDate date] timeIntervalSinceDate:self.startTime];
-                        // Log(LOG_I, [NSString stringWithFormat:@"Elapsed time is %f", elapsedTime]);
-                        
-                    }
-                }
-            }
-            
-            lastMouseButtonMask = normalizedButtonMask;
-            return YES;
+  if (@available(iOS 13.4, *)) {
+    UITouch* touch = [touches anyObject];
+    if (touch.type == UITouchTypeIndirectPointer) {
+      // Disable gc mouse because it doesn't work with vision OS
+      // if (@available(iOS 14.0, *)) {
+      //  if ([GCMouse current] != nil) {
+      //   We'll handle this with GCMouse. Do nothing here.
+      //   return YES;
+      //  }
+      // }
+
+      BOOL primary = YES;
+      BOOL secondary = NO;
+      BOOL middle = NO;
+
+      primary = (event.buttonMask & UIEventButtonMaskPrimary) != 0;
+      secondary = (event.buttonMask & UIEventButtonMaskSecondary) != 0;
+      middle = (event.buttonMask & 0x4) != 0; // undocumented mask
+
+      UIEventButtonMask normalizedButtonMask;
+      // iOS 14 includes the released button in the button Mask for the release event, while iOS 13 does not.
+      if (@available(iOS 14.0, *)) {
+        if (buttonAction == BUTTON_ACTION_RELEASE) {
+          normalizedButtonMask = lastMouseButtonMask & ~event.buttonMask;
+        } else {
+          normalizedButtonMask = event.buttonMask;
         }
+      } else {
+        normalizedButtonMask = event.buttonMask;
+      }
+
+      UIEventButtonMask changedButtons = lastMouseButtonMask ^ normalizedButtonMask;
+
+      // Handle Primary Mouse Button
+      if (changedButtons & UIEventButtonMaskPrimary) {
+          if (primary && buttonAction == BUTTON_ACTION_PRESS) {
+            Log(LOG_I, @"Primary (left) Click Action");
+            LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
+          } else if (!secondary && buttonAction == BUTTON_ACTION_RELEASE) {
+              Log(LOG_I, @"Primary (left) Click Action Released");
+            LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+          }
+      }
+
+      // Handle Secondary Mouse Button
+      if (changedButtons & UIEventButtonMaskSecondary) {
+        if (secondary && buttonAction == BUTTON_ACTION_PRESS) {
+          Log(LOG_I, @"Secondary (right) Click Action");
+          LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
+            LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
+        } else if (!secondary && buttonAction == BUTTON_ACTION_RELEASE) {
+          Log(LOG_I, @"Secondary (right) Click Released");
+          LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
+        }
+      }
+
+      // Handle Middle Mouse Button
+      if (changedButtons & 0x4) {
+        if (middle && buttonAction == BUTTON_ACTION_PRESS) {
+          Log(LOG_I, @"Middle Click Action");
+          LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_MIDDLE);
+            LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_MIDDLE);
+        } else if (!middle && buttonAction == BUTTON_ACTION_RELEASE) {
+          Log(LOG_I, @"Middle Click Released");
+          LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_MIDDLE);
+        }
+      }
+
+      lastMouseButtonMask = normalizedButtonMask;
+      return YES;
     }
+  }
 #endif
-    return NO;
+  return NO;
 }
 
 #if TARGET_OS_VISION

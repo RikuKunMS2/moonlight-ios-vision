@@ -1,3 +1,6 @@
+# MOUSE SUPPORT 
+* You MUST go into GENERAL -> KEYBOARD and TRACKPAD -> Enable Two Finger Secondary Click or for Magic Mouse enable Secondary Click (Set to Right)
+
 # Moonlight iOS/tvOS
 
 [![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/kwv8vpwr457lqn25/branch/master?svg=true)](https://ci.appveyor.com/project/cgutman/moonlight-ios/branch/master)
@@ -31,13 +34,14 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
     * Click on the "Signing & Capabilities" tab
     * In the "Team" dropdown, select your name. If your name doesn't appear, you may need to sign into Xcode with your Apple account.
     * Change the "Bundle Identifier" to something different (unique). You can add your name or some random letters to make it unique.
-    * Select your Vision Pro (not the simlator or 'any device' but the one your registered earlier) in the top bar as a target and click the Play button to run. It will start the build and install it to your headset
+    * Select your Vision Pro (not the simulator or 'any device' but the one your registered earlier) in the top bar as a target and click the Play button to run. It will start the build and install it to your headset
     * If you didn't pay for a developer account you will have to re-install it using x-code every 7 days.
+    
+# MOUSE SUPPORT 
+* You MUST go into GENERAL -> KEYBOARD and TRACKPAD -> Enable Two Finger Secondary Click or for Magic Mouse enable Secondary Click (Set to Right)
 
 # Updates
-* tried my best to stop scrolling from moving the trackpad / mouse cursor to where you’re looking 
-* added a small delay to also allow you to right click after scrolling, but since the cursor moves it’s not that useful. If you don’t like it ping me on discord or ko-fi
-* GC Mouse is still broken, until Apple themselves fix it there won’t be a way to really support native right click and magic trackpads to my understanding, even UTM hasn’t been able to fix this to my understanding.
+* COMPLETELY fixed right clicking, it works like normal now no more hold to right click
 * Game controllers now fixed but the app only works on vision OS 2.0 beta and up
 * Docking mode during stream view is not possible due to support only being for AVPlayerViewController and I quote "Today, AVPlayerViewController scenes are the only scenes adhere to docking." source: https://developer.apple.com/documentation/RealityKit/DockingRegionComponent
 
@@ -48,7 +52,6 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 * Why does my cursor snap to where I'm looking: I have no idea, this is an OS level thing that I don't think we have control over, oh boy I sure wish I could adjust the snapping delay though ha!
 
 ## New Planned Features
-* Better magic trackpad support for right clicking + more
 * Microphone forwarding via VBAN to Voicemeter on windows
 
 # Donations
