@@ -21,6 +21,8 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 @interface StreamView ()
 @property (nonatomic, strong) NSTimer *buttonTimer;
 @property (nonatomic, strong) NSDate *startTime;
+@property (nonatomic, assign) BOOL isScrolling;
+@property (nonatomic, assign) CGPoint lastScrollTranslation;
 @end
 
 
@@ -157,10 +159,10 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     // Start/restart the timer
     [interactionTimer invalidate];
     interactionTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
-                        target:self
-                        selector:@selector(interactionTimerExpired:)
-                        userInfo:nil
-                        repeats:NO];
+                                                        target:self
+                                                      selector:@selector(interactionTimerExpired:)
+                                                      userInfo:nil
+                                                       repeats:NO];
     
     // Notify the delegate if this was a new user interaction
     if (!timerAlreadyRunning) {
@@ -303,7 +305,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         default:
             return YES;
     }
-
+    
     CGPoint location = [self adjustCoordinatesForVideoArea:[event locationInView:self]];
     CGSize videoSize = [self getVideoAreaSize];
     
@@ -322,15 +324,15 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         case UIGestureRecognizerStateChanged:
             type = LI_TOUCH_EVENT_HOVER;
             break;
-
+            
         case UIGestureRecognizerStateEnded:
             type = LI_TOUCH_EVENT_HOVER_LEAVE;
             break;
-
+            
         default:
             return;
     }
-
+    
     CGPoint location = [self adjustCoordinatesForVideoArea:[gesture locationInView:self]];
     CGSize videoSize = [self getVideoAreaSize];
     
@@ -357,9 +359,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 #endif
 
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
-    if ([self handleMouseButtonEvent:BUTTON_ACTION_PRESS
-                          forTouches:touches
-                           withEvent:event]) {
+    if ([self handleMouseButtonEvent:BUTTON_ACTION_PRESS forTouches:touches withEvent:event]) {
         // If it's a mouse event, we're done
         return;
     }
@@ -380,6 +380,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         }
     }
 #endif
+    
     
     if (![onScreenControls handleTouchDownEvent:touches]) {
         // We still inform the touch handler even if we're going trigger the
@@ -492,12 +493,12 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         if (touch.type == UITouchTypeIndirectPointer) {
             //disable gc mouse because it doesn't work with vision os
             //if (@available(iOS 14.0, *)) {
-              //  if ([GCMouse current] != nil) {
-                    // We'll handle this with GCMouse. Do nothing here.
-               //     return YES;
-              //  }
-        //    }
-
+            //  if ([GCMouse current] != nil) {
+            // We'll handle this with GCMouse. Do nothing here.
+            //     return YES;
+            //  }
+            //    }
+            
             UIEventButtonMask normalizedButtonMask;
             
             // iOS 14 includes the released button in the button Mask for the release
@@ -515,35 +516,44 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
             }
             
             UIEventButtonMask changedButtons = lastMouseButtonMask ^ normalizedButtonMask;
-
+            
             UIEventButtonMask buttonFlag = UIEventButtonMaskForButtonNumber(1); // Button number for left is 1.
-
+            
             if (changedButtons & buttonFlag) {
                 if (buttonAction == BUTTON_ACTION_PRESS) {
-                    LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
-                    usleep(100 * 1000);
-                    LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
-                   // Log(LOG_I, @"Left Click occurred");
-                    
-                    self.startTime = [NSDate date]; // Start time recorded here
-                    self.buttonTimer = [NSTimer scheduledTimerWithTimeInterval:0.5 target:self selector:@selector(sendRightClick) userInfo:nil repeats:NO];
+                    // Check if a scroll gesture is recognized
+                    if (self.isScrolling) {
+                        Log(LOG_I, @"Right Click Action Taken - Scroll");
+                        LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
+                        usleep(100 * 1000);
+                        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
+                    }else {
+                        Log(LOG_I, @"Normal Left Click Action");
+                        LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
+                        usleep(100 * 1000);
+                        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
+                        // Log(LOG_I, @"Left Click occurred");
+                        
+                        self.startTime = [NSDate date]; // Start time recorded here
+                        self.buttonTimer = [NSTimer scheduledTimerWithTimeInterval:0.5 target:self selector:@selector(sendRightClick) userInfo:nil repeats:NO];
+                    }
                 }
                 else if (buttonAction == BUTTON_ACTION_RELEASE) {
                     // Left button release detected
-                   // Log(LOG_I, @"Left Click Let Go");
-
+                    // Log(LOG_I, @"Left Click Let Go");
+                    
                     if (self.buttonTimer) {
                         [self.buttonTimer invalidate];
                         self.buttonTimer = nil;
-
-
+                        
+                        
                         NSTimeInterval elapsedTime = [[NSDate date] timeIntervalSinceDate:self.startTime];
-                       // Log(LOG_I, [NSString stringWithFormat:@"Elapsed time is %f", elapsedTime]);
-
-           }
+                        // Log(LOG_I, [NSString stringWithFormat:@"Elapsed time is %f", elapsedTime]);
+                        
+                    }
                 }
             }
-
+            
             lastMouseButtonMask = normalizedButtonMask;
             return YES;
         }
@@ -554,7 +564,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 
 #if TARGET_OS_VISION
 - (void)sendRightClick {
-  //  Log(LOG_I, @"Right Click Action Taken - Type B");
+    //  Log(LOG_I, @"Right Click Action Taken - Type B");
     LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
     usleep(100 * 1000);
     LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
@@ -576,11 +586,11 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         if (touch.type == UITouchTypeIndirectPointer) {
             //disable gcmouse because it doesn't work with vision os
             //if (@available(iOS 14.0, *)) {
-             //   if ([GCMouse current] != nil) {
-                    // We'll handle this with GCMouse. Do nothing here.
-               //     return;
-                //}
-           // }
+            //   if ([GCMouse current] != nil) {
+            // We'll handle this with GCMouse. Do nothing here.
+            //     return;
+            //}
+            // }
             
             // We must handle this event to properly support
             // drags while the middle, X1, or X2 mouse buttons are
@@ -686,6 +696,11 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 
 #if !TARGET_OS_TV
 - (void) updateCursorLocation:(CGPoint)location isMouse:(BOOL)isMouse {
+    // Don't update the cursor position if scrolling
+    if (self.isScrolling) {
+        return;
+    }
+    
     CGPoint normalizedLocation = [self adjustCoordinatesForVideoArea:location];
     CGSize videoSize = [self getVideoAreaSize];
     
@@ -713,11 +728,11 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
                           defaultRegion:(UIPointerRegion *)defaultRegion API_AVAILABLE(ios(13.4)) {
     //disable gcmouse because it doesn't work with vision os
     // if (@available(iOS 14.0, *)) {
-     //   if ([GCMouse current] != nil) {
-            // We'll handle this with GCMouse. Do nothing here.
-       //     return nil;
-     //   }
-   // }
+    //   if ([GCMouse current] != nil) {
+    // We'll handle this with GCMouse. Do nothing here.
+    //     return nil;
+    //   }
+    // }
     
     // This logic mimics what iOS does with AVLayerVideoGravityResizeAspect
     CGSize videoSize;
@@ -748,32 +763,44 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 - (void)mouseWheelMovedContinuous:(UIPanGestureRecognizer *)gesture {
     switch (gesture.state) {
         case UIGestureRecognizerStateBegan:
+            self.isScrolling = YES;
+            Log(LOG_I, @"Scroll started");
+            break;
         case UIGestureRecognizerStateChanged:
             break;
-        
-        case UIGestureRecognizerStateEnded:
+        case UIGestureRecognizerStateEnded: {
+            Log(LOG_I, @"Scroll ended");
+            self.isScrolling = YES;
+            __weak typeof(self) weakSelf = self;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.7 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                weakSelf.isScrolling = NO;
+                Log(LOG_I, @"Scroll RC Listener Ended");
+                weakSelf.lastScrollTranslation = CGPointMake(0, 0);
+            });
+            break;
+        }
         default:
-            // Ignore recognition failure and other states
-            lastScrollTranslation = CGPointMake(0, 0);
+            self.isScrolling = NO;
+            self.lastScrollTranslation = CGPointMake(0, 0);
             return;
     }
     
     CGPoint currentScrollTranslation = [gesture translationInView:self];
     
     {
-        short translationDeltaY = ((currentScrollTranslation.y - lastScrollTranslation.y) / self.bounds.size.height) * 120; // WHEEL_DELTA
+        short translationDeltaY = ((currentScrollTranslation.y - self.lastScrollTranslation.y) / self.bounds.size.height) * 120; // WHEEL_DELTA
         if (translationDeltaY != 0) {
             LiSendHighResScrollEvent(translationDeltaY * 20);
-            lastScrollTranslation = currentScrollTranslation;
+            self.lastScrollTranslation = currentScrollTranslation;
         }
     }
-
+    
     {
-        short translationDeltaX = ((currentScrollTranslation.x - lastScrollTranslation.x) / self.bounds.size.width) * 120; // WHEEL_DELTA
+        short translationDeltaX = ((currentScrollTranslation.x - self.lastScrollTranslation.x) / self.bounds.size.width) * 120; // WHEEL_DELTA
         if (translationDeltaX != 0) {
             // Direction is reversed from vertical scrolling
             LiSendHighResHScrollEvent(-translationDeltaX * 20);
-            lastScrollTranslation = currentScrollTranslation;
+            self.lastScrollTranslation = currentScrollTranslation;
         }
     }
 }
@@ -781,13 +808,25 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 - (void)mouseWheelMovedDiscrete:(UIPanGestureRecognizer *)gesture {
     switch (gesture.state) {
         case UIGestureRecognizerStateBegan:
+            self.isScrolling = YES;
+            Log(LOG_I, @"Scroll Started");
+            break;
         case UIGestureRecognizerStateChanged:
             break;
-        
-        case UIGestureRecognizerStateEnded:
+        case UIGestureRecognizerStateEnded: {
+            self.isScrolling = YES;
+            Log(LOG_I, @"Scroll Ended");
+            __weak typeof(self) weakSelf = self;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.7 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                weakSelf.isScrolling = NO;
+                Log(LOG_I, @"Scroll RC Listener Ended");
+                weakSelf.lastScrollTranslation = CGPointMake(0, 0);
+            });
+            break;
+        }
         default:
-            // Ignore recognition failure and other states
-            lastScrollTranslation = CGPointMake(0, 0);
+            self.isScrolling = NO;
+            self.lastScrollTranslation = CGPointMake(0, 0);
             return;
     }
     
@@ -796,21 +835,23 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     CGPoint currentScrollTranslation = [gesture translationInView:self];
     
     {
-        short translationDeltaY = currentScrollTranslation.y - lastScrollTranslation.y;
+        short translationDeltaY = currentScrollTranslation.y - self.lastScrollTranslation.y;
         if (translationDeltaY != 0) {
             LiSendScrollEvent(translationDeltaY > 0 ? 1 : -1);
         }
+        
+        self.lastScrollTranslation = currentScrollTranslation;
     }
-
+    
     {
-        short translationDeltaX = currentScrollTranslation.x - lastScrollTranslation.x;
+        short translationDeltaX = currentScrollTranslation.x - self.lastScrollTranslation.x;
         if (translationDeltaX != 0) {
             // Direction is reversed from vertical scrolling
             LiSendHScrollEvent(translationDeltaX < 0 ? 1 : -1);
         }
+        
+        self.lastScrollTranslation = currentScrollTranslation;
     }
-    
-    lastScrollTranslation = currentScrollTranslation;
 }
 
 #endif
@@ -923,11 +964,11 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     [charset enumerateSubstringsInRange:NSMakeRange(0, charset.length)
                                 options:NSStringEnumerationByComposedCharacterSequences
                              usingBlock:^(NSString *substring, NSRange substringRange, NSRange enclosingRange, BOOL *stop) {
-                                 [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:0 action:@selector(keyPressed:)]];
-                                 [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:UIKeyModifierShift action:@selector(keyPressed:)]];
-                                 [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:UIKeyModifierControl action:@selector(keyPressed:)]];
-                                 [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:UIKeyModifierAlternate action:@selector(keyPressed:)]];
-                             }];
+        [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:0 action:@selector(keyPressed:)]];
+        [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:UIKeyModifierShift action:@selector(keyPressed:)]];
+        [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:UIKeyModifierControl action:@selector(keyPressed:)]];
+        [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:UIKeyModifierAlternate action:@selector(keyPressed:)]];
+    }];
     
     for (NSString *c in [dictCodes keyEnumerator]) {
         [commands addObject:[UIKeyCommand keyCommandWithInput:c

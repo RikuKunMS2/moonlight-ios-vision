@@ -34,7 +34,10 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
     * Select your Vision Pro (not the simlator or 'any device' but the one your registered earlier) in the top bar as a target and click the Play button to run. It will start the build and install it to your headset
     * If you didn't pay for a developer account you will have to re-install it using x-code every 7 days.
 
-#updates
+# Updates
+* tried my best to stop scrolling from moving the trackpad / mouse cursor to where you’re looking 
+* added a small delay to also allow you to right click after scrolling, but since the cursor moves it’s not that useful. If you don’t like it ping me on discord or ko-fi
+* GC Mouse is still broken, until Apple themselves fix it there won’t be a way to really support native right click and magic trackpads to my understanding, even UTM hasn’t been able to fix this to my understanding.
 * Game controllers now fixed but the app only works on vision OS 2.0 beta and up
 * Docking mode during stream view is not possible due to support only being for AVPlayerViewController and I quote "Today, AVPlayerViewController scenes are the only scenes adhere to docking." source: https://developer.apple.com/documentation/RealityKit/DockingRegionComponent
 
@@ -49,8 +52,8 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 * Microphone forwarding via VBAN to Voicemeter on windows
 
 # Donations
-* Some people expressed intrest in donations so:
-* I set up a ko-fi for donations!
+* Some people expressed interest in donations so:
+* I set up a ko-fi for [donations](https://ko-fi.com/lumanaire)!
 https://ko-fi.com/lumanaire
 
 Thanks again for your support :)
