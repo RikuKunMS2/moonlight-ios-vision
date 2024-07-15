@@ -1947,8 +1947,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-collections.git";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.6;
+				kind = exactVersion;
+				version = 1.0.6;
 			};
 		};
 		F72DD4D42BEEB16A0003CD8A /* XCRemoteSwiftPackageReference "OpenSSL-Package" */ = {
