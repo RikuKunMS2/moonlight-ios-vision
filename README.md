@@ -5,7 +5,7 @@
 *please contact me on reddit discord or ko-fi
 *[/u/rikudesu](https://www.reddit.com/u/RikuDesu/s/9AwOH8sHOD)
 * lumanaire
-* for [tips and/or support](https://ko-fi.com/lumanaire)!
+* ko-fi for [tips and/or support](https://ko-fi.com/lumanaire)!
 
 # Moonlight iOS/tvOS
 
