@@ -1,6 +1,12 @@
 # MOUSE SUPPORT 
 * You MUST go into GENERAL -> KEYBOARD and TRACKPAD -> Enable Two Finger Secondary Click or for Magic Mouse enable Secondary Click (Set to Right)
 
+# Build issue? Need help or support?
+*please contact me on reddit discord or ko-fi
+*[/u/rikudesu](https://www.reddit.com/u/RikuDesu/s/9AwOH8sHOD)
+* lumanaire
+* for [tips and/or support](https://ko-fi.com/lumanaire)!
+
 # Moonlight iOS/tvOS
 
 [![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/kwv8vpwr457lqn25/branch/master?svg=true)](https://ci.appveyor.com/project/cgutman/moonlight-ios/branch/master)
@@ -21,7 +27,12 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 ## Building
 * Install Xcode beta from the [App Store page](https://developer.apple.com/download/all/?q=xcode)
 * You need to be signed into a developer account to download (and build) you don’t have to pay, just do all the steps right up to paying and then don’t pay
+
+* dont forget this next step ive gotten a bunch of mails about this
 * You should delete your old xcode and rename xcode-beta to xcode
+
+*no seriously you actually need to rename it because otherwise it will not know where to find frameworks and you will get buld errors please rename your xcode-beta app to xcode
+
 * Run `git clone -b visionos --recursive https://github.com/RikuKunMS2/moonlight-ios-vision.git`
   *  If you've already cloned the repo without `--recursive`, run `git submodule update --init --recursive`
 * Open Moonlight.xcodeproj in Xcode (it would download by default to your user folder on MacOS)
@@ -41,6 +52,8 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 * You MUST go into GENERAL -> KEYBOARD and TRACKPAD -> Enable Two Finger Secondary Click or for Magic Mouse enable Secondary Click (Set to Right)
 
 # Updates
+* my kofi has the latest udpates on whats going on with the testflight please keep in mind that this is a volunteer project, there is a new branch for anyone who wants to contribute to the testflight as im having a lot of trouble getting it approved by apple at the moment
+* SDL 2 for vision is also up in my repos if you need it
 * COMPLETELY fixed right clicking, it works like normal now no more hold to right click
 * Game controllers now fixed but the app only works on vision OS 2.0 beta and up
 * Docking mode during stream view is not possible due to support only being for AVPlayerViewController and I quote "Today, AVPlayerViewController scenes are the only scenes adhere to docking." source: https://developer.apple.com/documentation/RealityKit/DockingRegionComponent
