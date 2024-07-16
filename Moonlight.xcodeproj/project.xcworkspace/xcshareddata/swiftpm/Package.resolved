@@ -1,6 +1,24 @@
 {
   "pins" : [
     {
+      "identity" : "openssl-package",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/krzyzanowskim/OpenSSL-Package.git",
+      "state" : {
+        "revision" : "fdc133911d1e26f59838763906a6486d65febfa6",
+        "version" : "3.1.5004"
+      }
+    },
+    {
+      "identity" : "realitybounds",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/IvanMathy/RealityBounds",
+      "state" : {
+        "branch" : "main",
+        "revision" : "ee63a2d2db4e5bd659f2fd56599bc04f76ca0b0f"
+      }
+    },
+    {
       "identity" : "swift-collections",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections.git",
