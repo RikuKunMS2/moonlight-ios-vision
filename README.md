@@ -1,3 +1,6 @@
+# This is the testflight branch, 10.0.14
+* this may differ from the build it yourself version, which may be more updated, but this one might be more stable.
+
 # MOUSE SUPPORT 
 * You MUST go into GENERAL -> KEYBOARD and TRACKPAD -> Enable Two Finger Secondary Click or for Magic Mouse enable Secondary Click (Set to Right)
 
@@ -46,12 +49,18 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 * Docking mode during stream view is not possible due to support only being for AVPlayerViewController and I quote "Today, AVPlayerViewController scenes are the only scenes adhere to docking." source: https://developer.apple.com/documentation/RealityKit/DockingRegionComponent
 
 
+## Contrubtion
+* Feel free to add settings toggles or features, optimizations etc!
+
 ## FAQ
 * how do I enable mouse support? SET THE SCREEN MODE TO TOUCHSCREEN in the moonlight settings in the app. confusing I know, but until apple fixes actual mouse supports its going to have to be set to touch screen mode.
 * How do I right click?: You press and hold on the trackpad for more than half a second and it will right click, both magic trackpad and eye clicking will do the same thing
 * Why does my cursor snap to where I'm looking: I have no idea, this is an OS level thing that I don't think we have control over, oh boy I sure wish I could adjust the snapping delay though ha!
 
 ## New Planned Features
+* settings to reverse scroll direction
+* change of defaults (720p touchscreen mode etc)
+* keyboard button above floating window to toggle onscreen keyboard
 * Microphone forwarding via VBAN to Voicemeter on windows
 
 # Donations

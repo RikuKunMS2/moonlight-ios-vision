@@ -3,10 +3,11 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3E80AA702C4DF119006A10EA /* OpenSSL.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3E80AA6F2C4DF119006A10EA /* OpenSSL.xcframework */; };
 		983091DE24CEB69B00A0835D /* ConnectionTester.c in Sources */ = {isa = PBXBuildFile; fileRef = 983091DD24CEB69B00A0835D /* ConnectionTester.c */; };
 		983091DF24CEB69B00A0835D /* ConnectionTester.c in Sources */ = {isa = PBXBuildFile; fileRef = 983091DD24CEB69B00A0835D /* ConnectionTester.c */; };
 		9857AEF01EBE85E10084F99E /* rs.c in Sources */ = {isa = PBXBuildFile; fileRef = 9857AEEE1EBE85E10084F99E /* rs.c */; };
@@ -42,7 +43,6 @@
 		98F145362667D847004018E3 /* RtpAudioQueue.c in Sources */ = {isa = PBXBuildFile; fileRef = 98F145332667D847004018E3 /* RtpAudioQueue.c */; };
 		98F145372667D847004018E3 /* RtpVideoQueue.c in Sources */ = {isa = PBXBuildFile; fileRef = 98F145342667D847004018E3 /* RtpVideoQueue.c */; };
 		98F145382667D847004018E3 /* RtpVideoQueue.c in Sources */ = {isa = PBXBuildFile; fileRef = 98F145342667D847004018E3 /* RtpVideoQueue.c */; };
-		F72DD4D32BEEB14B0003CD8A /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F72DD4D22BEEB14B0003CD8A /* OpenSSL */; };
 		FB1A67F821324F4900507771 /* rs.c in Sources */ = {isa = PBXBuildFile; fileRef = 9857AEEE1EBE85E10084F99E /* rs.c */; };
 		FB1A67FA21324F4900507771 /* AudioStream.c in Sources */ = {isa = PBXBuildFile; fileRef = 98AB2E1A1CAD423B0089BB98 /* AudioStream.c */; };
 		FB1A67FB21324F4900507771 /* ByteBuffer.c in Sources */ = {isa = PBXBuildFile; fileRef = 98AB2E1B1CAD423B0089BB98 /* ByteBuffer.c */; };
@@ -83,6 +83,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		3E80AA6F2C4DF119006A10EA /* OpenSSL.xcframework */ = {isa = PBXFileReference; expectedSignature = "AppleDeveloperProgram:2423V7K2Y5:Cameron Tham"; lastKnownFileType = wrapper.xcframework; name = OpenSSL.xcframework; path = ../Frameworks/OpenSSL.xcframework; sourceTree = "<group>"; };
 		983091DD24CEB69B00A0835D /* ConnectionTester.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ConnectionTester.c; sourceTree = "<group>"; };
 		9857AEEE1EBE85E10084F99E /* rs.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = rs.c; path = "moonlight-common-c/reedsolomon/rs.c"; sourceTree = "<group>"; };
 		9857AEEF1EBE85E10084F99E /* rs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = rs.h; path = "moonlight-common-c/reedsolomon/rs.h"; sourceTree = "<group>"; };
@@ -171,13 +172,21 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F72DD4D32BEEB14B0003CD8A /* OpenSSL in Frameworks */,
+				3E80AA702C4DF119006A10EA /* OpenSSL.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		3E80AA6E2C4DF119006A10EA /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				3E80AA6F2C4DF119006A10EA /* OpenSSL.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		9857AEED1EBE85D50084F99E /* reedsolomon */ = {
 			isa = PBXGroup;
 			children = (
@@ -312,6 +321,7 @@
 				98AB2E191CAD423B0089BB98 /* src */,
 				98AB2DEF1CAD422B0089BB98 /* enet */,
 				FB290E2F19B37A4E004C83CF /* Products */,
+				3E80AA6E2C4DF119006A10EA /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -357,7 +367,6 @@
 			);
 			name = "moonlight-common";
 			packageProductDependencies = (
-				F72DD4D22BEEB14B0003CD8A /* OpenSSL */,
 			);
 			productName = "limelight-common";
 			productReference = FB290E2E19B37A4E004C83CF /* libmoonlight-common.a */;
@@ -389,7 +398,6 @@
 			);
 			mainGroup = FB290E2519B37A4E004C83CF;
 			packageReferences = (
-				F72DD4D12BEEB14B0003CD8A /* XCRemoteSwiftPackageReference "OpenSSL-Package" */,
 			);
 			productRefGroup = FB290E2F19B37A4E004C83CF /* Products */;
 			projectDirPath = "";
@@ -735,25 +743,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		F72DD4D12BEEB14B0003CD8A /* XCRemoteSwiftPackageReference "OpenSSL-Package" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/krzyzanowskim/OpenSSL-Package.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 3.1.5004;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		F72DD4D22BEEB14B0003CD8A /* OpenSSL */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = F72DD4D12BEEB14B0003CD8A /* XCRemoteSwiftPackageReference "OpenSSL-Package" */;
-			productName = OpenSSL;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = FB290E2619B37A4E004C83CF /* Project object */;
 }

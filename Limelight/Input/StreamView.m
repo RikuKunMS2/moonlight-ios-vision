@@ -18,14 +18,6 @@
 
 static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 
-@interface StreamView ()
-@property (nonatomic, strong) NSTimer *buttonTimer;
-@property (nonatomic, strong) NSDate *startTime;
-@property (nonatomic, assign) BOOL isScrolling;
-@property (nonatomic, assign) CGPoint lastScrollTranslation;
-@end
-
-
 @implementation StreamView {
     OnScreenControls* onScreenControls;
     
@@ -147,7 +139,6 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     // This is critical to ensure keyboard events are delivered to this
     // StreamView and not our parent UIView, especially on tvOS.
     [self becomeFirstResponder];
-    [controllerSupport attachGCEventInteractionToView:self];
 }
 
 - (void)startInteractionTimer {
@@ -159,10 +150,10 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     // Start/restart the timer
     [interactionTimer invalidate];
     interactionTimer = [NSTimer scheduledTimerWithTimeInterval:2.0
-                                                        target:self
-                                                      selector:@selector(interactionTimerExpired:)
-                                                      userInfo:nil
-                                                       repeats:NO];
+                        target:self
+                        selector:@selector(interactionTimerExpired:)
+                        userInfo:nil
+                        repeats:NO];
     
     // Notify the delegate if this was a new user interaction
     if (!timerAlreadyRunning) {
@@ -305,7 +296,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         default:
             return YES;
     }
-    
+
     CGPoint location = [self adjustCoordinatesForVideoArea:[event locationInView:self]];
     CGSize videoSize = [self getVideoAreaSize];
     
@@ -324,15 +315,15 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         case UIGestureRecognizerStateChanged:
             type = LI_TOUCH_EVENT_HOVER;
             break;
-            
+
         case UIGestureRecognizerStateEnded:
             type = LI_TOUCH_EVENT_HOVER_LEAVE;
             break;
-            
+
         default:
             return;
     }
-    
+
     CGPoint location = [self adjustCoordinatesForVideoArea:[gesture locationInView:self]];
     CGSize videoSize = [self getVideoAreaSize];
     
@@ -359,7 +350,9 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 #endif
 
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
-    if ([self handleMouseButtonEvent:BUTTON_ACTION_PRESS forTouches:touches withEvent:event]) {
+    if ([self handleMouseButtonEvent:BUTTON_ACTION_PRESS
+                          forTouches:touches
+                           withEvent:event]) {
         // If it's a mouse event, we're done
         return;
     }
@@ -380,7 +373,6 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         }
     }
 #endif
-    
     
     if (![onScreenControls handleTouchDownEvent:touches]) {
         // We still inform the touch handler even if we're going trigger the
@@ -487,91 +479,65 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 }
 
 - (BOOL)handleMouseButtonEvent:(int)buttonAction forTouches:(NSSet *)touches withEvent:(UIEvent *)event {
-#if !TARGET_OS_TV || TARGET_OS_VISION
-  if (@available(iOS 13.4, *)) {
-    UITouch* touch = [touches anyObject];
-    if (touch.type == UITouchTypeIndirectPointer) {
-      // Disable gc mouse because it doesn't work with vision OS
-      // if (@available(iOS 14.0, *)) {
-      //  if ([GCMouse current] != nil) {
-      //   We'll handle this with GCMouse. Do nothing here.
-      //   return YES;
-      //  }
-      // }
-
-      BOOL primary = YES;
-      BOOL secondary = NO;
-      BOOL middle = NO;
-
-      primary = (event.buttonMask & UIEventButtonMaskPrimary) != 0;
-      secondary = (event.buttonMask & UIEventButtonMaskSecondary) != 0;
-      middle = (event.buttonMask & 0x4) != 0; // undocumented mask
-
-      UIEventButtonMask normalizedButtonMask;
-      // iOS 14 includes the released button in the button Mask for the release event, while iOS 13 does not.
-      if (@available(iOS 14.0, *)) {
-        if (buttonAction == BUTTON_ACTION_RELEASE) {
-          normalizedButtonMask = lastMouseButtonMask & ~event.buttonMask;
-        } else {
-          normalizedButtonMask = event.buttonMask;
+#if !TARGET_OS_TV
+    if (@available(iOS 13.4, *)) {
+        UITouch* touch = [touches anyObject];
+        if (touch.type == UITouchTypeIndirectPointer) {
+            if (@available(iOS 14.0, *)) {
+             //   if ([GCMouse current] != nil) {
+                    // We'll handle this with GCMouse. Do nothing here.
+               //     return YES;
+               // }
+            }
+            
+            UIEventButtonMask normalizedButtonMask;
+            
+            // iOS 14 includes the released button in the buttonMask for the release
+            // event, while iOS 13 does not. Normalize that behavior here.
+            if (@available(iOS 14.0, *)) {
+                if (buttonAction == BUTTON_ACTION_RELEASE) {
+                    normalizedButtonMask = lastMouseButtonMask & ~event.buttonMask;
+                }
+                else {
+                    normalizedButtonMask = event.buttonMask;
+                }
+            }
+            else {
+                normalizedButtonMask = event.buttonMask;
+            }
+            
+            UIEventButtonMask changedButtons = lastMouseButtonMask ^ normalizedButtonMask;
+                        
+            for (int i = BUTTON_LEFT; i <= BUTTON_X2; i++) {
+                UIEventButtonMask buttonFlag;
+                
+                switch (i) {
+                    // Right and Middle are reversed from what iOS uses
+                    case BUTTON_RIGHT:
+                        buttonFlag = UIEventButtonMaskForButtonNumber(2);
+                        break;
+                    case BUTTON_MIDDLE:
+                        buttonFlag = UIEventButtonMaskForButtonNumber(3);
+                        break;
+                        
+                    default:
+                        buttonFlag = UIEventButtonMaskForButtonNumber(i);
+                        break;
+                }
+                
+                if (changedButtons & buttonFlag) {
+                    LiSendMouseButtonEvent(buttonAction, i);
+                }
+            }
+            
+            lastMouseButtonMask = normalizedButtonMask;
+            return YES;
         }
-      } else {
-        normalizedButtonMask = event.buttonMask;
-      }
-
-      UIEventButtonMask changedButtons = lastMouseButtonMask ^ normalizedButtonMask;
-
-      // Handle Primary Mouse Button
-      if (changedButtons & UIEventButtonMaskPrimary) {
-          if (primary && buttonAction == BUTTON_ACTION_PRESS) {
-            Log(LOG_I, @"Primary (left) Click Action");
-            LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
-          } else if (!secondary && buttonAction == BUTTON_ACTION_RELEASE) {
-              Log(LOG_I, @"Primary (left) Click Action Released");
-            LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
-          }
-      }
-
-      // Handle Secondary Mouse Button
-      if (changedButtons & UIEventButtonMaskSecondary) {
-        if (secondary && buttonAction == BUTTON_ACTION_PRESS) {
-          Log(LOG_I, @"Secondary (right) Click Action");
-          LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
-            LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
-        } else if (!secondary && buttonAction == BUTTON_ACTION_RELEASE) {
-          Log(LOG_I, @"Secondary (right) Click Released");
-          LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
-        }
-      }
-
-      // Handle Middle Mouse Button
-      if (changedButtons & 0x4) {
-        if (middle && buttonAction == BUTTON_ACTION_PRESS) {
-          Log(LOG_I, @"Middle Click Action");
-          LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_MIDDLE);
-            LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_MIDDLE);
-        } else if (!middle && buttonAction == BUTTON_ACTION_RELEASE) {
-          Log(LOG_I, @"Middle Click Released");
-          LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_MIDDLE);
-        }
-      }
-
-      lastMouseButtonMask = normalizedButtonMask;
-      return YES;
     }
-  }
 #endif
-  return NO;
+    
+    return NO;
 }
-
-#if TARGET_OS_VISION
-- (void)sendRightClick {
-    //  Log(LOG_I, @"Right Click Action Taken - Type B");
-    LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
-    usleep(100 * 1000);
-    LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
-}
-#endif
 
 - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
 #if !TARGET_OS_TV
@@ -586,13 +552,12 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         
         UITouch *touch = [touches anyObject];
         if (touch.type == UITouchTypeIndirectPointer) {
-            //disable gcmouse because it doesn't work with vision os
-            //if (@available(iOS 14.0, *)) {
-            //   if ([GCMouse current] != nil) {
-            // We'll handle this with GCMouse. Do nothing here.
-            //     return;
-            //}
-            // }
+            if (@available(iOS 14.0, *)) {
+              //  if ([GCMouse current] != nil) {
+                    // We'll handle this with GCMouse. Do nothing here.
+                //    return;
+                //}
+            }
             
             // We must handle this event to properly support
             // drags while the middle, X1, or X2 mouse buttons are
@@ -698,11 +663,6 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 
 #if !TARGET_OS_TV
 - (void) updateCursorLocation:(CGPoint)location isMouse:(BOOL)isMouse {
-    // Don't update the cursor position if scrolling
-    if (self.isScrolling) {
-        return;
-    }
-    
     CGPoint normalizedLocation = [self adjustCoordinatesForVideoArea:location];
     CGSize videoSize = [self getVideoAreaSize];
     
@@ -728,13 +688,12 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 - (UIPointerRegion *)pointerInteraction:(UIPointerInteraction *)interaction
                        regionForRequest:(UIPointerRegionRequest *)request
                           defaultRegion:(UIPointerRegion *)defaultRegion API_AVAILABLE(ios(13.4)) {
-    //disable gcmouse because it doesn't work with vision os
-    // if (@available(iOS 14.0, *)) {
-    //   if ([GCMouse current] != nil) {
-    // We'll handle this with GCMouse. Do nothing here.
-    //     return nil;
-    //   }
-    // }
+    if (@available(iOS 14.0, *)) {
+     //   if ([GCMouse current] != nil) {
+            // We'll handle this with GCMouse. Do nothing here.
+       //     return nil;
+      //  }
+    }
     
     // This logic mimics what iOS does with AVLayerVideoGravityResizeAspect
     CGSize videoSize;
@@ -765,44 +724,32 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 - (void)mouseWheelMovedContinuous:(UIPanGestureRecognizer *)gesture {
     switch (gesture.state) {
         case UIGestureRecognizerStateBegan:
-            self.isScrolling = YES;
-            Log(LOG_I, @"Scroll started");
-            break;
         case UIGestureRecognizerStateChanged:
             break;
-        case UIGestureRecognizerStateEnded: {
-            Log(LOG_I, @"Scroll ended");
-            self.isScrolling = YES;
-            __weak typeof(self) weakSelf = self;
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.7 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                weakSelf.isScrolling = NO;
-                Log(LOG_I, @"Scroll RC Listener Ended");
-                weakSelf.lastScrollTranslation = CGPointMake(0, 0);
-            });
-            break;
-        }
+        
+        case UIGestureRecognizerStateEnded:
         default:
-            self.isScrolling = NO;
-            self.lastScrollTranslation = CGPointMake(0, 0);
+            // Ignore recognition failure and other states
+            lastScrollTranslation = CGPointMake(0, 0);
             return;
     }
     
     CGPoint currentScrollTranslation = [gesture translationInView:self];
     
     {
-        short translationDeltaY = ((currentScrollTranslation.y - self.lastScrollTranslation.y) / self.bounds.size.height) * 120; // WHEEL_DELTA
+        short translationDeltaY = ((currentScrollTranslation.y - lastScrollTranslation.y) / self.bounds.size.height) * 120; // WHEEL_DELTA
         if (translationDeltaY != 0) {
             LiSendHighResScrollEvent(translationDeltaY * 20);
-            self.lastScrollTranslation = currentScrollTranslation;
+            lastScrollTranslation = currentScrollTranslation;
         }
     }
-    
+
     {
-        short translationDeltaX = ((currentScrollTranslation.x - self.lastScrollTranslation.x) / self.bounds.size.width) * 120; // WHEEL_DELTA
+        short translationDeltaX = ((currentScrollTranslation.x - lastScrollTranslation.x) / self.bounds.size.width) * 120; // WHEEL_DELTA
         if (translationDeltaX != 0) {
             // Direction is reversed from vertical scrolling
             LiSendHighResHScrollEvent(-translationDeltaX * 20);
-            self.lastScrollTranslation = currentScrollTranslation;
+            lastScrollTranslation = currentScrollTranslation;
         }
     }
 }
@@ -810,25 +757,13 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 - (void)mouseWheelMovedDiscrete:(UIPanGestureRecognizer *)gesture {
     switch (gesture.state) {
         case UIGestureRecognizerStateBegan:
-            self.isScrolling = YES;
-            Log(LOG_I, @"Scroll Started");
-            break;
         case UIGestureRecognizerStateChanged:
             break;
-        case UIGestureRecognizerStateEnded: {
-            self.isScrolling = YES;
-            Log(LOG_I, @"Scroll Ended");
-            __weak typeof(self) weakSelf = self;
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.7 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                weakSelf.isScrolling = NO;
-                Log(LOG_I, @"Scroll RC Listener Ended");
-                weakSelf.lastScrollTranslation = CGPointMake(0, 0);
-            });
-            break;
-        }
+        
+        case UIGestureRecognizerStateEnded:
         default:
-            self.isScrolling = NO;
-            self.lastScrollTranslation = CGPointMake(0, 0);
+            // Ignore recognition failure and other states
+            lastScrollTranslation = CGPointMake(0, 0);
             return;
     }
     
@@ -837,23 +772,21 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     CGPoint currentScrollTranslation = [gesture translationInView:self];
     
     {
-        short translationDeltaY = currentScrollTranslation.y - self.lastScrollTranslation.y;
+        short translationDeltaY = currentScrollTranslation.y - lastScrollTranslation.y;
         if (translationDeltaY != 0) {
             LiSendScrollEvent(translationDeltaY > 0 ? 1 : -1);
         }
-        
-        self.lastScrollTranslation = currentScrollTranslation;
     }
-    
+
     {
-        short translationDeltaX = currentScrollTranslation.x - self.lastScrollTranslation.x;
+        short translationDeltaX = currentScrollTranslation.x - lastScrollTranslation.x;
         if (translationDeltaX != 0) {
             // Direction is reversed from vertical scrolling
             LiSendHScrollEvent(translationDeltaX < 0 ? 1 : -1);
         }
-        
-        self.lastScrollTranslation = currentScrollTranslation;
     }
+    
+    lastScrollTranslation = currentScrollTranslation;
 }
 
 #endif
@@ -966,11 +899,11 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     [charset enumerateSubstringsInRange:NSMakeRange(0, charset.length)
                                 options:NSStringEnumerationByComposedCharacterSequences
                              usingBlock:^(NSString *substring, NSRange substringRange, NSRange enclosingRange, BOOL *stop) {
-        [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:0 action:@selector(keyPressed:)]];
-        [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:UIKeyModifierShift action:@selector(keyPressed:)]];
-        [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:UIKeyModifierControl action:@selector(keyPressed:)]];
-        [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:UIKeyModifierAlternate action:@selector(keyPressed:)]];
-    }];
+                                 [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:0 action:@selector(keyPressed:)]];
+                                 [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:UIKeyModifierShift action:@selector(keyPressed:)]];
+                                 [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:UIKeyModifierControl action:@selector(keyPressed:)]];
+                                 [commands addObject:[UIKeyCommand keyCommandWithInput:substring modifierFlags:UIKeyModifierAlternate action:@selector(keyPressed:)]];
+                             }];
     
     for (NSString *c in [dictCodes keyEnumerator]) {
         [commands addObject:[UIKeyCommand keyCommandWithInput:c

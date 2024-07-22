@@ -8,7 +8,9 @@
 
 #import "ControllerSupport.h"
 #import "Controller.h"
+
 #import "OnScreenControls.h"
+
 #import "DataManager.h"
 #import "Moonlight-Swift.h"
 
@@ -16,37 +18,32 @@
 
 @import GameController;
 @import AudioToolbox;
-@import UIKit;
 
-// Constants
 static const double MOUSE_SPEED_DIVISOR = 1.25;
 
-// Implementation
 @implementation ControllerSupport {
     id _controllerConnectObserver;
     id _controllerDisconnectObserver;
-    GCMouse *_mouseConnectObserver;
-    GCMouse *_mouseDisconnectObserver;
-    GCKeyboard *_keyboardConnectObserver;
-    GCKeyboard *_keyboardDisconnectObserver;
-
+    id _mouseConnectObserver;
+    id _mouseDisconnectObserver;
+    id _keyboardConnectObserver;
+    id _keyboardDisconnectObserver;
+    
     NSLock *_controllerStreamLock;
     NSMutableDictionary *_controllers;
     id<ControllerSupportDelegate> _delegate;
     
-    GCEventInteraction *_gcEventInteraction;
-
     float accumulatedDeltaX;
     float accumulatedDeltaY;
     float accumulatedScrollX;
     float accumulatedScrollY;
-
+    
     OnScreenControls *_osc;
     Controller *_oscController;
-
-    #define EMULATING_SELECT 0x1
-    #define EMULATING_SPECIAL 0x2
-
+    
+#define EMULATING_SELECT     0x1
+#define EMULATING_SPECIAL    0x2
+    
     bool _oscEnabled;
     char _controllerNumbers;
     bool _multiController;
@@ -58,114 +55,6 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 ((y) ? [self setButtonFlag:controller flags:x] : [self clearButtonFlag:controller flags:x])
 
 #define MAX_MAGNITUDE(x, y) (abs(x) > abs(y) ? (x) : (y))
-
-// Methods
-
-
-- (void)setupObservers
-{
-    __weak typeof(self) weakSelf = self;
-    _controllerConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCControllerDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf) return;
-
-        Log(LOG_I, @"Controller connected!");
-
-        GCController* controller = note.object;
-
-        if (![ControllerSupport isSupportedGamepad:controller]) {
-            // Ignore micro gamepads and motion controllers
-            return;
-        }
-
-        Controller* limeController = [strongSelf assignController:controller];
-        if (limeController) {
-            [strongSelf registerControllerCallbacks:controller];
-            [strongSelf reportControllerArrival:limeController];
-            [strongSelf updateAutoOnScreenControlMode];
-            [strongSelf->_delegate gamepadPresenceChanged];
-        }
-    }];
-    _controllerDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCControllerDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf) return;
-        
-        Log(LOG_I, @"Controller disconnected!");
-
-        GCController* controller = note.object;
-
-        if (![ControllerSupport isSupportedGamepad:controller]) {
-            // Ignore micro gamepads and motion controllers
-            return;
-        }
-
-        [strongSelf unregisterControllerCallbacks:controller];
-        strongSelf->_controllerNumbers &= ~(1 << controller.playerIndex);
-        Log(LOG_I, @"Unassigning controller index: %ld", (long)controller.playerIndex);
-
-        Controller* limeController = [strongSelf->_controllers objectForKey:[NSNumber numberWithInteger:controller.playerIndex]];
-        if (limeController) {
-            [strongSelf cleanupControllerHaptics:limeController];
-            [strongSelf cleanupControllerMotion:limeController];
-            [strongSelf cleanupControllerBattery:limeController];
-
-            if (limeController.mergedWithController) {
-                assert(limeController.mergedWithController.mergedWithController == limeController);
-                limeController.mergedWithController.mergedWithController = nil;
-            }
-
-            [strongSelf updateFinished:limeController];
-            [strongSelf->_controllers removeObjectForKey:[NSNumber numberWithInteger:controller.playerIndex]];
-            [strongSelf updateAutoOnScreenControlMode];
-            [strongSelf->_delegate gamepadPresenceChanged];
-        }
-    }];
-
-    if (@available(iOS 14.0, tvOS 14.0, *)) {
-        _mouseConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            __strong typeof(weakSelf) strongSelf = weakSelf;
-            if (!strongSelf) return;
-
-            Log(LOG_I, @"Mouse connected!");
-
-            GCMouse* mouse = note.object;
-
-            [strongSelf registerMouseCallbacks:mouse];
-            [strongSelf updateAutoOnScreenControlMode];
-            [strongSelf->_delegate mousePresenceChanged];
-        }];
-        _mouseDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            __strong typeof(weakSelf) strongSelf = weakSelf;
-            if (!strongSelf) return;
-
-            Log(LOG_I, @"Mouse disconnected!");
-
-            GCMouse* mouse = note.object;
-            [strongSelf unregisterMouseCallbacks:mouse];
-            [strongSelf updateAutoOnScreenControlMode];
-            [strongSelf->_delegate mousePresenceChanged];
-        }];
-        _keyboardConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            [weakSelf updateAutoOnScreenControlMode];
-        }];
-        _keyboardDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            [weakSelf updateAutoOnScreenControlMode];
-        }];
-    }
-}
-
-// Attach the interaction to the view
-- (void)attachGCEventInteractionToView:(UIView *)view {
-    [view addInteraction:_gcEventInteraction];
-    NSLog(@"Attached GCEventInteraction to view!");
-}
-
-// Detach the interaction from the view
-- (void)detachGCEventInteractionFromView:(UIView *)view {
-    [view removeInteraction:_gcEventInteraction];
-    NSLog(@"Detached GCEventInteraction from view!");
-}
-
 
 -(void) rumble:(unsigned short)controllerNumber lowFreqMotor:(unsigned short)lowFreqMotor highFreqMotor:(unsigned short)highFreqMotor
 {
@@ -1203,14 +1092,8 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     DataManager* dataMan = [[DataManager alloc] init];
     _oscEnabled = (OnScreenControlsLevel)[dataMan getSettings].onscreenControls != OnScreenControlsLevelOff;
     
-    _gcEventInteraction = [[GCEventInteraction alloc] init];
-    _gcEventInteraction.handledEventTypes = GCUIEventTypeGamepad;
-    
     Log(LOG_I, @"Number of supported controllers connected: %d", [ControllerSupport getGamepadCount]);
     Log(LOG_I, @"Multi-controller: %d", _multiController);
-    
-    _gcEventInteraction = [[GCEventInteraction alloc] init];
-    _gcEventInteraction.handledEventTypes = GCUIEventTypeGamepad;
     
     for (GCController* controller in [GCController controllers]) {
         if ([ControllerSupport isSupportedGamepad:controller]) {
@@ -1350,7 +1233,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     }
 }
 
-- (void)cleanup
+-(void) cleanup
 {
     [[NSNotificationCenter defaultCenter] removeObserver:_controllerConnectObserver];
     [[NSNotificationCenter defaultCenter] removeObserver:_controllerDisconnectObserver];
@@ -1358,29 +1241,29 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     [[NSNotificationCenter defaultCenter] removeObserver:_mouseDisconnectObserver];
     [[NSNotificationCenter defaultCenter] removeObserver:_keyboardConnectObserver];
     [[NSNotificationCenter defaultCenter] removeObserver:_keyboardDisconnectObserver];
-
+    
     _controllerConnectObserver = nil;
     _controllerDisconnectObserver = nil;
     _mouseConnectObserver = nil;
     _mouseDisconnectObserver = nil;
     _keyboardConnectObserver = nil;
     _keyboardDisconnectObserver = nil;
-
+    
     _controllerNumbers = 0;
-
+    
     for (Controller* controller in [_controllers allValues]) {
         [self cleanupControllerHaptics:controller];
         [self cleanupControllerMotion:controller];
         [self cleanupControllerBattery:controller];
     }
     [_controllers removeAllObjects];
-
+    
     for (GCController* controller in [GCController controllers]) {
         if ([ControllerSupport isSupportedGamepad:controller]) {
             [self unregisterControllerCallbacks:controller];
         }
     }
-
+    
     if (@available(iOS 14.0, tvOS 14.0, *)) {
         for (GCMouse* mouse in [GCMouse mice]) {
             [self unregisterMouseCallbacks:mouse];

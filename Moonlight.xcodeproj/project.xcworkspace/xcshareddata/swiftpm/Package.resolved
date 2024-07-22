@@ -1,15 +1,6 @@
 {
   "pins" : [
     {
-      "identity" : "openssl-package",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/krzyzanowskim/OpenSSL-Package.git",
-      "state" : {
-        "revision" : "fdc133911d1e26f59838763906a6486d65febfa6",
-        "version" : "3.1.5004"
-      }
-    },
-    {
       "identity" : "swift-collections",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections.git",
