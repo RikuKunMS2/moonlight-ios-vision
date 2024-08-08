@@ -1,3 +1,7 @@
+# TEST FLIGHT
+The testflight has finally been approved now: https://testflight.apple.com/join/poWcaME5
+
+
 # MOUSE SUPPORT 
 * You MUST go into GENERAL -> KEYBOARD and TRACKPAD -> Enable Two Finger Secondary Click or for Magic Mouse enable Secondary Click (Set to Right)
 
