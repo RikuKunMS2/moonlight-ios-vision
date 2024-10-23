@@ -1,9 +1,9 @@
-//
-
 import SwiftUI
 
 struct SettingsView: View {
     @Binding public var settings: TemporarySettings
+    @State private var selectedAspectRatio: AspectRatio?
+    @State private var isCustomAspectRatio: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -20,8 +20,6 @@ struct SettingsView: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.inline)
-                    }
-                    .ornament(attachmentAnchor: .scene(.bottom)) {
                         HStack {
                             TextField("Width", value: $settings.resolution.width, format: .number)
                             Text("by")
@@ -31,7 +29,12 @@ struct SettingsView: View {
                         .keyboardType(.numberPad)
                         .fixedSize(horizontal: true, vertical: false)
                         .padding()
-                        .glassBackgroundEffect()
+                        .onChange(of: settings.resolution) { _ in
+                            isCustomAspectRatio = !Self.resolutionTable.contains(settings.resolution)
+                            if isCustomAspectRatio {
+                                selectedAspectRatio = nil
+                            }
+                        }
                     }
                     .navigationTitle("Resolution")
                 } label: {
@@ -41,6 +44,46 @@ struct SettingsView: View {
                         Text(settings.resolution.description)
                     }
                 }
+
+                NavigationLink {
+                    Form {
+                        Picker("Aspect Ratio", selection: $selectedAspectRatio) {
+                            ForEach(Self.resolutionsGroupedByType.map { $0.0 }, id: \.self) { aspectRatio in
+                                Text(aspectRatio.casualDescription).tag(aspectRatio as AspectRatio?)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.inline)
+                        HStack {
+                            Spacer()
+                            if let selectedAspectRatio {
+                                Text(selectedAspectRatio.casualDescription)
+                            } else {
+                                Text("Custom")
+                            }
+                        }
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numberPad)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding()
+                        .onChange(of: selectedAspectRatio) { newValue in
+                            if let newAspectRatio = newValue {
+                                Task { @MainActor in
+                                    updateResolutionForAspectRatio(newAspectRatio)
+                                }
+                                isCustomAspectRatio = false
+                            }
+                        }
+                    }
+                    .navigationTitle("Aspect Ratio")
+                } label: {
+                    HStack {
+                        Text("Aspect Ratio")
+                        Spacer()
+                        Text(settings.resolution.aspectRatio.casualDescription)
+                    }
+                }
+
                 Picker("Framerate", selection: $settings.framerate) {
                     ForEach(Self.framerateTable, id: \.self) { framerate in
                         Text("\(framerate)")
@@ -87,7 +130,26 @@ struct SettingsView: View {
                 settings.save()
             }
         }
-    .frame(width: 600)
+        .frame(width: 600)
+        .onAppear {
+            selectedAspectRatio = settings.resolution.aspectRatio
+            isCustomAspectRatio = !Self.resolutionTable.contains(settings.resolution)
+        }
+    }
+
+    @MainActor
+    private func updateResolutionForAspectRatio(_ newAspectRatio: AspectRatio) {
+        // Get current width and height
+        let currentWidth = settings.resolution.width
+        let currentHeight = settings.resolution.height
+
+        // Maintain the same width or height and adjust the other according to the new aspect ratio
+        if currentWidth >= currentHeight {
+            settings.resolution = Resolution(width: currentWidth, height: (currentWidth * newAspectRatio.height) / newAspectRatio.width)
+        } else {
+            settings.resolution = Resolution(width: (currentHeight * newAspectRatio.width) / newAspectRatio.height, height: currentHeight)
+        }
+        isCustomAspectRatio = false
     }
 }
 
@@ -106,8 +168,8 @@ private extension TemporarySettings {
 extension SettingsView {
     struct AspectRatio: Equatable, Hashable, Comparable {
         // Always stored as reduced values
-        private let width: Int
-        private let height: Int
+        private(set) var width: Int
+        private(set) var height: Int
 
         init(width: Int, height: Int) {
             let reduced = simplifyFraction(numerator: width, denominator: height)
@@ -118,17 +180,19 @@ extension SettingsView {
         var casualDescription: LocalizedStringKey {
             switch self {
             case AspectRatio(width: 16, height: 9):
-                "Widescreen (TV)"
+                "16:9"
             case AspectRatio(width: 16, height: 10):
-                "Widescreen (PC)"
+                "16:10"
             case AspectRatio(width: 4, height: 3):
                 "4:3"
             case AspectRatio(width: 64, height: 27):
-                "Ultrawide (64:27)"
+                "'21:9' 2560x1080 or 5120x2160"
             case AspectRatio(width: 43, height: 18):
-                "Ultrawide (43:18)"
-            case AspectRatio(width: 32, height: 9):
-                "Super-Ultrawide"
+                "'21:9' 3440x1440"
+            case AspectRatio(width: 24, height: 10):
+                "24:10 3840x1600"
+            case AspectRatio(width: 64, height: 18):
+                "32:9"
             default:
                 "\(width)-by-\(height)"
             }
@@ -152,6 +216,8 @@ extension SettingsView {
             switch self {
             case Resolution(width: 3840, height: 2160):
                 "4K"
+            case Resolution(width: 5120, height: 2880):
+                "5K"
             case _ where simplifyFraction(numerator: width, denominator: height) == simplifyFraction(numerator: 16, denominator: 9):
                 "\(height)p"
             default:
@@ -166,12 +232,15 @@ extension SettingsView {
         Resolution(width: 1920, height: 1080),
         Resolution(width: 2560, height: 1440),
         Resolution(width: 3840, height: 2160),
+        Resolution(width: 5120, height: 2880),
         // 16:10
         Resolution(width: 1920, height: 1200),
         Resolution(width: 2560, height: 1600),
         // "21:9"
         Resolution(width: 2560, height: 1080),
+        Resolution(width: 5120, height: 2160),
         Resolution(width: 3440, height: 1440),
+        Resolution(width: 3840, height: 1600),
         // 32:9
         Resolution(width: 5120, height: 1440),
     ]

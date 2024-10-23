@@ -1,5 +1,3 @@
-//
-
 import SwiftUI
 
 struct MoonlightVisionApp: SwiftUI.App {
@@ -8,10 +6,10 @@ struct MoonlightVisionApp: SwiftUI.App {
         WindowGroup {
             MainContentView()
                 .environmentObject(appDelegate.mainViewModel)
+                .persistentSystemOverlays(.hidden) // Add this line to hide overlays
         }
         .windowResizability(.contentSize)
     }
-
 }
 
 @main

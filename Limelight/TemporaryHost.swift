@@ -126,6 +126,6 @@ public class TemporaryHost: NSObject {
     }
 }
 
-extension TemporaryHost: Identifiable {
+extension TemporaryHost: @preconcurrency Identifiable {
     public var id: String { self.uuid }
 }

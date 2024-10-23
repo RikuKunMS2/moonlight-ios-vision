@@ -29,4 +29,3 @@
 - (void) populateHost:(TemporaryHost*)host;
 
 @end
-

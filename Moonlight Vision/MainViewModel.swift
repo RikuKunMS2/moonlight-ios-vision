@@ -55,10 +55,12 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     
     func addHost(newHost: TemporaryHost) {
         if !hosts.contains(newHost) {
+            print("Adding new host: \(newHost)")
             hosts.append(newHost)
+        }else {
+            print("Host already exists: \(newHost)")
         }
     }
-
     func removeHost(_ host: TemporaryHost) {
         if hosts.contains(host) {
             discoveryManager?.removeHost(fromDiscovery: host)
@@ -86,16 +88,17 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     nonisolated func hostMaybeFound(host: TemporaryHost?, error: String?) {
         Task { @MainActor in
             if let host {
+                print("Discovered host: \(host)")
                 self.addHost(newHost: host)
                 await self.updateHost(host: host)
-                
             } else {
+                print("Error discovering host: \(error ?? "Unknown error")")
                 self.errorAddingHost = true
                 self.addHostErrorMessage = error ?? "Unknown Error"
             }
         }
     }
-    
+
     func tryPairHost(_ host: TemporaryHost) {
         discoveryManager?.stopDiscoveryBlocking()
         let httpManager = HttpManager(host: host)
@@ -139,24 +142,22 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     }
     
     func updateHost(host: TemporaryHost) async {
-        // Potentially skip this if it's recent?
-        // Populate online/offline correctly?
-        
         Task {
             let httpManager = HttpManager(host: host)
             discoveryManager?.pauseDiscovery(for: host)
             host.updatePending = true
             let serverInfoResponse = ServerInfoResponse()
             let request = HttpRequest(for: serverInfoResponse, with: httpManager?.newServerInfoRequest(false), fallbackError: 401, fallbackRequest: httpManager?.newHttpServerInfoRequest())
+            print("Executing request for host: \(host)")
             httpManager?.executeRequestSynchronously(request)
             discoveryManager?.resumeDiscovery(for: host)
-            
+
             host.updatePending = false
-            if !serverInfoResponse.isStatusOk() {
-                print("Failed to get server info: \(serverInfoResponse.statusMessage ?? "unknown error")")
-                // populate state with bad
-            } else {
+            if serverInfoResponse.isStatusOk() {
+                print("Successfully updated host: \(host)")
                 serverInfoResponse.populateHost(host)
+            } else {
+                print("Failed to update host: \(serverInfoResponse.statusMessage ?? "unknown error")")
             }
         }
     }
@@ -207,13 +208,14 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     func loadSavedHosts() {
         if let savedHosts = dataManager.getHosts() as? [TemporaryHost] {
+            print("Loaded saved hosts: \(savedHosts)")
             for host in savedHosts {
                 addHost(newHost: host)
             }
         } else {
             print("Unable to fetch saved hosts")
         }
-        
+
         for host in hosts {
             if host.activeAddress == nil {
                 host.activeAddress = host.localAddress

@@ -31,13 +31,13 @@ public class TemporarySettings: NSObject {
     @objc public var parent: MoonlightSettings?
 
     override public init() {
-        self.bitrate = 0
+        self.bitrate = 50000
         self.framerate = 0
         self.height = 0
         self.width = 0
         self.audioConfig = 0
         self.uniqueId = ""
-        self.onscreenControls = OnScreenControlsLevel.auto
+        self.onscreenControls = OnScreenControlsLevel.off
         super.init()
     }
 

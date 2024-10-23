@@ -7,8 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3E80AA6B2C4DF10B006A10EA /* OpenSSL.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3E80AA6A2C4DF10B006A10EA /* OpenSSL.xcframework */; };
-		3E80AA6C2C4DF10B006A10EA /* OpenSSL.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3E80AA6A2C4DF10B006A10EA /* OpenSSL.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		3E971C232CBA1AF000367885 /* OpenSSL.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3E971C212CBA1AF000367885 /* OpenSSL.xcframework */; };
+		3E971C242CBA1AFB00367885 /* OpenSSL.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3E971C212CBA1AF000367885 /* OpenSSL.xcframework */; };
+		3E971C252CBA1AFB00367885 /* OpenSSL.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3E971C212CBA1AF000367885 /* OpenSSL.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		693B3A9B218638CD00982F7B /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 693B3A9A218638CD00982F7B /* Settings.bundle */; };
 		98181BE92791277400E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BE82791275D00E43572 /* libSDL2.a */; };
 		98181BEB2791278F00E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BEA2791278300E43572 /* libSDL2.a */; };
@@ -257,7 +258,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				3E80AA6C2C4DF10B006A10EA /* OpenSSL.xcframework in Embed Frameworks */,
+				3E971C252CBA1AFB00367885 /* OpenSSL.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -265,7 +266,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		3E80AA6A2C4DF10B006A10EA /* OpenSSL.xcframework */ = {isa = PBXFileReference; expectedSignature = "AppleDeveloperProgram:2423V7K2Y5:Cameron Tham"; lastKnownFileType = wrapper.xcframework; name = OpenSSL.xcframework; path = Frameworks/OpenSSL.xcframework; sourceTree = "<group>"; };
+		3E971C212CBA1AF000367885 /* OpenSSL.xcframework */ = {isa = PBXFileReference; expectedSignature = "AppleDeveloperProgram:67RAULRX93:Marcin Krzyzanowski"; lastKnownFileType = wrapper.xcframework; path = OpenSSL.xcframework; sourceTree = "<group>"; };
 		566E9D2B2770B23A00EF7BFE /* Moonlight v1.7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.7.xcdatamodel"; sourceTree = "<group>"; };
 		693B3A9A218638CD00982F7B /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
 		9803CCAB254F9EAF00EE185E /* ConnectionCallbacks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ConnectionCallbacks.h; sourceTree = "<group>"; };
@@ -527,9 +528,9 @@
 				F7A11A202B5DF46B001E8686 /* RealityKit.framework in Frameworks */,
 				F7A119F72B5DE725001E8686 /* libopus.a in Frameworks */,
 				F7A119482B5DDF73001E8686 /* Foundation.framework in Frameworks */,
-				3E80AA6B2C4DF10B006A10EA /* OpenSSL.xcframework in Frameworks */,
 				F7A119492B5DDF73001E8686 /* CoreFoundation.framework in Frameworks */,
 				F7A1194A2B5DDF73001E8686 /* libSDL2.a in Frameworks */,
+				3E971C242CBA1AFB00367885 /* OpenSSL.xcframework in Frameworks */,
 				F7A1194B2B5DDF73001E8686 /* libavcodec.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -556,6 +557,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3E971C232CBA1AF000367885 /* OpenSSL.xcframework in Frameworks */,
 				9890CF6B203B7EE1006C4B06 /* libxml2.tbd in Frameworks */,
 				98CFB82F1CAD481B0048EF74 /* libmoonlight-common.a in Frameworks */,
 				FB8946ED19F6AFE800339C8A /* libopus.a in Frameworks */,
@@ -681,7 +683,7 @@
 		FB290CF019B2C406004C83CF /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				3E80AA6A2C4DF10B006A10EA /* OpenSSL.xcframework */,
+				3E971C212CBA1AF000367885 /* OpenSSL.xcframework */,
 				F7A11A1F2B5DF46B001E8686 /* RealityKit.framework */,
 				F7A11A1D2B5DF457001E8686 /* UIKit.framework */,
 				98882A032AF60F5300C5A11C /* libavcodec.a */,
@@ -1485,7 +1487,7 @@
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS-Sim",
 				);
-				MARKETING_VERSION = 10.0.14;
+				MARKETING_VERSION = 10.0.17;
 				OTHER_LDFLAGS = "-ld64";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1561,7 +1563,7 @@
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS-Sim",
 				);
-				MARKETING_VERSION = 10.0.14;
+				MARKETING_VERSION = 10.0.17;
 				OTHER_LDFLAGS = "-ld64";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";
 				PRODUCT_NAME = "$(TARGET_NAME)";

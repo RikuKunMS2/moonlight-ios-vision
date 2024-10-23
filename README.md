@@ -1,9 +1,3 @@
-# This is the testflight branch, 10.0.14
-* this may differ from the build it yourself version, which may be more updated, but this one might be more stable.
-
-# MOUSE SUPPORT 
-* You MUST go into GENERAL -> KEYBOARD and TRACKPAD -> Enable Two Finger Secondary Click or for Magic Mouse enable Secondary Click (Set to Right)
-
 # Moonlight iOS/tvOS
 
 [![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/kwv8vpwr457lqn25/branch/master?svg=true)](https://ci.appveyor.com/project/cgutman/moonlight-ios/branch/master)
@@ -16,57 +10,15 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 
 [![Moonlight for iOS and tvOS](https://moonlight-stream.org/images/App_Store_Badge_135x40.svg)](https://apps.apple.com/us/app/moonlight-game-streaming/id1000551566)
 
-## Requirements
-* XCode developer account (to get the XCode Beta)
-* Tested on Vision OS 2.0 Beta 2
-* XCode Beta
-
 ## Building
-* Install Xcode beta from the [App Store page](https://developer.apple.com/download/all/?q=xcode)
-* You need to be signed into a developer account to download (and build) you don’t have to pay, just do all the steps right up to paying and then don’t pay
-* You should delete your old xcode and rename xcode-beta to xcode
-* Run `git clone -b visionos --recursive https://github.com/RikuKunMS2/moonlight-ios-vision.git`
-  *  If you've already cloned the repo without `--recursive`, run `git submodule update --init --recursive`
-* Open Moonlight.xcodeproj in Xcode (it would download by default to your user folder on MacOS)
-* To run on a real device, you will need to locally modify the signing options and add your device:
-    * Go to the top menu bar, then in 'Window' open Devices and Simulators
-    * Add your Vision Pro
-    * In the project select to the folder icon in the sidebar to browser files
+* Install Xcode from the [App Store page](https://apps.apple.com/us/app/xcode/id497799835)
+* Run `git clone --recursive https://github.com/moonlight-stream/moonlight-ios.git`
+  *  If you've already clone the repo without `--recursive`, run `git submodule update --init --recursive`
+* Open Moonlight.xcodeproj in Xcode
+* To run on a real device, you will need to locally modify the signing options:
     * Click on "Moonlight" at the top of the left sidebar
-    * Under "Targets", select "Moonlight Vision"
     * Click on the "Signing & Capabilities" tab
+    * Under "Targets", select "Moonlight" (for iOS/iPadOS) or "Moonlight TV" (for tvOS)
     * In the "Team" dropdown, select your name. If your name doesn't appear, you may need to sign into Xcode with your Apple account.
-    * Change the "Bundle Identifier" to something different (unique). You can add your name or some random letters to make it unique.
-    * Select your Vision Pro (not the simulator or 'any device' but the one your registered earlier) in the top bar as a target and click the Play button to run. It will start the build and install it to your headset
-    * If you didn't pay for a developer account you will have to re-install it using x-code every 7 days.
-    
-# MOUSE SUPPORT 
-* You MUST go into GENERAL -> KEYBOARD and TRACKPAD -> Enable Two Finger Secondary Click or for Magic Mouse enable Secondary Click (Set to Right)
-
-# Updates
-* COMPLETELY fixed right clicking, it works like normal now no more hold to right click
-* Game controllers now fixed but the app only works on vision OS 2.0 beta and up
-* Docking mode during stream view is not possible due to support only being for AVPlayerViewController and I quote "Today, AVPlayerViewController scenes are the only scenes adhere to docking." source: https://developer.apple.com/documentation/RealityKit/DockingRegionComponent
-
-
-## Contrubtion
-* Feel free to add settings toggles or features, optimizations etc!
-
-## FAQ
-* how do I enable mouse support? SET THE SCREEN MODE TO TOUCHSCREEN in the moonlight settings in the app. confusing I know, but until apple fixes actual mouse supports its going to have to be set to touch screen mode.
-* How do I right click?: You press and hold on the trackpad for more than half a second and it will right click, both magic trackpad and eye clicking will do the same thing
-* Why does my cursor snap to where I'm looking: I have no idea, this is an OS level thing that I don't think we have control over, oh boy I sure wish I could adjust the snapping delay though ha!
-
-## New Planned Features
-* settings to reverse scroll direction
-* change of defaults (720p touchscreen mode etc)
-* keyboard button above floating window to toggle onscreen keyboard
-* Microphone forwarding via VBAN to Voicemeter on windows
-
-# Donations
-* Some people expressed interest in donations so:
-* I set up a ko-fi for [donations](https://ko-fi.com/lumanaire)!
-https://ko-fi.com/lumanaire
-
-Thanks again for your support :)
-
+    * Change the "Bundle Identifier" to something different. You can add your name or some random letters to make it unique.
+    * Now you can select your Apple device in the top bar as a target and click the Play button to run.

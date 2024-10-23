@@ -8,6 +8,8 @@
 
 #import "StreamConfiguration.h"
 #import "Controller.h"
+#import "Controller.h"
+#import <UIKit/UIKit.h>
 
 @class OnScreenControls;
 
@@ -49,5 +51,8 @@
 +(int) getConnectedGamepadMask:(StreamConfiguration*)streamConfig;
 
 -(NSUInteger) getConnectedGamepadCount;
+
+- (void) attachGCEventInteractionToView:(UIView *)view;
+- (void) detachGCEventInteractionFromView:(UIView *)view;
 
 @end
