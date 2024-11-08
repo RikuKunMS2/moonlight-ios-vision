@@ -1,18 +1,74 @@
 //
 
 import SwiftUI
+import Combine
+
+
+struct FadeInHoverEffect<Content: View>: View {
+    let content: Content
+    @State private var isHovered = false
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()  // No need for AnyView
+    }
+
+    var body: some View {
+        content
+            .opacityEffect()  // Apply your custom opacity effect
+            .onHover { hovering in // Detect hover state
+                isHovered = hovering
+                print(hovering ? "Hovered" : "Not hovered")
+            }
+    }
+}
+
+extension View {
+    func opacityEffect() -> some View {
+        self.modifier(OpacityHoverEffect()) // Your existing opacity effect
+    }
+}
+
+// Define a custom view modifier for the opacity hover effect
+struct OpacityHoverEffect: ViewModifier {
+    @State private var isHovered = false
+    @State private var timerCancellable: AnyCancellable?
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isHovered ? 1 : 0.01) // Initially set to 1 when hovered, fade to 0.01 otherwise
+            .onHover { hovering in
+                if hovering != isHovered {
+                    print("Element is being hovered")
+                    isHovered = hovering
+                    if hovering {
+                        timerCancellable?.cancel() // Cancel any existing timer
+                        content // Show content immediately on hover
+                    } else {
+                        timerCancellable = Timer.publish(every: 5, on: .main, in: .common)
+                            .autoconnect()
+                            .sink { _ in
+                                isHovered = false // Fade out after five seconds if not hovered
+                                timerCancellable?.cancel()
+                                print("Fade out after 5 seconds")
+                            }
+                    }
+                }
+            }
+            .animation(.easeOut, value: isHovered)
+    }
+}
+
 
 struct MainContentView: View {
     @EnvironmentObject private var viewModel: MainViewModel
-    
+
     @State private var selectedHost: TemporaryHost?
-    
     @State private var addingHost = false
     @State private var isDeletingHost = false
     @State private var hostToDelete: TemporaryHost?
     @State private var newHostIp = ""
     @State private var dimPassthrough = true
-    
+
     var body: some View {
         if viewModel.activelyStreaming {
             ZStack {
@@ -30,16 +86,18 @@ struct MainContentView: View {
             }
             .toolbar {}
             .ornament(attachmentAnchor: .scene(.topLeading), contentAlignment: .bottomLeading) {
-                HStack {
-                    Button("Close", systemImage: "xmark") {
-                        viewModel.activelyStreaming = false
+                FadeInHoverEffect {
+                    HStack {
+                        Button("Close", systemImage: "xmark") {
+                            viewModel.activelyStreaming = false
+                        }
+                        Button("Toggle Dimming", systemImage: dimPassthrough ? "moon.fill" : "moon") {
+                            dimPassthrough.toggle()
+                        }
                     }
-                    Button("Toggle Dimming", systemImage: dimPassthrough ? "moon.fill" : "moon") {
-                        dimPassthrough.toggle()
-                    }
+                    .labelStyle(.iconOnly)
+                    .padding()
                 }
-                .labelStyle(.iconOnly)
-                .padding()
             }
             .clipShape(RoundedRectangle(cornerRadius: 30.0))
             .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 30.0))

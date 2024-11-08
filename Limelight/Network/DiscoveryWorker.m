@@ -142,7 +142,6 @@ static const float POLL_RATE = 2.0f; // Poll every 2 seconds
             return YES;
         } else {
             Log(LOG_I, @"Received response from incorrect host: %@ but ignoring the expected: %@", [response getStringTag:TAG_UNIQUE_ID], _host.uuid);
-            return YES;
         }
     }
     return NO;
