@@ -274,20 +274,22 @@
         // are accurate though.
         
         // Update address of existing host
-        if (host.address != nil) {
-            existingHost.address = host.address;
-        }
-        if (host.localAddress != nil) {
-            existingHost.localAddress = host.localAddress;
-        }
-        if (host.ipv6Address != nil) {
-            existingHost.ipv6Address = host.ipv6Address;
-        }
-        if (host.externalAddress != nil) {
-            existingHost.externalAddress = host.externalAddress;
-        }
-        existingHost.activeAddress = host.activeAddress;
-        existingHost.state = host.state;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            if (host.address != nil) {
+                existingHost.address = host.address;
+            }
+            if (host.localAddress != nil) {
+                existingHost.localAddress = host.localAddress;
+            }
+            if (host.ipv6Address != nil) {
+                existingHost.ipv6Address = host.ipv6Address;
+            }
+            if (host.externalAddress != nil) {
+                existingHost.externalAddress = host.externalAddress;
+            }
+            existingHost.activeAddress = host.activeAddress;
+            existingHost.state = host.state;
+        });
         return NO;
     }
     else {

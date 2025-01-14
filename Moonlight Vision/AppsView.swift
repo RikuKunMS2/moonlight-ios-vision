@@ -11,22 +11,34 @@ import SwiftUI
 
 struct AppsView: View {
     @EnvironmentObject private var viewModel: MainViewModel
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.pushWindow) private var pushWindow
+    @Environment(\.dismissWindow) private var dismissWindow
     
+    @Binding
     public var host: TemporaryHost
     
     var body: some View {
         List {
             ForEach(host.appList.sorted(by: { $0.name ?? "" < $1.name ?? "" }), id: \.id) { app in
                 AppButtonView(host: host, app: app) {
-                    viewModel.stream(app: app)
+                    if let config = viewModel.stream(app: app) {
+                        if (viewModel.streamSettings.renderer == .realitykit) {
+                            openWindow(id: viewModel.streamSettings.renderer.windowId, value: config)
+                            dismissWindow(id: "mainView")
+                        } else {
+                            pushWindow(id: viewModel.streamSettings.renderer.windowId, value: config)
+                        }
+                    }
                 }
             }
         }
         .navigationTitle(host.name)
         .onAppear() {
             // this MUST be async lmao
-            
-            viewModel.refreshAppsFor(host: host)
+            Task {
+                viewModel.refreshAppsFor(host: host)
+            }
         }.refreshable() {
             viewModel.refreshAppsFor(host: host)
         }

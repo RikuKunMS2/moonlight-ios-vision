@@ -9,7 +9,7 @@
 #import <UIKit/UIKit.h>
 #import "DiscoveryManager.h"
 #import "PairManager.h"
-#import "StreamConfiguration.h"
+#import "Moonlight-Swift.h"
 #import "UIComputerView.h"
 #import "UIAppView.h"
 #import "AppAssetManager.h"

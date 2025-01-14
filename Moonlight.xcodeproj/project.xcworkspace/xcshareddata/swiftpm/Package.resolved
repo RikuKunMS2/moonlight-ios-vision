@@ -1,6 +1,15 @@
 {
   "pins" : [
     {
+      "identity" : "realitybounds",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/IvanMathy/RealityBounds",
+      "state" : {
+        "branch" : "main",
+        "revision" : "ee63a2d2db4e5bd659f2fd56599bc04f76ca0b0f"
+      }
+    },
+    {
       "identity" : "swift-collections",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections.git",

@@ -9,6 +9,7 @@
 import Foundation
 import OrderedCollections
 import VideoToolbox
+import AVFoundation
 
 @MainActor
 class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback, AppAssetCallback {
@@ -23,6 +24,12 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     @Published var currentStreamConfig = StreamConfiguration()
     @Published var activelyStreaming = false
     @Published var streamSettings: TemporarySettings
+    
+    @Published var volumeSliderValue: Float = 1.0
+    
+    @Published var dimPassthrough = true
+    @Published var vol: Float = 127
+    @Published var mute: Bool = false
     
     private var dataManager: DataManager
     private var discoveryManager: DiscoveryManager? = nil
@@ -252,11 +259,11 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     
     // MARK: Stream Control
     
-    func stream(app: TemporaryApp) {
+    func stream(app: TemporaryApp) -> StreamConfiguration? {
         let config = StreamConfiguration()
         
         guard let host = app.host() else {
-            return
+            return nil
         }
         
         config.host = host.activeAddress
@@ -332,5 +339,6 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         
         currentStreamConfig = config
         activelyStreaming = true
+        return currentStreamConfig
     }
 }
