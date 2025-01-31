@@ -163,7 +163,9 @@
     [_tipLabel.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor].active = YES;
 
     _streamMan = [[StreamManager alloc] initWithConfig:self.streamConfig
-                                            renderView:_streamView
+                                      rendererProvider:^id<AnyVideoDecoderRenderer> __strong {
+        return [[VideoDecoderRenderer alloc] initWithView:self->_streamView callbacks:self streamAspectRatio:(float)self.streamConfig.width / (float)self.streamConfig.height useFramePacing:self.streamConfig.useFramePacing];
+    }
                                    connectionCallbacks:self];
     NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
     [opQueue addOperation:_streamMan];

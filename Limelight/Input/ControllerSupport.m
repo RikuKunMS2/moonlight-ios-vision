@@ -509,6 +509,15 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             }
             
             controller.extendedGamepad.valueChangedHandler = NULL;
+        } else if (controller.microGamepad != NULL) {
+            // Re-enable system gestures on the gamepad buttons now
+            if (@available(iOS 14.0, tvOS 14.0, *)) {
+                for (GCControllerElement* element in controller.physicalInputProfile.allElements) {
+                    element.preferredSystemGestureState = GCSystemGestureStateEnabled;
+                }
+            }
+            
+            controller.microGamepad.valueChangedHandler = NULL;
         }
     }
 }
@@ -608,13 +617,13 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
         supportedButtonFlags |= PLAY_FLAG;
         
         // Detect buttons present in the GCExtendedGamepad profile
-        if (controller.extendedGamepad.dpad) {
+        if (controller.gamepad.dpad || controller.microGamepad.dpad) {
             supportedButtonFlags |= UP_FLAG | DOWN_FLAG | LEFT_FLAG | RIGHT_FLAG;
         }
-        if (controller.extendedGamepad.leftShoulder) {
+        if (controller.gamepad.leftShoulder || controller.gamepad.leftShoulder) {
             supportedButtonFlags |= LB_FLAG;
         }
-        if (controller.extendedGamepad.rightShoulder) {
+        if (controller.gamepad.rightShoulder) {
             supportedButtonFlags |= RB_FLAG;
         }
         if (@available(iOS 13.0, tvOS 13.0, *)) {
@@ -627,16 +636,16 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                 supportedButtonFlags |= SPECIAL_FLAG;
             }
         }
-        if (controller.extendedGamepad.buttonA) {
+        if (controller.gamepad.buttonA) {
             supportedButtonFlags |= A_FLAG;
         }
-        if (controller.extendedGamepad.buttonB) {
+        if (controller.gamepad.buttonB) {
             supportedButtonFlags |= B_FLAG;
         }
-        if (controller.extendedGamepad.buttonX) {
+        if (controller.gamepad.buttonX) {
             supportedButtonFlags |= X_FLAG;
         }
-        if (controller.extendedGamepad.buttonY) {
+        if (controller.gamepad.buttonY) {
             supportedButtonFlags |= Y_FLAG;
         }
         if (@available(iOS 12.1, tvOS 12.1, *)) {
@@ -676,15 +685,15 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                 capabilities |= LI_CCAP_TOUCHPAD;
             }
             
-            if ([controller.extendedGamepad isKindOfClass:[GCXboxGamepad class]]) {
+            if ([controller.extendedGamepad isKindOfClass:[GCXboxGamepad class]] || [controller.gamepad isKindOfClass:[GCXboxGamepad class]]) {
                 type = LI_CTYPE_XBOX;
             }
-            else if ([controller.extendedGamepad isKindOfClass:[GCDualShockGamepad class]]) {
+            else if ([controller.extendedGamepad isKindOfClass:[GCDualShockGamepad class]] || [controller.gamepad isKindOfClass:[GCDualShockGamepad class]]) {
                 type = LI_CTYPE_PS;
             }
             
             if (@available(iOS 14.5, tvOS 14.5, *)) {
-                if ([controller.extendedGamepad isKindOfClass:[GCDualSenseGamepad class]]) {
+                if ([controller.extendedGamepad isKindOfClass:[GCDualSenseGamepad class]] || [controller.gamepad isKindOfClass:[GCDualSenseGamepad class]]) {
                     type = LI_CTYPE_PS;
                 }
             }
@@ -824,7 +833,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             };
         }
         
-        if (controller.extendedGamepad != NULL) {
+        if (controller.extendedGamepad != NULL || controller.microGamepad != NULL) {
             // Disable system gestures on the gamepad to avoid interfering
             // with in-game controller actions
             if (@available(iOS 14.0, tvOS 14.0, *)) {
@@ -832,110 +841,207 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                     element.preferredSystemGestureState = GCSystemGestureStateDisabled;
                 }
             }
-            
-            controller.extendedGamepad.valueChangedHandler = ^(GCExtendedGamepad *gamepad, GCControllerElement *element) {
-                Controller* limeController = [self->_controllers objectForKey:[NSNumber numberWithInteger:gamepad.controller.playerIndex]];
-                short leftStickX, leftStickY;
-                short rightStickX, rightStickY;
-                unsigned char leftTrigger, rightTrigger;
-                
-                if (self->_swapABXYButtons) {
-                    UPDATE_BUTTON_FLAG(limeController, B_FLAG, gamepad.buttonA.pressed);
-                    UPDATE_BUTTON_FLAG(limeController, A_FLAG, gamepad.buttonB.pressed);
-                    UPDATE_BUTTON_FLAG(limeController, Y_FLAG, gamepad.buttonX.pressed);
-                    UPDATE_BUTTON_FLAG(limeController, X_FLAG, gamepad.buttonY.pressed);
-                }
-                else {
-                    UPDATE_BUTTON_FLAG(limeController, A_FLAG, gamepad.buttonA.pressed);
-                    UPDATE_BUTTON_FLAG(limeController, B_FLAG, gamepad.buttonB.pressed);
-                    UPDATE_BUTTON_FLAG(limeController, X_FLAG, gamepad.buttonX.pressed);
-                    UPDATE_BUTTON_FLAG(limeController, Y_FLAG, gamepad.buttonY.pressed);
-                }
-                
-                UPDATE_BUTTON_FLAG(limeController, UP_FLAG, gamepad.dpad.up.pressed);
-                UPDATE_BUTTON_FLAG(limeController, DOWN_FLAG, gamepad.dpad.down.pressed);
-                UPDATE_BUTTON_FLAG(limeController, LEFT_FLAG, gamepad.dpad.left.pressed);
-                UPDATE_BUTTON_FLAG(limeController, RIGHT_FLAG, gamepad.dpad.right.pressed);
-                
-                UPDATE_BUTTON_FLAG(limeController, LB_FLAG, gamepad.leftShoulder.pressed);
-                UPDATE_BUTTON_FLAG(limeController, RB_FLAG, gamepad.rightShoulder.pressed);
-                
-                // Yay, iOS 12.1 now supports analog stick buttons
-                if (@available(iOS 12.1, tvOS 12.1, *)) {
-                    if (gamepad.leftThumbstickButton != nil) {
-                        UPDATE_BUTTON_FLAG(limeController, LS_CLK_FLAG, gamepad.leftThumbstickButton.pressed);
+            if (controller.extendedGamepad != NULL) {
+                controller.extendedGamepad.valueChangedHandler = ^(GCExtendedGamepad *gamepad, GCControllerElement *element) {
+                    Controller* limeController = [self->_controllers objectForKey:[NSNumber numberWithInteger:gamepad.controller.playerIndex]];
+                    short leftStickX, leftStickY;
+                    short rightStickX, rightStickY;
+                    unsigned char leftTrigger, rightTrigger;
+                    
+                    if (self->_swapABXYButtons) {
+                        UPDATE_BUTTON_FLAG(limeController, B_FLAG, gamepad.buttonA.pressed);
+                        UPDATE_BUTTON_FLAG(limeController, A_FLAG, gamepad.buttonB.pressed);
+                        UPDATE_BUTTON_FLAG(limeController, Y_FLAG, gamepad.buttonX.pressed);
+                        UPDATE_BUTTON_FLAG(limeController, X_FLAG, gamepad.buttonY.pressed);
                     }
-                    if (gamepad.rightThumbstickButton != nil) {
-                        UPDATE_BUTTON_FLAG(limeController, RS_CLK_FLAG, gamepad.rightThumbstickButton.pressed);
-                    }
-                }
-                
-                if (@available(iOS 13.0, tvOS 13.0, *)) {
-                    // Options button is optional (only present on Xbox One S and PS4 gamepads)
-                    if (gamepad.buttonOptions != nil) {
-                        UPDATE_BUTTON_FLAG(limeController, BACK_FLAG, gamepad.buttonOptions.pressed);
-
-                        // For older MFi gamepads, the menu button will already be handled by
-                        // the controllerPausedHandler.
-                        UPDATE_BUTTON_FLAG(limeController, PLAY_FLAG, gamepad.buttonMenu.pressed);
-                    }
-                }
-                
-                if (@available(iOS 14.0, tvOS 14.0, *)) {
-                    // Home/Guide button is optional (only present on Xbox One S and PS4 gamepads)
-                    if (gamepad.buttonHome != nil) {
-                        UPDATE_BUTTON_FLAG(limeController, SPECIAL_FLAG, gamepad.buttonHome.pressed);
+                    else {
+                        UPDATE_BUTTON_FLAG(limeController, A_FLAG, gamepad.buttonA.pressed);
+                        UPDATE_BUTTON_FLAG(limeController, B_FLAG, gamepad.buttonB.pressed);
+                        UPDATE_BUTTON_FLAG(limeController, X_FLAG, gamepad.buttonX.pressed);
+                        UPDATE_BUTTON_FLAG(limeController, Y_FLAG, gamepad.buttonY.pressed);
                     }
                     
-                    // Xbox One/Series controllers
-                    if (gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleOne]) {
-                        UPDATE_BUTTON_FLAG(limeController, PADDLE1_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleOne].pressed);
-                    }
-                    if (gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleTwo]) {
-                        UPDATE_BUTTON_FLAG(limeController, PADDLE2_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleTwo].pressed);
-                    }
-                    if (gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleThree]) {
-                        UPDATE_BUTTON_FLAG(limeController, PADDLE3_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleThree].pressed);
-                    }
-                    if (gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleFour]) {
-                        UPDATE_BUTTON_FLAG(limeController, PADDLE4_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleFour].pressed);
-                    }
-                    if (@available(iOS 15.0, tvOS 15.0, *)) {
-                        if (gamepad.controller.physicalInputProfile.buttons[GCInputButtonShare]) {
-                            UPDATE_BUTTON_FLAG(limeController, MISC_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputButtonShare].pressed);
+                    UPDATE_BUTTON_FLAG(limeController, UP_FLAG, gamepad.dpad.up.pressed);
+                    UPDATE_BUTTON_FLAG(limeController, DOWN_FLAG, gamepad.dpad.down.pressed);
+                    UPDATE_BUTTON_FLAG(limeController, LEFT_FLAG, gamepad.dpad.left.pressed);
+                    UPDATE_BUTTON_FLAG(limeController, RIGHT_FLAG, gamepad.dpad.right.pressed);
+                    
+                    UPDATE_BUTTON_FLAG(limeController, LB_FLAG, gamepad.leftShoulder.pressed);
+                    UPDATE_BUTTON_FLAG(limeController, RB_FLAG, gamepad.rightShoulder.pressed);
+                    
+                    // Yay, iOS 12.1 now supports analog stick buttons
+                    if (@available(iOS 12.1, tvOS 12.1, *)) {
+                        if (gamepad.leftThumbstickButton != nil) {
+                            UPDATE_BUTTON_FLAG(limeController, LS_CLK_FLAG, gamepad.leftThumbstickButton.pressed);
+                        }
+                        if (gamepad.rightThumbstickButton != nil) {
+                            UPDATE_BUTTON_FLAG(limeController, RS_CLK_FLAG, gamepad.rightThumbstickButton.pressed);
                         }
                     }
                     
-                    // DualShock/DualSense controllers
-                    if (gamepad.controller.physicalInputProfile.buttons[GCInputDualShockTouchpadButton]) {
-                        UPDATE_BUTTON_FLAG(limeController, TOUCHPAD_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputDualShockTouchpadButton].pressed);
+                    if (@available(iOS 13.0, tvOS 13.0, *)) {
+                        // Options button is optional (only present on Xbox One S and PS4 gamepads)
+                        if (gamepad.buttonOptions != nil) {
+                            UPDATE_BUTTON_FLAG(limeController, BACK_FLAG, gamepad.buttonOptions.pressed);
+                            
+                            // For older MFi gamepads, the menu button will already be handled by
+                            // the controllerPausedHandler.
+                            UPDATE_BUTTON_FLAG(limeController, PLAY_FLAG, gamepad.buttonMenu.pressed);
+                        }
                     }
-                    if (gamepad.controller.physicalInputProfile.dpads[GCInputDualShockTouchpadOne]) {
-                        [self handleControllerTouchpad:limeController
-                                                 touch:gamepad.controller.physicalInputProfile.dpads[GCInputDualShockTouchpadOne]
-                                                 index:0];
+                    
+                    if (@available(iOS 14.0, tvOS 14.0, *)) {
+                        // Home/Guide button is optional (only present on Xbox One S and PS4 gamepads)
+                        if (gamepad.buttonHome != nil) {
+                            UPDATE_BUTTON_FLAG(limeController, SPECIAL_FLAG, gamepad.buttonHome.pressed);
+                        }
+                        
+                        // Xbox One/Series controllers
+                        if (gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleOne]) {
+                            UPDATE_BUTTON_FLAG(limeController, PADDLE1_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleOne].pressed);
+                        }
+                        if (gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleTwo]) {
+                            UPDATE_BUTTON_FLAG(limeController, PADDLE2_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleTwo].pressed);
+                        }
+                        if (gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleThree]) {
+                            UPDATE_BUTTON_FLAG(limeController, PADDLE3_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleThree].pressed);
+                        }
+                        if (gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleFour]) {
+                            UPDATE_BUTTON_FLAG(limeController, PADDLE4_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputXboxPaddleFour].pressed);
+                        }
+                        if (@available(iOS 15.0, tvOS 15.0, *)) {
+                            if (gamepad.controller.physicalInputProfile.buttons[GCInputButtonShare]) {
+                                UPDATE_BUTTON_FLAG(limeController, MISC_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputButtonShare].pressed);
+                            }
+                        }
+                        
+                        // DualShock/DualSense controllers
+                        if (gamepad.controller.physicalInputProfile.buttons[GCInputDualShockTouchpadButton]) {
+                            UPDATE_BUTTON_FLAG(limeController, TOUCHPAD_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputDualShockTouchpadButton].pressed);
+                        }
+                        if (gamepad.controller.physicalInputProfile.dpads[GCInputDualShockTouchpadOne]) {
+                            [self handleControllerTouchpad:limeController
+                                                     touch:gamepad.controller.physicalInputProfile.dpads[GCInputDualShockTouchpadOne]
+                                                     index:0];
+                        }
+                        if (gamepad.controller.physicalInputProfile.dpads[GCInputDualShockTouchpadTwo]) {
+                            [self handleControllerTouchpad:limeController
+                                                     touch:gamepad.controller.physicalInputProfile.dpads[GCInputDualShockTouchpadTwo]
+                                                     index:1];
+                        }
                     }
-                    if (gamepad.controller.physicalInputProfile.dpads[GCInputDualShockTouchpadTwo]) {
-                        [self handleControllerTouchpad:limeController
-                                                 touch:gamepad.controller.physicalInputProfile.dpads[GCInputDualShockTouchpadTwo]
-                                                 index:1];
+                    
+                    leftStickX = gamepad.leftThumbstick.xAxis.value * 0x7FFE;
+                    leftStickY = gamepad.leftThumbstick.yAxis.value * 0x7FFE;
+                    
+                    rightStickX = gamepad.rightThumbstick.xAxis.value * 0x7FFE;
+                    rightStickY = gamepad.rightThumbstick.yAxis.value * 0x7FFE;
+                    
+                    leftTrigger = gamepad.leftTrigger.value * 0xFF;
+                    rightTrigger = gamepad.rightTrigger.value * 0xFF;
+                    
+                    [self updateLeftStick:limeController x:leftStickX y:leftStickY];
+                    [self updateRightStick:limeController x:rightStickX y:rightStickY];
+                    [self updateTriggers:limeController left:leftTrigger right:rightTrigger];
+                    [self updateFinished:limeController];
+                };
+            } else {
+                Log(LOG_W, @"Found Micro pad with following elements: ", controller.physicalInputProfile.elements.allKeys);
+                controller.microGamepad.valueChangedHandler = ^(GCMicroGamepad *gamepad, GCControllerElement *element) {
+                    Log(LOG_I, @"INPUT DETECTED BY MICRO PAD");
+                    gamepad.controller.physicalInputProfile.valueDidChangeHandler(gamepad.controller.physicalInputProfile, element);
+                };
+                controller.physicalInputProfile.valueDidChangeHandler = ^(GCPhysicalInputProfile *gamepad, GCControllerElement *element) {
+                    Controller* limeController = [self->_controllers objectForKey:[NSNumber numberWithInteger:0]];
+                    short leftStickX, leftStickY;
+                    short rightStickX, rightStickY;
+                    unsigned char leftTrigger, rightTrigger;
+                    
+                    if (self->_swapABXYButtons) {
+                        UPDATE_BUTTON_FLAG(limeController, B_FLAG, gamepad.buttons[@"Button A"].pressed);
+                        UPDATE_BUTTON_FLAG(limeController, A_FLAG, gamepad.buttons[@"Button B"].pressed);
+                        UPDATE_BUTTON_FLAG(limeController, Y_FLAG, gamepad.buttons[@"Button X"].pressed);
+                        UPDATE_BUTTON_FLAG(limeController, X_FLAG, gamepad.buttons[@"Button Y"].pressed);
                     }
-                }
-                
-                leftStickX = gamepad.leftThumbstick.xAxis.value * 0x7FFE;
-                leftStickY = gamepad.leftThumbstick.yAxis.value * 0x7FFE;
-                
-                rightStickX = gamepad.rightThumbstick.xAxis.value * 0x7FFE;
-                rightStickY = gamepad.rightThumbstick.yAxis.value * 0x7FFE;
-                
-                leftTrigger = gamepad.leftTrigger.value * 0xFF;
-                rightTrigger = gamepad.rightTrigger.value * 0xFF;
-                
-                [self updateLeftStick:limeController x:leftStickX y:leftStickY];
-                [self updateRightStick:limeController x:rightStickX y:rightStickY];
-                [self updateTriggers:limeController left:leftTrigger right:rightTrigger];
-                [self updateFinished:limeController];
-            };
+                    else {
+                        UPDATE_BUTTON_FLAG(limeController, A_FLAG, gamepad.buttons[@"Button A"].pressed);
+                        UPDATE_BUTTON_FLAG(limeController, B_FLAG, gamepad.buttons[@"Button B"].pressed);
+                        UPDATE_BUTTON_FLAG(limeController, X_FLAG, gamepad.buttons[@"Button X"].pressed);
+                        UPDATE_BUTTON_FLAG(limeController, Y_FLAG, gamepad.buttons[@"Button Y"].pressed);
+                    }
+                    
+                    UPDATE_BUTTON_FLAG(limeController, UP_FLAG, gamepad.buttons[@"Direction Pad Up"].pressed);
+                    UPDATE_BUTTON_FLAG(limeController, DOWN_FLAG, gamepad.buttons[@"Direction Pad Down"].pressed);
+                    UPDATE_BUTTON_FLAG(limeController, LEFT_FLAG, gamepad.buttons[@"Direction Pad Left"].pressed);
+                    UPDATE_BUTTON_FLAG(limeController, RIGHT_FLAG, gamepad.buttons[@"Direction Pad Right"].pressed);
+                    
+                    UPDATE_BUTTON_FLAG(limeController, LB_FLAG, gamepad.buttons[@"Left Shoulder"].pressed);
+                    UPDATE_BUTTON_FLAG(limeController, RB_FLAG, gamepad.buttons[@"Right Shoulder"].pressed);
+                    
+//                    // Yay, iOS 12.1 now supports analog stick buttons
+//                    if (@available(iOS 12.1, tvOS 12.1, *)) {
+//                        if (gamepad.leftThumbstickButton != nil) {
+//                            UPDATE_BUTTON_FLAG(limeController, LS_CLK_FLAG, gamepad.leftThumbstickButton.pressed);
+//                        }
+//                        if (gamepad.rightThumbstickButton != nil) {
+//                            UPDATE_BUTTON_FLAG(limeController, RS_CLK_FLAG, gamepad.rightThumbstickButton.pressed);
+//                        }
+//                    }
+                    
+                    if (@available(iOS 13.0, tvOS 13.0, *)) {
+                        // Options button is optional (only present on Xbox One S and PS4 gamepads)
+                        if (gamepad.buttons[@"Button Options"] != nil) {
+                            UPDATE_BUTTON_FLAG(limeController, BACK_FLAG, gamepad.buttons[@"Button Options"].pressed);//gamepad.buttonOptions.pressed);
+                            
+                            // For older MFi gamepads, the menu button will already be handled by
+                            // the controllerPausedHandler.
+                            UPDATE_BUTTON_FLAG(limeController, PLAY_FLAG, gamepad.buttons[@"Button Menu"].pressed); //gamepad.buttonMenu.pressed);
+                        }
+                    }
+                    
+                    if (@available(iOS 14.0, tvOS 14.0, *)) {
+                        // Home/Guide button is optional (only present on Xbox One S and PS4 gamepads)
+                        if (gamepad.buttons[@"Button Home"] != nil) {
+                            UPDATE_BUTTON_FLAG(limeController, SPECIAL_FLAG, gamepad.buttons[@"Button Home"].pressed);
+                        }
+                        
+                        if (@available(iOS 15.0, tvOS 15.0, *)) {
+                            if (gamepad.buttons[GCInputButtonShare]) {
+                                UPDATE_BUTTON_FLAG(limeController, MISC_FLAG, gamepad.buttons[GCInputButtonShare].pressed);
+                            }
+                        }
+                        
+                        // DualShock/DualSense controllers
+                        if (gamepad.buttons[GCInputDualShockTouchpadButton]) {
+                            UPDATE_BUTTON_FLAG(limeController, TOUCHPAD_FLAG, gamepad.buttons[GCInputDualShockTouchpadButton].pressed);
+                        }
+                        if (gamepad.dpads[GCInputDualShockTouchpadOne]) {
+                            [self handleControllerTouchpad:limeController
+                                                     touch:gamepad.dpads[GCInputDualShockTouchpadOne]
+                                                     index:0];
+                        }
+                        if (gamepad.dpads[GCInputDualShockTouchpadTwo]) {
+                            [self handleControllerTouchpad:limeController
+                                                     touch:gamepad.dpads[GCInputDualShockTouchpadTwo]
+                                                     index:1];
+                        }
+                    }
+                    
+//                    leftStickX = gamepad.leftThumbstick.xAxis.value * 0x7FFE;
+//                    leftStickY = gamepad.leftThumbstick.yAxis.value * 0x7FFE;
+//                    
+//                    rightStickX = gamepad.rightThumbstick.xAxis.value * 0x7FFE;
+//                    rightStickY = gamepad.rightThumbstick.yAxis.value * 0x7FFE;
+//                    
+//                    leftTrigger = gamepad.leftTrigger.value * 0xFF;
+//                    rightTrigger = gamepad.rightTrigger.value * 0xFF;
+                    
+                    [self updateLeftStick:limeController x:0 y:0];
+                    [self updateRightStick:limeController x:0 y:0];
+                    [self updateTriggers:limeController left:0 right:0];
+                    [self updateFinished:limeController];
+                };
+            }
         }
     } else {
         Log(LOG_W, @"Tried to register controller callbacks on NULL controller");
@@ -1098,7 +1204,6 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             // If this is player 0, it shares state with the OSC
             limeController.mergedWithController = _oscController;
             _oscController.mergedWithController = limeController;
-            
             if (@available(iOS 13.0, tvOS 13.0, *)) {
                 if (controller.extendedGamepad != nil &&
                     controller.extendedGamepad.buttonOptions != nil) {
@@ -1120,6 +1225,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 
             [_controllers setObject:limeController forKey:[NSNumber numberWithInteger:controller.playerIndex]];
             
+            
             Log(LOG_I, @"Assigning controller index: %d", i);
             return limeController;
         }
@@ -1133,7 +1239,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 }
 
 +(bool) isSupportedGamepad:(GCController*) controller {
-    return controller.extendedGamepad != nil;
+    return controller.extendedGamepad != nil || controller.microGamepad != nil || controller.gamepad != nil;
 }
 
 #pragma clang diagnostic pop

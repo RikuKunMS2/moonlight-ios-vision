@@ -8,101 +8,122 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                NavigationLink {
-                    Form {
-                        Picker("Resolution", selection: $settings.resolution) {
-                            ForEach(Self.resolutionsGroupedByType, id: \.0) { aspectRatio, resolutions in
-                                ForEach(resolutions, id: \.self) { resolution in
-                                    Text(resolution.description)
-                                        .badge(aspectRatio.casualDescription)
+                Section(header: Text("Video settings")) {
+                    NavigationLink {
+                        Form {
+                            Picker("Resolution", selection: $settings.resolution) {
+                                ForEach(Self.resolutionsGroupedByType, id: \.0) { aspectRatio, resolutions in
+                                    ForEach(resolutions, id: \.self) { resolution in
+                                        Text(resolution.description)
+                                            .badge(aspectRatio.casualDescription)
+                                    }
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.inline)
+                        }
+                        .ornament(attachmentAnchor: .scene(.bottom)) {
+                            HStack {
+                                TextField("Width", value: $settings.resolution.width, format: .number)
+                                Text("by")
+                                TextField("Height", value: $settings.resolution.height, format: .number)
+                            }
+                            .textFieldStyle(.roundedBorder)
+                            .keyboardType(.numberPad)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding()
+                            .glassBackgroundEffect()
+                            .onChange(of: settings.resolution) { _ in
+                                isCustomAspectRatio = !Self.resolutionTable.contains(settings.resolution)
+                                if isCustomAspectRatio {
+                                    selectedAspectRatio = nil
                                 }
                             }
                         }
-                        .labelsHidden()
-                        .pickerStyle(.inline)
+                        .navigationTitle("Resolution")
+                    } label: {
                         HStack {
-                            TextField("Width", value: $settings.resolution.width, format: .number)
-                            Text("by")
-                            TextField("Height", value: $settings.resolution.height, format: .number)
-                        }
-                        .textFieldStyle(.roundedBorder)
-                        .keyboardType(.numberPad)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .padding()
-                        .onChange(of: settings.resolution) { _ in
-                            isCustomAspectRatio = !Self.resolutionTable.contains(settings.resolution)
-                            if isCustomAspectRatio {
-                                selectedAspectRatio = nil
-                            }
-                        }
-                    }
-                    .navigationTitle("Resolution")
-                } label: {
-                    HStack {
-                        Text("Resolution")
-                        Spacer()
-                        Text(settings.resolution.description)
-                    }
-                }
-
-                NavigationLink {
-                    Form {
-                        Picker("Aspect Ratio", selection: $selectedAspectRatio) {
-                            ForEach(Self.resolutionsGroupedByType.map { $0.0 }, id: \.self) { aspectRatio in
-                                Text(aspectRatio.casualDescription).tag(aspectRatio as AspectRatio?)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.inline)
-                        HStack {
+                            Text("Resolution")
                             Spacer()
-                            if let selectedAspectRatio {
-                                Text(selectedAspectRatio.casualDescription)
-                            } else {
-                                Text("Custom")
-                            }
+                            Text(settings.resolution.description)
                         }
-                        .textFieldStyle(.roundedBorder)
-                        .keyboardType(.numberPad)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .padding()
-                        .onChange(of: selectedAspectRatio) { newValue in
-                            if let newAspectRatio = newValue {
-                                Task { @MainActor in
-                                    updateResolutionForAspectRatio(newAspectRatio)
+                    }
+                    
+                    NavigationLink {
+                        Form {
+                            Picker("Aspect Ratio", selection: $selectedAspectRatio) {
+                                ForEach(Self.resolutionsGroupedByType.map { $0.0 }, id: \.self) { aspectRatio in
+                                    Text(aspectRatio.casualDescription).tag(aspectRatio as AspectRatio?)
                                 }
-                                isCustomAspectRatio = false
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.inline)
+                            HStack {
+                                Spacer()
+                                if let selectedAspectRatio {
+                                    Text(selectedAspectRatio.casualDescription)
+                                } else {
+                                    Text("Custom")
+                                }
+                            }
+                            .textFieldStyle(.roundedBorder)
+                            .keyboardType(.numberPad)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding()
+                            .onChange(of: selectedAspectRatio) { newValue in
+                                if let newAspectRatio = newValue {
+                                    Task { @MainActor in
+                                        updateResolutionForAspectRatio(newAspectRatio)
+                                    }
+                                    isCustomAspectRatio = false
+                                }
                             }
                         }
+                        .navigationTitle("Aspect Ratio")
+                    } label: {
+                        HStack {
+                            Text("Aspect Ratio")
+                            Spacer()
+                            Text(settings.resolution.aspectRatio.casualDescription)
+                        }
                     }
-                    .navigationTitle("Aspect Ratio")
-                } label: {
-                    HStack {
-                        Text("Aspect Ratio")
-                        Spacer()
-                        Text(settings.resolution.aspectRatio.casualDescription)
+                    Picker("Framerate", selection: $settings.framerate) {
+                        ForEach(Self.framerateTable, id: \.self) { framerate in
+                            Text("\(framerate)")
+                        }
+                    }
+                    Picker("Bitrate", selection: $settings.bitrate) {
+                        ForEach(Self.bitrateTable, id: \.self) { bitrate in
+                            Text("\(bitrate / 1000)Mbps")
+                        }
+                    }
+                    
+                    Picker("Renderer", selection: $settings.renderer) {
+                        Text("UIKit (classic)").tag(Renderer.classic)
+                        Text("RealityKit (native)").tag(Renderer.realitykit)
                     }
                 }
-
-                Picker("Framerate", selection: $settings.framerate) {
-                    ForEach(Self.framerateTable, id: \.self) { framerate in
-                        Text("\(framerate)")
+                if (settings.renderer == .realitykit) {
+                    Section(header: Text("RealityKit Renderer Settings (Experimental)"), footer: Text("The new RealityKit renderer is experemental and currently does not support keyboard or mouse, come at me on reddit u/tht7 if you care")) {
+                        Toggle("Animate screen curve", isOn: $settings.realitykitRendererAnimateOpening)
+                        Text("Screen curvature")
+                        Slider(value: $settings.realitykitRendererCurvature, in: (0...1), step: 0.001)
                     }
-                }
-                Picker("Bitrate", selection: $settings.bitrate) {
-                    ForEach(Self.bitrateTable, id: \.self) { bitrate in
-                        Text("\(bitrate / 1000)Mbps")
+                } else {
+                    Section(header: Text("UIKit (Classic) Renderer Settings")) {
+                        Picker("Touch Mode", selection: $settings.absoluteTouchMode) {
+                            Text("Touchpad").tag(false)
+                            Text("Touchscreen").tag(true)
+                        }
+                        Picker("On-Screen Controls", selection: $settings.onscreenControls) {
+                            Text("Off").tag(OnScreenControlsLevel.off)
+                            Text("Auto").tag(OnScreenControlsLevel.auto)
+                            Text("Simple").tag(OnScreenControlsLevel.simple)
+                            Text("Full").tag(OnScreenControlsLevel.full)
+                        }
+                        Toggle("Citrix X1 Mouse Support", isOn: $settings.btMouseSupport)
+                        Toggle("Statistics Overlay", isOn: $settings.statsOverlay)
                     }
-                }
-                Picker("Touch Mode", selection: $settings.absoluteTouchMode) {
-                    Text("Touchpad").tag(false)
-                    Text("Touchscreen").tag(true)
-                }
-                Picker("On-Screen Controls", selection: $settings.onscreenControls) {
-                    Text("Off").tag(OnScreenControlsLevel.off)
-                    Text("Auto").tag(OnScreenControlsLevel.auto)
-                    Text("Simple").tag(OnScreenControlsLevel.simple)
-                    Text("Full").tag(OnScreenControlsLevel.full)
                 }
                 Toggle("Optimize Game Settings", isOn: $settings.optimizeGames)
                 Picker("Multi-Controller Mode", selection: $settings.multiController) {
@@ -122,18 +143,16 @@ struct SettingsView: View {
                     Text("Lowest Latency").tag(false)
                     Text("Smoothest Video").tag(true)
                 }
-                Toggle("Citrix X1 Mouse Support", isOn: $settings.btMouseSupport)
-                Toggle("Statistics Overlay", isOn: $settings.statsOverlay)
             }
             .navigationTitle("Settings")
             .onDisappear {
                 settings.save()
             }
-        }
-        .frame(width: 600)
-        .onAppear {
-            selectedAspectRatio = settings.resolution.aspectRatio
-            isCustomAspectRatio = !Self.resolutionTable.contains(settings.resolution)
+            .frame(width: 600)
+            .onAppear {
+                selectedAspectRatio = settings.resolution.aspectRatio
+                isCustomAspectRatio = !Self.resolutionTable.contains(settings.resolution)
+            }
         }
     }
 
@@ -164,6 +183,7 @@ private extension TemporarySettings {
         }
     }
 }
+    
 
 extension SettingsView {
     struct AspectRatio: Equatable, Hashable, Comparable {

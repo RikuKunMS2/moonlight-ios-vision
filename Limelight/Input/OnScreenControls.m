@@ -12,6 +12,8 @@
 #import "Controller.h"
 #include "Limelight.h"
 
+#import "Moonlight-Swift.h"
+
 #define UPDATE_BUTTON(x, y) (buttonFlags = \
 (y) ? (buttonFlags | (x)) : (buttonFlags & ~(x)))
 

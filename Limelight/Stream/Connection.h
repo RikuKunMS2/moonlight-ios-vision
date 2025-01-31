@@ -6,8 +6,9 @@
 //  Copyright (c) 2014 Moonlight Stream. All rights reserved.
 //
 
-#import "VideoDecoderRenderer.h"
-#import "StreamConfiguration.h"
+#import "AnyVideoDecoderRenderer.h"
+// Will be handled from Swift
+@class StreamConfiguration;
 
 #define CONN_TEST_SERVER "ios.conntest.moonlight-stream.org"
 
@@ -23,9 +24,14 @@ typedef struct {
     int minHostProcessingLatency;
 } video_stats_t;
 
+static volatile int volume = 127;
+void setVolume(int newVol);
+
+int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
+
 @interface Connection : NSOperation <NSStreamDelegate>
 
--(id) initWithConfig:(StreamConfiguration*)config renderer:(VideoDecoderRenderer*)myRenderer connectionCallbacks:(id<ConnectionCallbacks>)callbacks;
+-(id) initWithConfig:(StreamConfiguration*)config renderer:(id<AnyVideoDecoderRenderer> __strong)myRenderer connectionCallbacks:(id<ConnectionCallbacks>)callbacks;
 -(void) terminate;
 -(void) main;
 -(BOOL) getVideoStats:(video_stats_t*)stats;

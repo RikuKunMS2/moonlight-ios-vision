@@ -17,6 +17,10 @@ public class TemporarySettings: NSObject {
     @objc public var onscreenControls: OnScreenControlsLevel
     @objc public var uniqueId: String
     @objc public var preferredCodec = PreferredCodec.auto
+    @objc public var renderer: Renderer = .classic
+
+    @objc public var realitykitRendererAnimateOpening: Bool = false
+    @objc public var realitykitRendererCurvature: Float = 0.0
 
     @objc public var useFramePacing = false
     @objc public var multiController = false
@@ -38,6 +42,9 @@ public class TemporarySettings: NSObject {
         self.audioConfig = 0
         self.uniqueId = ""
         self.onscreenControls = OnScreenControlsLevel.off
+        self.renderer = .classic
+        self.realitykitRendererAnimateOpening = false
+        self.realitykitRendererCurvature = 0.0
         super.init()
     }
 
@@ -55,6 +62,7 @@ public class TemporarySettings: NSObject {
         self.audioConfig = settings.audioConfig?.int32Value ?? 0
         self.preferredCodec = PreferredCodec(rawValue: Int(settings.preferredCodec)) ?? PreferredCodec.auto
         self.onscreenControls = OnScreenControlsLevel(rawValue: settings.onscreenControls?.intValue ?? 0) ?? OnScreenControlsLevel.off
+        self.renderer = if let ren = settings.renderer?.uint8Value { Renderer(rawValue: UInt8(ren)) ?? .classic } else { .classic }
         self.uniqueId = settings.uniqueId ?? ""
 
         self.useFramePacing = settings.useFramePacing
@@ -66,6 +74,10 @@ public class TemporarySettings: NSObject {
         self.btMouseSupport = settings.btMouseSupport
         self.absoluteTouchMode = settings.absoluteTouchMode
         self.statsOverlay = settings.statsOverlay
+
+        self.realitykitRendererAnimateOpening = settings.realitykitRendererAnimateOpening == 1
+        self.realitykitRendererCurvature = settings.realitykitRendererCurvature?.floatValue ?? 0
+
         #endif
 
         super.init()
@@ -74,7 +86,7 @@ public class TemporarySettings: NSObject {
     @objc public func save() {
         // save settings to parent
         let dataManager = DataManager()
-        dataManager.saveSettings(withBitrate: Int(bitrate), framerate: Int(framerate), height: Int(height), width: Int(width), audioConfig: Int(audioConfig), onscreenControls: Int(onscreenControls.rawValue), optimizeGames: optimizeGames, multiController: multiController, swapABXYButtons: swapABXYButtons, audioOnPC: playAudioOnPC, preferredCodec: UInt32(preferredCodec.rawValue), useFramePacing: useFramePacing, enableHdr: enableHdr, btMouseSupport: btMouseSupport, absoluteTouchMode: absoluteTouchMode, statsOverlay: statsOverlay)
+        dataManager.saveSettings(withBitrate: Int(bitrate), framerate: Int(framerate), height: Int(height), width: Int(width), audioConfig: Int(audioConfig), onscreenControls: Int(onscreenControls.rawValue), optimizeGames: optimizeGames, multiController: multiController, swapABXYButtons: swapABXYButtons, audioOnPC: playAudioOnPC, preferredCodec: UInt32(preferredCodec.rawValue), renderer: renderer.rawValue, useFramePacing: useFramePacing, enableHdr: enableHdr, btMouseSupport: btMouseSupport, absoluteTouchMode: absoluteTouchMode, statsOverlay: statsOverlay, realitykitRendererAnimateOpening: realitykitRendererAnimateOpening, realitykitRendererCurvature: NSNumber(value: realitykitRendererCurvature))
     }
 }
 
@@ -83,4 +95,17 @@ public class TemporarySettings: NSObject {
     case h264
     case hevc
     case av1
+}
+
+@objc public enum Renderer: UInt8 {
+    case classic
+    case realitykit
+
+    // Swift-only computed property for mapping cases to strings
+    var windowId: String {
+        switch self {
+        case .classic: return "classicStreamingWindow"
+        case .realitykit: return "realitykitStreamingWindow"
+        }
+    }
 }

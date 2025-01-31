@@ -10,6 +10,9 @@
 #import "Utils.h"
 
 #import <VideoToolbox/VideoToolbox.h>
+#import <AVFAudio/AVAudioSession.h>
+
+#import "Moonlight-Swift.h"
 
 #define SDL_MAIN_HANDLED
 #import <SDL.h>
@@ -41,9 +44,15 @@ static NSLock* videoStatsLock;
 static SDL_AudioDeviceID audioDevice;
 static OPUS_MULTISTREAM_CONFIGURATION audioConfig;
 static void* audioBuffer;
+static void* rawAudioBuffer;
 static int audioFrameSize;
 
-static VideoDecoderRenderer* renderer;
+
+void setVolume(int newVol) {
+    volume = newVol;
+}
+
+static id<AnyVideoDecoderRenderer> __strong renderer;
 
 int DrDecoderSetup(int videoFormat, int width, int height, int redrawRate, void* context, int drFlags)
 {
@@ -166,7 +175,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
             ret = [renderer submitDecodeBuffer:(unsigned char*)entry->data
                                         length:entry->length
                                     bufferType:entry->bufferType
-                                     decodeUnit:decodeUnit];
+                                    decodeUnit:decodeUnit];
             if (ret != DR_OK) {
                 free(data);
                 return ret;
@@ -213,7 +222,8 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     audioConfig = *opusConfig;
     audioFrameSize = opusConfig->samplesPerFrame * sizeof(short) * opusConfig->channelCount;
     audioBuffer = SDL_malloc(audioFrameSize);
-    if (audioBuffer == NULL) {
+    rawAudioBuffer = SDL_malloc(audioFrameSize);
+    if (audioBuffer == NULL || rawAudioBuffer == NULL) {
         Log(LOG_E, @"Failed to allocate audio frame buffer");
         ArCleanup();
         return -1;
@@ -262,6 +272,11 @@ void ArCleanup(void)
         audioBuffer = NULL;
     }
     
+    if (rawAudioBuffer != NULL) {
+        SDL_free(rawAudioBuffer);
+        rawAudioBuffer = NULL;
+    }
+    
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
 }
 
@@ -276,13 +291,23 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
     }
     
     decodeLen = opus_multistream_decode(opusDecoder, (unsigned char *)sampleData, sampleLength,
-                                        (short*)audioBuffer, audioConfig.samplesPerFrame, 0);
+                                        (short*)rawAudioBuffer, audioConfig.samplesPerFrame, 0);
     if (decodeLen > 0) {
         // Provide backpressure on the queue to ensure too many frames don't build up
         // in SDL's audio queue.
         while (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > 10) {
             SDL_Delay(1);
         }
+        if (volume == 127) {
+            if (SDL_QueueAudio(audioDevice,
+                               rawAudioBuffer,
+                               sizeof(short) * decodeLen * audioConfig.channelCount) < 0) {
+                Log(LOG_E, @"Failed to queue audio sample: %s\n", SDL_GetError());
+            }
+            return;
+        }
+        SDL_memset(audioBuffer, 0, audioFrameSize);
+        SDL_MixAudioFormat(audioBuffer, rawAudioBuffer, AUDIO_S16, sizeof(short) * decodeLen * audioConfig.channelCount, volume);
         
         if (SDL_QueueAudio(audioDevice,
                            audioBuffer,
@@ -374,7 +399,7 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     });
 }
 
--(id) initWithConfig:(StreamConfiguration*)config renderer:(VideoDecoderRenderer*)myRenderer connectionCallbacks:(id<ConnectionCallbacks>)callbacks
+-(id) initWithConfig:(StreamConfiguration*)config renderer:(id<AnyVideoDecoderRenderer> __strong)myRenderer connectionCallbacks:(id<ConnectionCallbacks>)callbacks
 {
     self = [super init];
 

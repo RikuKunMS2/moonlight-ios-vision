@@ -8,6 +8,7 @@
 
 #import "StreamView.h"
 #include <Limelight.h>
+#import <AVFoundation/AVFoundation.h>
 #import "DataManager.h"
 #import "ControllerSupport.h"
 #import "KeyboardSupport.h"

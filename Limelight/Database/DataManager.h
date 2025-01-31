@@ -25,11 +25,14 @@
                  swapABXYButtons:(BOOL)swapABXYButtons
                        audioOnPC:(BOOL)audioOnPC
                   preferredCodec:(uint32_t)preferredCodec
+                        renderer:(uint8_t)renderer
                   useFramePacing:(BOOL)useFramePacing
                        enableHdr:(BOOL)enableHdr
                   btMouseSupport:(BOOL)btMouseSupport
                absoluteTouchMode:(BOOL)absoluteTouchMode
-                    statsOverlay:(BOOL)statsOverlay;
+                    statsOverlay:(BOOL)statsOverlay
+realitykitRendererAnimateOpening:(BOOL)realitykitRendererAnimateOpening
+     realitykitRendererCurvature:(NSNumber*)realitykitRendererCurvature;
 
 - (NSArray*) getHosts;
 - (void) updateHost:(TemporaryHost*)host;
