@@ -10,7 +10,6 @@
 #import "HttpRequest.h"
 #import "CryptoManager.h"
 #import "ServerInfoResponse.h"
-#import "StreamConfiguration.h"
 #import "Moonlight-Swift.h"
 
 #include <libxml2/libxml/xmlreader.h>

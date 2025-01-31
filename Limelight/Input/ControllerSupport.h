@@ -6,10 +6,10 @@
 //  Copyright (c) 2014 Moonlight Stream. All rights reserved.
 //
 
-#import "StreamConfiguration.h"
-#import "Controller.h"
 #import "Controller.h"
 #import <UIKit/UIKit.h>
+
+@class StreamConfiguration;
 
 @class OnScreenControls;
 

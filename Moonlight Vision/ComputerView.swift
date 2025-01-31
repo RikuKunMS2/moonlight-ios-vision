@@ -6,6 +6,7 @@ import SwiftUI
 struct ComputerView: View {
     @EnvironmentObject private var viewModel: MainViewModel
 
+    @Binding
     public var host: TemporaryHost
 
     var body: some View {
@@ -16,7 +17,7 @@ struct ComputerView: View {
                 // do something if disconnected too
                 switch host.pairState {
                 case PairState.paired:
-                    AppsView(host: host)
+                    AppsView(host: $host)
                 case PairState.unpaired:
                     Text(host.name)
                     Button("Start Pairing") {
@@ -53,5 +54,5 @@ struct ComputerView: View {
     var outerHost: TemporaryHost = .init()
     outerHost.pairState = PairState.unpaired
 
-    return ComputerView(host: outerHost).environmentObject(viewModel)
+    return ComputerView(host: .constant(outerHost)).environmentObject(viewModel)
 }

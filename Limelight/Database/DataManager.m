@@ -56,19 +56,21 @@
                        framerate:(NSInteger)framerate
                           height:(NSInteger)height
                            width:(NSInteger)width
-                     audioConfig:(NSInteger)audioConfig
+                audioConfig:(NSInteger)audioConfig
                 onscreenControls:(NSInteger)onscreenControls
                    optimizeGames:(BOOL)optimizeGames
                  multiController:(BOOL)multiController
                  swapABXYButtons:(BOOL)swapABXYButtons
                        audioOnPC:(BOOL)audioOnPC
                   preferredCodec:(uint32_t)preferredCodec
+                        renderer:(uint8_t)renderer
                   useFramePacing:(BOOL)useFramePacing
                        enableHdr:(BOOL)enableHdr
                   btMouseSupport:(BOOL)btMouseSupport
                absoluteTouchMode:(BOOL)absoluteTouchMode
-                    statsOverlay:(BOOL)statsOverlay {
-    
+                    statsOverlay:(BOOL)statsOverlay
+realitykitRendererAnimateOpening:(BOOL)realitykitRendererAnimateOpening
+     realitykitRendererCurvature:(NSNumber*)realitykitRendererCurvature {
     [_managedObjectContext performBlockAndWait:^{
         MoonlightSettings* settingsToSave = [self retrieveSettings];
         settingsToSave.framerate = [NSNumber numberWithInteger:framerate];
@@ -87,7 +89,9 @@
         settingsToSave.btMouseSupport = btMouseSupport;
         settingsToSave.absoluteTouchMode = absoluteTouchMode;
         settingsToSave.statsOverlay = statsOverlay;
-        
+        settingsToSave.renderer = [NSNumber numberWithInteger: renderer];
+        settingsToSave.realitykitRendererAnimateOpening = [NSNumber numberWithBool: realitykitRendererAnimateOpening];
+        settingsToSave.realitykitRendererCurvature = realitykitRendererCurvature;
         [self saveData];
     }];
 }
@@ -122,11 +126,15 @@
             // Add a new persistent managed object if one doesn't exist
             MoonlightApp* parentApp = [self getAppForTemporaryApp:app withAppRecords:appRecords];
             if (parentApp == nil) {
-                NSEntityDescription* entity = [NSEntityDescription entityForName:@"App" inManagedObjectContext:self->_managedObjectContext];
-                parentApp = [[MoonlightApp alloc] initWithEntity:entity insertIntoManagedObjectContext:self->_managedObjectContext];
+//                NSEntityDescription* entity = [NSEntityDescription entityForName:@"App" inManagedObjectContext:self->_managedObjectContext];
+//                parentApp = [[MoonlightApp alloc] initWithEntity:entity insertIntoManagedObjectContext:self->_managedObjectContext];
+                parentApp = [NSEntityDescription insertNewObjectForEntityForName: @"App" inManagedObjectContext: self->_managedObjectContext];
+                Log(LOG_E, @"Inserting new App to database: %@", parentApp);
+                [parentApp setHost: parent];
             }
             
             [app propagateChangesToParent:parentApp withHost:parent];
+            [parentApp setHost: parent];
             
             [applist addObject:parentApp];
         }
@@ -218,6 +226,9 @@
 // Only call from within performBlockAndWait!!!
 - (MoonlightApp*) getAppForTemporaryApp:(TemporaryApp*)tempApp withAppRecords:(NSArray*)apps {
     for (MoonlightApp* app in apps) {
+        if ([app id] == NULL || app.host == NULL) {
+            Log(LOG_E, @"App looking sus: %@", app);
+        }
         if ([app.id isEqualToString:tempApp.id] &&
             [app.host.uuid isEqualToString:tempApp.host.uuid]) {
             return app;

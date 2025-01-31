@@ -19,21 +19,25 @@
 
 #include <Limelight.h>
 
+#import "Moonlight-Swift.h"
+
 @implementation StreamManager {
     StreamConfiguration* _config;
 
     UIView* _renderView;
     id<ConnectionCallbacks> _callbacks;
     Connection* _connection;
+    
+    id<AnyVideoDecoderRenderer> __strong (^_rendererProvider)(void);
 }
 
-- (id) initWithConfig:(StreamConfiguration*)config renderView:(UIView*)view connectionCallbacks:(id<ConnectionCallbacks>)callbacks {
+- (id) initWithConfig:(StreamConfiguration*)config rendererProvider:(id<AnyVideoDecoderRenderer> __strong (^)(void))rendererProvider connectionCallbacks:(id<ConnectionCallbacks>)callbacks {
     self = [super init];
     _config = config;
-    _renderView = view;
     _callbacks = callbacks;
     _config.riKey = [Utils randomBytes:16];
     _config.riKeyId = arc4random();
+    _rendererProvider = rendererProvider;
     return self;
 }
 
@@ -64,7 +68,6 @@
         [_callbacks launchFailed:@"Device not paired to PC"];
         return;
     }
-    
     // Only perform this check on GFE (as indicated by MJOLNIR in state value)
     if ((_config.width > 4096 || _config.height > 4096) && [serverState containsString:@"MJOLNIR"]) {
         // Pascal added support for 8K HEVC encoding support. Maxwell 2 could encode HEVC but only up to 4K.
@@ -99,7 +102,8 @@
     
     // Initializing the renderer must be done on the main thread
     dispatch_async(dispatch_get_main_queue(), ^{
-        VideoDecoderRenderer* renderer = [[VideoDecoderRenderer alloc] initWithView:self->_renderView callbacks:self->_callbacks streamAspectRatio:(float)self->_config.width / (float)self->_config.height useFramePacing:self->_config.useFramePacing];
+        id<AnyVideoDecoderRenderer> __strong renderer = self->_rendererProvider();
+//        VideoDecoderRenderer* renderer = [[VideoDecoderRenderer alloc] initWithView:self->_renderView callbacks:self->_callbacks streamAspectRatio:(float)self->_config.width / (float)self->_config.height useFramePacing:self->_config.useFramePacing];
         self->_connection = [[Connection alloc] initWithConfig:self->_config renderer:renderer connectionCallbacks:self->_callbacks];
         NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
         [opQueue addOperation:self->_connection];

@@ -8,7 +8,7 @@
 
 #import "ControllerSupport.h"
 #import "OnScreenControls.h"
-#import "StreamConfiguration.h"
+//#import "StreamConfiguration.h"
 
 
 enum X1MouseButton : uint8_t;
