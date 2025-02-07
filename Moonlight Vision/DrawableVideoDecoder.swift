@@ -393,6 +393,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                     attributes[kCVPixelBufferPixelFormatTypeKey] = decodingFormat
                 }
                 VTDecompressionSessionCreate(allocator: kCFAllocatorDefault, formatDescription: formatDesc, decoderSpecification: videoDecoderSpecification as CFDictionary, imageBufferAttributes: attributes as CFDictionary, outputCallback: &self.decoderCallback, decompressionSessionOut: &self.session)
+                AudioHelpers.fixAudioForSurroundForCurrentWindow() // TODO(shinyquagsire23): Make this configurable?
             } else {
                 // Couldn’t create format description yet
 //                free(dataPtr)

@@ -30,6 +30,7 @@ struct _UIKitStreamViewWindowButton: View {
         Button {
             if let window = currentWindow {
                 applyAspectRatioLock(streamConfig: streamConfig, targetWindow: window) // Pass the window
+                AudioHelpers.fixAudioForSurroundForUIKitWindow(window) // TODO(shinyquagsire23): Make this configurable
             } else {
                 print("Error: No window reference available to apply aspect ratio lock.")
                 // Optionally provide user feedback here, e.g., an alert
@@ -72,6 +73,7 @@ struct _UIKitStreamViewWindowButton: View {
                     if let window = viewToFindWindow?.window {
                         print("Found window by traversing view hierarchy: \(window)")
                         currentWindow = window
+                        AudioHelpers.fixAudioForSurroundForUIKitWindow(window)
                         return
                     }
                     viewToFindWindow = viewToFindWindow?.superview
@@ -104,6 +106,13 @@ struct _UIKitStreamView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewControllerType {
         let streamView = StreamFrameViewController()
         streamView.streamConfig = streamConfig
+        streamView.connectedCallback = {
+            print("Connected in Swift!")
+            AudioHelpers.fixAudioForSurroundForCurrentWindow() // TODO(shinyquagsire23): Make this configurable
+        };
+        streamView.disconnectedCallback = {
+            print("Disconnected in Swift!")
+        };
         _UIKitStreamView.controllerReference.object = streamView // Use the static reference
         return streamView
     }

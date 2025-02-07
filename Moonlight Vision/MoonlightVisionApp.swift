@@ -37,6 +37,10 @@ struct MoonlightVisionApp: SwiftUI.App {
                         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
                                                 let geometryRequest = UIWindowScene.GeometryPreferences.Vision(resizingRestrictions: .uniform)
                                                 windowScene.requestGeometryUpdate(geometryRequest)
+
+                        // Change audio center to this window
+                        // TODO(shinyquagsire23): Maybe this should be configurable?
+                        AudioHelpers.fixAudioForSurroundForCurrentWindow()
                     }
 //                    .onAppear {
 //                        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
