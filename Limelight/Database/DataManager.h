@@ -35,7 +35,7 @@ realitykitRendererAnimateOpening:(BOOL)realitykitRendererAnimateOpening
      realitykitRendererCurvature:(NSNumber*)realitykitRendererCurvature
                   dimPassthrough:(BOOL)dimPassthrough;
 
-- (NSArray*) getHosts;
+- (NSArray<TemporaryHost*>*) getHosts;
 - (void) updateHost:(TemporaryHost*)host;
 - (void) updateAppsForExistingHost:(TemporaryHost *)host;
 - (void) removeHost:(TemporaryHost*)host;

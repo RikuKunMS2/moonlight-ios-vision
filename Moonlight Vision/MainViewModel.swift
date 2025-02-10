@@ -13,6 +13,9 @@ import AVFoundation
 
 @MainActor
 class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback, AppAssetCallback {
+    @objc
+    static let shared = MainViewModel()
+    
     @Published var hosts: [TemporaryHost] = []
 
     @Published var pairingInProgress = false
@@ -42,6 +45,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     private var currentlyPairingHost: TemporaryHost?
 
     override init() {
+        print("INITING MAIN MODEL")
         boxArtCache = NSCache<TemporaryApp, UIImage>()
         dataManager = DataManager()
         // should this be in viewDidLoad and not init?
@@ -450,7 +454,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             return nil
         }
 
-        config.host = host.activeAddress
+        config.host = host.activeAddress ?? host.address
         config.httpsPort = host.httpsPort
         config.appID = app.id
         config.appName = app.name
@@ -473,7 +477,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         config.useFramePacing = streamSettings.useFramePacing
         config.swapABXYButtons = streamSettings.swapABXYButtons
         config.multiController = streamSettings.multiController
-        config.gamepadMask = ControllerSupport.getConnectedGamepadMask(config)
+        config.gamepadMask = ControllerSupport.getConnectedGamepadMask(config, settings: streamSettings)
 
         // 7.1, always
         config.audioConfiguration = (0x63f << 16) | (8 << 8) | 0xca

@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -531,6 +531,10 @@
 		FBDE86E519F82297001C18A8 /* UIAppView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = UIAppView.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		B10D61AE2D54D0F600550218 /* AppIntents */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = AppIntents; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
 		F7A1193D2B5DDF73001E8686 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
@@ -639,6 +643,7 @@
 		F7A119592B5DE1AB001E8686 /* Moonlight Vision */ = {
 			isa = PBXGroup;
 			children = (
+				B10D61AE2D54D0F600550218 /* AppIntents */,
 				E77582CC2D53F3E500948545 /* Shaders.metal */,
 				3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */,
 				E77582CE2D54020300948545 /* CVMetalHelpers.swift */,
@@ -1092,6 +1097,9 @@
 			);
 			dependencies = (
 				F7A119092B5DDF73001E8686 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B10D61AE2D54D0F600550218 /* AppIntents */,
 			);
 			name = "Moonlight XrOS";
 			packageProductDependencies = (

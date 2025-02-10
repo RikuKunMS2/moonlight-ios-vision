@@ -1256,7 +1256,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     return count;
 }
 
-+(int) getConnectedGamepadMask:(StreamConfiguration*)streamConfig {
++(int) getConnectedGamepadMask:(StreamConfiguration*)streamConfig settings:(TemporarySettings* _Nullable) settings {
     int mask = 0;
     
     if (streamConfig.multiController) {
@@ -1272,9 +1272,10 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
         // properly so always report controller 1 if not in MC mode
         mask = 0x1;
     }
-    
-    DataManager* dataMan = [[DataManager alloc] init];
-    TemporarySettings* settings = [dataMan getSettings];
+    if (settings == NULL) {
+        DataManager* dataMan = [[DataManager alloc] init];
+        settings = [dataMan getSettings];
+    }
     OnScreenControlsLevel level = (OnScreenControlsLevel)settings.onscreenControls;
     
     // Even if no gamepads are present, we will always count one if OSC is enabled,
@@ -1283,7 +1284,6 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     if (level != OnScreenControlsLevelOff && (![ControllerSupport hasKeyboardOrMouse] || level != OnScreenControlsLevelAuto) && !settings.absoluteTouchMode) {
         mask |= 0x1;
     }
-    
     return mask;
 }
 

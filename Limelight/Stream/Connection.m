@@ -314,27 +314,37 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
 
 void ClStageStarting(int stage)
 {
-    [_callbacks stageStarting:LiGetStageName(stage)];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [_callbacks stageStarting:LiGetStageName(stage)];
+    });
 }
 
 void ClStageComplete(int stage)
 {
-    [_callbacks stageComplete:LiGetStageName(stage)];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [_callbacks stageComplete:LiGetStageName(stage)];
+    });
 }
 
 void ClStageFailed(int stage, int errorCode)
 {
-    [_callbacks stageFailed:LiGetStageName(stage) withError:errorCode portTestFlags:LiGetPortFlagsFromStage(stage)];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [_callbacks stageFailed:LiGetStageName(stage) withError:errorCode portTestFlags:LiGetPortFlagsFromStage(stage)];
+    });
 }
 
 void ClConnectionStarted(void)
 {
-    [_callbacks connectionStarted];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [_callbacks connectionStarted];
+    });
 }
 
 void ClConnectionTerminated(int errorCode)
 {
-    [_callbacks connectionTerminated: errorCode];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [_callbacks connectionTerminated: errorCode];
+    });
 }
 
 void ClLogMessage(const char* format, ...)
@@ -347,33 +357,45 @@ void ClLogMessage(const char* format, ...)
 
 void ClRumble(unsigned short controllerNumber, unsigned short lowFreqMotor, unsigned short highFreqMotor)
 {
-    [_callbacks rumble:controllerNumber lowFreqMotor:lowFreqMotor highFreqMotor:highFreqMotor];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [_callbacks rumble:controllerNumber lowFreqMotor:lowFreqMotor highFreqMotor:highFreqMotor];
+    });
 }
 
 void ClConnectionStatusUpdate(int status)
 {
-    [_callbacks connectionStatusUpdate:status];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [_callbacks connectionStatusUpdate:status];
+    });
 }
 
 void ClSetHdrMode(bool enabled)
 {
-    [renderer setHdrMode:enabled];
-    [_callbacks setHdrMode:enabled];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [renderer setHdrMode:enabled];
+        [_callbacks setHdrMode:enabled];
+    });
 }
 
 void ClRumbleTriggers(uint16_t controllerNumber, uint16_t leftTriggerMotor, uint16_t rightTriggerMotor)
 {
-    [_callbacks rumbleTriggers:controllerNumber leftTrigger:leftTriggerMotor rightTrigger:rightTriggerMotor];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [_callbacks rumbleTriggers:controllerNumber leftTrigger:leftTriggerMotor rightTrigger:rightTriggerMotor];
+    });
 }
 
 void ClSetMotionEventState(uint16_t controllerNumber, uint8_t motionType, uint16_t reportRateHz)
 {
-    [_callbacks setMotionEventState:controllerNumber motionType:motionType reportRateHz:reportRateHz];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [_callbacks setMotionEventState:controllerNumber motionType:motionType reportRateHz:reportRateHz];
+    });
 }
 
 void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t b)
 {
-    [_callbacks setControllerLed:controllerNumber r:r g:g b:b];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [_callbacks setControllerLed:controllerNumber r:r g:g b:b];
+    });
 }
 
 -(void) terminate

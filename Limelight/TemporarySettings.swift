@@ -2,6 +2,7 @@
 
 import Foundation
 import Observation
+import AppIntents
 
 #if os(visionOS)
 @Observable
@@ -99,7 +100,19 @@ public class TemporarySettings: NSObject {
     case av1
 }
 
-@objc public enum Renderer: UInt8 {
+@objc public enum Renderer: UInt8, Codable, Sendable, AppEnum {
+    
+    public static var typeDisplayRepresentation: TypeDisplayRepresentation {
+            TypeDisplayRepresentation(
+                stringLiteral: "Renderer"
+            )
+        }
+    
+    public static var caseDisplayRepresentations: [Renderer : DisplayRepresentation] = [
+        .classic: .init(stringLiteral: "UIKit (Classic)"),
+        .realitykit: .init(stringLiteral: "RealityKit (Experimental)"),
+    ]
+    
     case classic
     case realitykit
 

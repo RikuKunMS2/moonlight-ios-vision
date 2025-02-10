@@ -22,36 +22,22 @@ struct MoonlightVisionApp: SwiftUI.App {
         .windowStyle(.plain)
         .windowResizability(.contentSize)
         
+        WindowGroup("LoadingStream", id: "dummy") {
+            DummyView()
+                .environmentObject(appDelegate.mainViewModel)
+        }
+        .handlesExternalEvents(matching: ["dummy"])
+        
         WindowGroup(id: "realitykitStreamingWindow", for: StreamConfiguration.self) { streamConfig in
-            @State var lol: Bool = false
-            if streamConfig.wrappedValue != nil {
-                RealityKitStreamView(streamConfig: Binding(
-                    get: { streamConfig.wrappedValue! },
-                    set: { n in streamConfig.wrappedValue = n }
-                ))
+                RealityKitStreamView(streamConfig: streamConfig)
+                .environmentObject(appDelegate.mainViewModel)
                 .onDisappear {
-                    //print("SteamWindowClosedOutside")
+                    streamConfig.wrappedValue = nil
                 }
-                    .environmentObject(appDelegate.mainViewModel)
-                    .onChange(of: appDelegate.mainViewModel) {
-                        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
-                                                let geometryRequest = UIWindowScene.GeometryPreferences.Vision(resizingRestrictions: .uniform)
-                                                windowScene.requestGeometryUpdate(geometryRequest)
-                    }
-//                    .onAppear {
-//                        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
-//                        let geometryRequest = UIWindowScene.GeometryPreferences.Vision(resizingRestrictions: .uniform)
-//                        windowScene.requestGeometryUpdate(geometryRequest)
-//                    }
-                   
-            } else {
-                Text("No computer selected")
-            }
         }
         .windowStyle(.volumetric)
         .defaultSize(width: 2, height: 2, depth: 2, in: .meters)
-//        .windowResizability(.contentSize)
-        
+
         WindowGroup(id: "classicStreamingWindow", for: StreamConfiguration.self) { streamConfig in
             if streamConfig.wrappedValue != nil {
                 UIKitStreamView(streamConfig: Binding(

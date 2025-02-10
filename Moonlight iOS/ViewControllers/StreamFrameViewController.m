@@ -535,8 +535,7 @@
 
 - (void) launchFailed:(NSString*)message {
     Log(LOG_I, @"Launch failed: %@", message);
-    
-    dispatch_async(dispatch_get_main_queue(), ^{
+
         // Allow the display to go to sleep now
         [UIApplication sharedApplication].idleTimerDisabled = NO;
         
@@ -548,7 +547,6 @@
             [self returnToMainFrame];
         }]];
         [self presentViewController:alert animated:YES completion:nil];
-    });
 }
 
 - (void)rumble:(unsigned short)controllerNumber lowFreqMotor:(unsigned short)lowFreqMotor highFreqMotor:(unsigned short)highFreqMotor {
