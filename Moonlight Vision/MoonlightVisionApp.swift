@@ -34,25 +34,9 @@ struct MoonlightVisionApp: SwiftUI.App {
                 .onDisappear {
                     streamConfig.wrappedValue = nil
                 }
-                    .environmentObject(appDelegate.mainViewModel)
-                    .onChange(of: appDelegate.mainViewModel) {
-                        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
-                                                let geometryRequest = UIWindowScene.GeometryPreferences.Vision(resizingRestrictions: .uniform)
-                                                windowScene.requestGeometryUpdate(geometryRequest)
-
-                        // Change audio center to this window
-                        // TODO(shinyquagsire23): Maybe this should be configurable?
-                        AudioHelpers.fixAudioForSurroundForCurrentWindow()
-                    }
-//                    .onAppear {
-//                        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
-//                        let geometryRequest = UIWindowScene.GeometryPreferences.Vision(resizingRestrictions: .uniform)
-//                        windowScene.requestGeometryUpdate(geometryRequest)
-//                    }
-                   
-            } else {
-                Text("No computer selected")
-            }
+                .onChange(of: appDelegate.mainViewModel) {
+                    AudioHelpers.fixAudioForSurroundForCurrentWindow()
+                }
         }
         .windowStyle(.volumetric)
         .defaultSize(width: 2, height: 2, depth: 2, in: .meters)
