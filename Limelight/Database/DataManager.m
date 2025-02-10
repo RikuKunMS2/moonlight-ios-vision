@@ -246,6 +246,7 @@ realitykitRendererAnimateOpening:(BOOL)realitykitRendererAnimateOpening
     NSFetchRequest* fetchRequest = [[NSFetchRequest alloc] init];
     NSEntityDescription* entity = [NSEntityDescription entityForName:entityName inManagedObjectContext:_managedObjectContext];
     [fetchRequest setEntity:entity];
+    [fetchRequest setReturnsObjectsAsFaults:NO]; // >:(
     
     NSError* error;
     fetchedRecords = [_managedObjectContext executeFetchRequest:fetchRequest error:&error];

@@ -57,6 +57,7 @@ import Combine
     func launchFailed(_ message: String!) {
         print("Launch failed: \(message ?? "Unknown error")")
         errorMessage = message
+        showAlert = true
     }
     
     func rumble(_ controllerNumber: UInt16, lowFreqMotor: UInt16, highFreqMotor: UInt16) {

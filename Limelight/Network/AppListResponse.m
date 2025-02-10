@@ -100,9 +100,7 @@ static const char* TAG_APP_INSTALL_PATH = "AppInstallPath";
                 appInfoNode = appInfoNode->next;
             }
             if (appId != nil) {
-                TemporaryApp* app = [[TemporaryApp alloc] init];
-                app.name = appName;
-                app.id = appId;
+                TemporaryApp* app = [[TemporaryApp alloc] initWithId:appId name:appName];
                 app.hdrSupported = [hdrSupported intValue] != 0;
                 app.installPath = appInstallPath;
                 [_appList addObject:app];

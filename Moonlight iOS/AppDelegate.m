@@ -94,11 +94,7 @@ static NSString* DB_NAME = @"Limelight_iOS.sqlite";
 #pragma mark - MainViewModel
 
 - (MainViewModel *)mainViewModel {
-    if (_mainViewModel != nil) {
-        return _mainViewModel;
-    }
-    _mainViewModel = [[MainViewModel alloc] init];
-    return _mainViewModel;
+    return [MainViewModel shared];
 }
 
 #pragma mark - Core Data stack

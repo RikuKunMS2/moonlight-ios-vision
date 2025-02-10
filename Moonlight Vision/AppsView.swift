@@ -16,25 +16,31 @@ struct AppsView: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     
+    @State private var nowLoading: String?
+    
     @Binding
     public var host: TemporaryHost
     
     var body: some View {
         List {
             ForEach(host.appList.sorted(by: { $0.name ?? "" < $1.name ?? "" }), id: \.id) { app in
-                AppButtonView(host: host, app: app) {
-                    if let config = viewModel.stream(app: app) {
-                        if (viewModel.streamSettings.renderer == .realitykit) {
-                            openWindow(id: viewModel.streamSettings.renderer.windowId, value: config)
-                            dismissWindow(id: "mainView")
-//                            Task {
-                                
-                                
-                                //                                await openImmersiveSpace(id: "immesiveSpace", value: config)
-                                
-//                            }
-                        } else {
-                            pushWindow(id: viewModel.streamSettings.renderer.windowId, value: config)
+                HStack {
+                    if (nowLoading == (app.id ?? app.name)) {
+                        ProgressView()
+                    }
+                    AppButtonView(host: host, app: app) {
+                        if (nowLoading != nil) {
+                            return
+                        }
+                        nowLoading = app.id ?? app.name
+                        if let config = viewModel.stream(app: app) {
+                            if (viewModel.streamSettings.renderer == .realitykit) {
+                                openWindow(id: viewModel.streamSettings.renderer.windowId, value: config)
+                                dismissWindow(id: "mainView")
+                            } else {
+                                pushWindow(id: viewModel.streamSettings.renderer.windowId, value: config)
+                                nowLoading = nil
+                            }
                         }
                     }
                 }
@@ -44,18 +50,20 @@ struct AppsView: View {
         .onAppear() {
             // this MUST be async lmao
             Task {
+                print("LOAD")
                 viewModel.refreshAppsFor(host: host)
             }
         }.refreshable() {
+            print("REFRESH")
             viewModel.refreshAppsFor(host: host)
         }
     }
 }
 
 struct AppButtonView: View {
-    var host: TemporaryHost
-    var app: TemporaryApp
-    var action: () -> Void
+    let host: TemporaryHost
+    let app: TemporaryApp
+    let action: () -> Void
     
     var body: some View {
         Button(app.name ?? "Unknown", action: action)
