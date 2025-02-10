@@ -244,7 +244,8 @@ struct _RealityKitStreamView: View {
         }
         .persistentSystemOverlays(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
         .preferredSurroundingsEffect(viewModel.streamSettings.dimPassthrough ? .systemDark : nil)
-
+        .volumeBaseplateVisibility(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
+        .supportedVolumeViewpoints(.front)
     }
 
     func animateOpening() {

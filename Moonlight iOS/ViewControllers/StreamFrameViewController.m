@@ -403,6 +403,10 @@
                                                                      userInfo:nil
                                                                       repeats:YES];
         }
+        
+        if (self->_connectedCallback) {
+            self->_connectedCallback();
+        }
     });
 }
 
@@ -482,6 +486,10 @@
             [self returnToMainFrame];
         }]];
         [self presentViewController:conTermAlert animated:YES completion:nil];
+        
+        if (self->_disconnectedCallback) {
+            self->_disconnectedCallback();
+        }
     });
 
     [_streamMan stopStream];
