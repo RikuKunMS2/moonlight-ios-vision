@@ -15,24 +15,47 @@ struct HDRMetadata {
     float maxFALL;                  // 4 bytes
 };
 
-// YCbCr to RGB conversion
-float3 ycbcr2rgb(float3 ycbcr) {
-    // BT.2020 YCbCr to RGB matrix for 10-bit
-    const float3x3 conversion = float3x3(
-        float3(1.0,      0.0,          1.4746),
-        float3(1.0,     -0.1645,      -0.5714),
-        float3(1.0,      1.8814,       0.0)
+// BT.2020 constants
+constant float Kr = 0.2627;
+constant float Kb = 0.0593;
+constant float Kg = 1.0 - Kr - Kb;
+
+// Video range scale factors for 10-bit
+constant float Y_RANGE_MIN = 64.0 / 1023.0;    // 64 in 10-bit space
+constant float Y_RANGE_MAX = 940.0 / 1023.0;   // 940 in 10-bit space
+constant float C_RANGE_MIN = 64.0 / 1023.0;    // 64 in 10-bit space
+constant float C_RANGE_MAX = 960.0 / 1023.0;   // 960 in 10-bit space
+
+float3 ycbcr2rgb_bt2020(float3 ycbcr) {
+    // For full range 10-bit, we don't need to scale Y
+    float y = ycbcr.x;
+    
+    // For full range, Cb and Cr are centered at 0.5
+    float cb = ycbcr.y - 0.5;
+    float cr = ycbcr.z - 0.5;
+    
+    // BT.2020 conversion matrix for full range
+    const float3x3 bt2020 = float3x3(
+        float3( 1.0,  0.0,      1.4746),
+        float3( 1.0, -0.1646,  -0.5714),
+        float3( 1.0,  1.8814,   0.0)
     );
     
-    // Adjust for video range (64-940 for Y, 64-960 for CbCr)
-    float y = (ycbcr.x - (64.0/1023.0)) * (1023.0/(940.0-64.0));
-    float cb = (ycbcr.y - (512.0/1023.0)) * (1023.0/(960.0-64.0));
-    float cr = (ycbcr.z - (512.0/1023.0)) * (1023.0/(960.0-64.0));
+    // Apply conversion
+    float3 rgb = bt2020 * float3(y, cb, cr);
     
-    return clamp(conversion * float3(y, cb, cr), 0.0, 1.0);
+    // For HDR, we might want to apply the PQ EOTF after clamping
+    rgb = clamp(rgb, 0.0, 1.0);
+    
+    // Debug: Split screen to show stages
+    if (any(rgb != clamp(rgb, 0.0, 1.0))) {
+        return float3(1.0, 0.0, 0.0);  // Show clipped pixels in red
+    }
+    
+    return rgb;
 }
 
-// PQ EOTF (SMPTE ST 2084)
+// PQ EOTF might need adjustment
 float3 PQ_EOTF(float3 color) {
     const float m1 = 0.1593017578125;
     const float m2 = 78.84375;
@@ -44,25 +67,7 @@ float3 PQ_EOTF(float3 color) {
     float3 temp2 = max(temp - c1, 0.0);
     float3 temp3 = pow(temp2 / (c2 - c3 * temp), float3(1.0 / m1));
     
-    return temp3 * 10000.0; // Convert to nits
-}
-
-float3 ycbcr2rgb_10bit(float3 ycbcr) {
-    // v210 format uses video range [64, 940] for Y and [64, 960] for CbCr
-    float y = (ycbcr.x - (64.0/1024.0)) / ((940.0-64.0)/1024.0);
-    float cb = (ycbcr.y - (64.0/1024.0)) / ((960.0-64.0)/1024.0) - 0.5;
-    float cr = (ycbcr.z - (64.0/1024.0)) / ((960.0-64.0)/1024.0) - 0.5;
-    
-    // BT.2020 coefficients for 10-bit video range
-    const float Kb = 0.0593;
-    const float Kr = 0.2627;
-    
-    // Convert to RGB
-    float r = y + 2.0 * (1.0 - Kr) * cr;
-    float b = y + 2.0 * (1.0 - Kb) * cb;
-    float g = (y - Kr * r - Kb * b) / (1.0 - Kr - Kb);
-    
-    return clamp(float3(r, g, b), 0.0, 1.0);
+    return temp3 * 10000.0; // Maybe adjust this scaling factor
 }
 
 kernel void hdrProcessing(
@@ -80,31 +85,38 @@ kernel void hdrProcessing(
     uint2 cbcrCoord = gid / 2;
     float2 cbcr = cbcrTexture.read(cbcrCoord).rg;
     
-    // Debug visualization
-    bool showDebug = true;  // Toggle for debugging
-    if (showDebug) {
-        // Show raw values before conversion
-        if (gid.x < output.get_width() / 4) {
-            // Y component
-            output.write(float4(y, y, y, 1.0), gid);
-        } else if (gid.x < output.get_width() * 2/4) {
-            // Cb component
-            output.write(float4(cbcr.x, cbcr.x, cbcr.x, 1.0), gid);
-        } else if (gid.x < output.get_width() * 3/4) {
-            // Cr component
-            output.write(float4(cbcr.y, cbcr.y, cbcr.y, 1.0), gid);
-        } else {
-            // Show converted RGB
-            float3 rgb = ycbcr2rgb_10bit(float3(y, cbcr.x, cbcr.y));
-            output.write(float4(rgb, 1.0), gid);
-        }
-        return;
-    }
+    // Convert YCbCr to RGB
+    float cb = cbcr.x - 0.5;
+    float cr = cbcr.y - 0.5;
     
-    // Normal processing
-    float3 rgb = ycbcr2rgb_10bit(float3(y, cbcr.x, cbcr.y));
+    // Use BT.2020 constants
+    float3 rgb = float3(
+        y + (2.0 - 2.0 * Kr) * cr,
+        y - ((2.0 * Kr * (1.0 - Kr) * cr) + (2.0 * Kb * (1.0 - Kb) * cb)) / Kg,
+        y + (2.0 - 2.0 * Kb) * cb
+    );
+    
+    rgb = clamp(rgb, 0.0, 1.0);
+    
+    // Apply PQ EOTF first
     float3 nits = PQ_EOTF(rgb);
-    float3 mapped = nits / (nits + metadata.maxCLL);
     
-    output.write(float4(mapped, 1.0), gid);
-} 
+    // Use fixed tone mapping value for testing
+    float3 mapped = nits / (nits + float3(1000.0));
+    
+    // Since we store in GBR order but want RGB output, we need to:
+    float3 transformed = float3(
+        dot(mapped, float3(metadata.colorPrimariesMatrix0[0],  // R from matrix2
+                        metadata.colorPrimariesMatrix0[1], 
+                        metadata.colorPrimariesMatrix0[2])),
+        dot(mapped, float3(metadata.colorPrimariesMatrix1[0],  // G from matrix0
+                        metadata.colorPrimariesMatrix1[1], 
+                        metadata.colorPrimariesMatrix1[2])),
+        dot(mapped, float3(metadata.colorPrimariesMatrix2[0],  // B from matrix1
+                        metadata.colorPrimariesMatrix2[1], 
+                        metadata.colorPrimariesMatrix2[2]))
+    );
+    
+    output.write(float4(transformed, 1.0), gid);
+}
+

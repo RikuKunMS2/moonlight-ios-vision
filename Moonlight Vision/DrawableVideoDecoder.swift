@@ -7,14 +7,14 @@
 //
 
 import AVFoundation
+import CoreVideo
 import Foundation
 import Metal
+import MetalKit
 import QuartzCore // For CADisplayLink
 import RealityKit
 import SwiftUI
 import VideoToolbox
-import CoreVideo
-import MetalKit
 
 // https://gist.github.com/shinyquagsire23/81c86f4bf670aaa68b5804080ff964a0
 let MTLPixelFormatYCBCR8_420_2P_sRGB: UInt = 520
@@ -65,7 +65,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     private var frameRate: Int32 = 0
     private var videoWidth: Int = 0
     private var videoHeight: Int = 0
-    
+
     private var metalFormat: MTLPixelFormat
     private var decodingFormat: OSType
 
@@ -122,10 +122,10 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     ) {
         // Format setup based on HDR
         metalFormat = enableHDR ? .rgba16Float : .bgra8Unorm_srgb
-        decodingFormat = enableHDR ? 
-            kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange :
+        decodingFormat = enableHDR ?
+            kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange : // Back to what was working
             kCVPixelFormatType_32BGRA
-        
+
         self.texture = texture
         self.callbacks = callbacks
         streamAspectRatio = aspectRatio
@@ -163,16 +163,24 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     }
 
     func decompressionOutputCallback(
-        decompressionOutputRefCon: UnsafeMutableRawPointer?,
-        sourceFrameRefCon: UnsafeMutableRawPointer?,
-        status: OSStatus,
-        infoFlags: VTDecodeInfoFlags,
+        decompressionOutputRefCon _: UnsafeMutableRawPointer?,
+        sourceFrameRefCon _: UnsafeMutableRawPointer?,
+        status _: OSStatus,
+        infoFlags _: VTDecodeInfoFlags,
         imageBuffer: CVImageBuffer?,
-        presentationTimeStamp: CMTime,
-        presentationDuration: CMTime?
-    ) -> Void {
+        presentationTimeStamp _: CMTime,
+        presentationDuration _: CMTime?
+    ) {
+        print("\n=== Decompression Output ===")
+
+        guard let imageBuffer = imageBuffer else {
+            print("No image buffer!")
+            return
+        }
+
+        printBufferAttributes(imageBuffer)
+
         guard
-            let imageBuffer = imageBuffer,
             let drawable = try? drawableQueue?.nextDrawable(),
             let commandBuffer = commandQueue?.makeCommandBuffer()
         else {
@@ -183,7 +191,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         if let hdrRenderer = hdrRenderer {
             // Update metadata before processing frame
             updateHDRMetadata()
-            
+
             // HDR path
             hdrRenderer.processFrame(
                 sourceBuffer: imageBuffer,
@@ -193,32 +201,33 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         } else {
             // SDR path - simple blit
             guard let blits = commandBuffer.makeBlitCommandEncoder() else { return }
-            
+
             var imageTexture: CVMetalTexture?
             let width = CVPixelBufferGetWidth(imageBuffer)
             let height = CVPixelBufferGetHeight(imageBuffer)
-            
+
             let result = CVMetalTextureCacheCreateTextureFromImage(
-                kCFAllocatorDefault, 
-                textureCache!, 
-                imageBuffer, 
-                nil, 
+                kCFAllocatorDefault,
+                textureCache!,
+                imageBuffer,
+                nil,
                 metalFormat,
-                width, 
-                height, 
-                0, 
+                width,
+                height,
+                0,
                 &imageTexture
             )
-            
+
             guard result == kCVReturnSuccess,
-                  let mtlTexture = CVMetalTextureGetTexture(imageTexture!) else {
+                  let mtlTexture = CVMetalTextureGetTexture(imageTexture!)
+            else {
                 return
             }
-            
+
             blits.copy(from: mtlTexture, to: drawable.texture)
             blits.endEncoding()
         }
-        
+
         commandBuffer.commit()
         drawable.present()
     }
@@ -418,7 +427,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                     || bufferType == BUFFER_TYPE_PPS
                 {
                     // Strip the NAL start and store it
-                    var startLen = (dataPtr[2] == 0x01) ? 3 : 4
+                    let startLen = (dataPtr[2] == 0x01) ? 3 : 4
                     let newData = Data(bytes: dataPtr + startLen, count: Int(length) - startLen)
                     parameterSetBuffers.append([UInt8](newData))
                 }
@@ -613,12 +622,55 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
     // MARK: - Creating a Sample Buffer
 
+    private func printFormatDescription(_ formatDesc: CMFormatDescription) {
+        print("\nDecoder configuration:")
+        print("Media type: \(CMFormatDescriptionGetMediaType(formatDesc))")
+        print("Media subtype: \(CMFormatDescriptionGetMediaSubType(formatDesc))")
+
+        if let colorPrimaries = CMFormatDescriptionGetExtension(formatDesc, extensionKey: kCMFormatDescriptionExtension_ColorPrimaries) {
+            print("Color primaries: \(colorPrimaries)")
+        }
+        if let transferFunction = CMFormatDescriptionGetExtension(formatDesc, extensionKey: kCMFormatDescriptionExtension_TransferFunction) {
+            print("Transfer function: \(transferFunction)")
+        }
+        if let ycbcrMatrix = CMFormatDescriptionGetExtension(formatDesc, extensionKey: kCMFormatDescriptionExtension_YCbCrMatrix) {
+            print("YCbCr matrix: \(ycbcrMatrix)")
+        }
+    }
+
+    private func printBufferAttributes(_ imageBuffer: CVImageBuffer) {
+        if let attachments = CVBufferGetAttachments(imageBuffer, .shouldPropagate) as? [String: Any] {
+            print("\nBuffer attachments:")
+            for (key, value) in attachments {
+                print("\(key): \(value)")
+            }
+        }
+
+        let pixelFormat = CVPixelBufferGetPixelFormatType(imageBuffer)
+        print("\nPixel format details:")
+        print("Format: \(String(format: "0x%08x", pixelFormat))")
+        print("Plane count: \(CVPixelBufferGetPlaneCount(imageBuffer))")
+        print("Color attachments present: \(CVBufferHasAttachment(imageBuffer, kCVImageBufferYCbCrMatrixKey))")
+
+        // Print plane details
+        for plane in 0 ..< CVPixelBufferGetPlaneCount(imageBuffer) {
+            print("\nPlane \(plane):")
+            print("Width: \(CVPixelBufferGetWidthOfPlane(imageBuffer, plane))")
+            print("Height: \(CVPixelBufferGetHeightOfPlane(imageBuffer, plane))")
+            print("Bytes per row: \(CVPixelBufferGetBytesPerRowOfPlane(imageBuffer, plane))")
+        }
+    }
+
     private func createSampleBuffer(
         dataPtr: UnsafeMutablePointer<UInt8>,
         length: Int,
         formatDesc: CMVideoFormatDescription,
         decodeUnit: PDECODE_UNIT!
     ) -> CMSampleBuffer? {
+        // Add debug print at the start
+        print("\n=== Creating Sample Buffer ===")
+        printFormatDescription(formatDesc)
+
         // Create block buffer from data
         var dataBlockBuffer: CMBlockBuffer?
         let statusDataBlock = CMBlockBufferCreateWithMemoryBlock(
@@ -821,7 +873,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
         let mediaType: CMMediaType = CMFormatDescriptionGetMediaType(formatDescription)
 
-        if (mediaType == kCMMediaType_Audio) {
+        if mediaType == kCMMediaType_Audio {
             print("this was an audio sample....")
             return
         }
