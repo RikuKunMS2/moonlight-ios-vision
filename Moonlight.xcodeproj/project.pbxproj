@@ -41,6 +41,8 @@
 		98B9CE6D27B2144B00B473C4 /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 98B9CE6C27B2144B00B473C4 /* AVKit.framework */; };
 		98CFB82F1CAD481B0048EF74 /* libmoonlight-common.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98AB2E841CAD46840089BB98 /* libmoonlight-common.a */; };
 		98D585701C0ED0E800F6CC00 /* TemporarySettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 98D5856F1C0ED0E800F6CC00 /* TemporarySettings.m */; };
+		998720D62D60A60100BB0EA2 /* HDRShaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 998720D52D60A60100BB0EA2 /* HDRShaders.metal */; };
+		998720D72D60A60100BB0EA2 /* HDRRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 998720D42D60A60100BB0EA2 /* HDRRenderer.swift */; };
 		B19362EE2D4ECDD6004F88FA /* NSData+Conversion.m in Sources */ = {isa = PBXBuildFile; fileRef = B19362ED2D4ECDCF004F88FA /* NSData+Conversion.m */; };
 		B19362EF2D4ECDD6004F88FA /* NSData+Conversion.m in Sources */ = {isa = PBXBuildFile; fileRef = B19362ED2D4ECDCF004F88FA /* NSData+Conversion.m */; };
 		B19362F02D4ECDD6004F88FA /* NSData+Conversion.m in Sources */ = {isa = PBXBuildFile; fileRef = B19362ED2D4ECDCF004F88FA /* NSData+Conversion.m */; };
@@ -313,6 +315,8 @@
 		98B9CE6C27B2144B00B473C4 /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = Platforms/AppleTVOS.platform/Developer/SDKs/AppleTVOS15.2.sdk/System/Library/Frameworks/AVKit.framework; sourceTree = DEVELOPER_DIR; };
 		98D5856E1C0ED0E800F6CC00 /* TemporarySettings.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = TemporarySettings.h; path = Database/TemporarySettings.h; sourceTree = "<group>"; };
 		98D5856F1C0ED0E800F6CC00 /* TemporarySettings.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = TemporarySettings.m; path = Database/TemporarySettings.m; sourceTree = "<group>"; };
+		998720D42D60A60100BB0EA2 /* HDRRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HDRRenderer.swift; sourceTree = "<group>"; };
+		998720D52D60A60100BB0EA2 /* HDRShaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = HDRShaders.metal; sourceTree = "<group>"; };
 		B19362EC2D4ECDC0004F88FA /* NSData+Conversion.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NSData+Conversion.h"; sourceTree = "<group>"; };
 		B19362ED2D4ECDCF004F88FA /* NSData+Conversion.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "NSData+Conversion.m"; sourceTree = "<group>"; };
 		B1AC7CED2D4E00980013B9A3 /* HDRParsingUtils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HDRParsingUtils.h; sourceTree = "<group>"; };
@@ -635,6 +639,8 @@
 		F7A119592B5DE1AB001E8686 /* Moonlight Vision */ = {
 			isa = PBXGroup;
 			children = (
+				998720D42D60A60100BB0EA2 /* HDRRenderer.swift */,
+				998720D52D60A60100BB0EA2 /* HDRShaders.metal */,
 				3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */,
 				B1EDB1302D4D95A700EB1839 /* DrawableVideoDecoder.swift */,
 				B1EDB1312D4D95A700EB1839 /* ObservableConnectionManager.swift */,
@@ -1304,6 +1310,8 @@
 				F7A119372B5DDF73001E8686 /* AppAssetResponse.m in Sources */,
 				F7A119382B5DDF73001E8686 /* DataManager.m in Sources */,
 				F7A1193A2B5DDF73001E8686 /* ServerInfoResponse.m in Sources */,
+				998720D62D60A60100BB0EA2 /* HDRShaders.metal in Sources */,
+				998720D72D60A60100BB0EA2 /* HDRRenderer.swift in Sources */,
 				F778956E2B65975900F02568 /* SDLMainWrapper.m in Sources */,
 				F7A1193B2B5DDF73001E8686 /* StreamManager.m in Sources */,
 				F7A1193C2B5DDF73001E8686 /* KeyboardInputField.m in Sources */,
