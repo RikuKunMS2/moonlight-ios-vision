@@ -3,19 +3,31 @@ import simd
 import CoreVideo
 import CoreMedia
 
-// Define the HDR metadata structure that matches the C structure
-struct SS_HDR_METADATA {
-    struct DisplayPrimaries {
-        var x: UInt16
-        var y: UInt16
+// Mirror of the C struct with explicit layout
+struct HDRMetadataSwift {
+    struct Primary {
+        var x: UInt16 // Normalized to 50,000
+        var y: UInt16 // Normalized to 50,000
     }
     
-    var displayPrimaries: (DisplayPrimaries, DisplayPrimaries, DisplayPrimaries)
-    var whitePoint: DisplayPrimaries
-    var maxDisplayLuminance: UInt32
-    var minDisplayLuminance: UInt32
-    var maxContentLightLevel: UInt16
-    var maxFrameAverageLightLevel: UInt16
+    // Exactly match C struct layout
+    var primaries: (Primary, Primary, Primary) // 3 pairs of UInt16 = 12 bytes
+    var whitePoint: Primary                    // 1 pair of UInt16 = 4 bytes
+    var maxDisplayLuminance: UInt16            // 2 bytes
+    var minDisplayLuminance: UInt16            // 2 bytes
+    var maxContentLightLevel: UInt16           // 2 bytes
+    var maxFrameAverageLightLevel: UInt16      // 2 bytes
+    var maxFullFrameLuminance: UInt16          // 2 bytes
+}
+
+// Add static assertions
+extension HDRMetadataSwift {
+    static func validateLayout() {
+        print("HDR Metadata layout:")
+        print("Size: \(MemoryLayout<HDRMetadataSwift>.size) bytes")
+        print("Alignment: \(MemoryLayout<HDRMetadataSwift>.alignment) bytes")
+        print("Stride: \(MemoryLayout<HDRMetadataSwift>.stride) bytes")
+    }
 }
 
 class HDRRenderer {
@@ -64,35 +76,38 @@ class HDRRenderer {
         print("- cpu cache mode: \(buffer.cpuCacheMode.rawValue)")
     }
     
-    func updateMetadata(_ metadata: SS_HDR_METADATA) {
+    func updateMetadata(_ cMetadata: SS_HDR_METADATA) {
+        // First validate layout
+        HDRMetadataSwift.validateLayout()
+        
+        // Safely copy C struct to our Swift struct
+        var metadata = withUnsafePointer(to: cMetadata) { ptr in
+            ptr.withMemoryRebound(to: HDRMetadataSwift.self, capacity: 1) { $0.pointee }
+        }
+        
         let ptr = metadataBuffer.contents()
-        
-        // Write matrix0 (12 bytes)
         var offset = 0
-        writeFloat3(ptr.advanced(by: offset), 
-                   x: Float(metadata.displayPrimaries.0.x) / 50000.0,
-                   y: Float(metadata.displayPrimaries.0.y) / 50000.0,
-                   z: 1.0 - Float(metadata.displayPrimaries.0.x + metadata.displayPrimaries.0.y) / 50000.0)
         
-        // Skip 4 bytes padding
+        // Update Metal buffer with the values
+        writeFloat3(ptr.advanced(by: offset), 
+                   x: Float(metadata.primaries.0.x) / 50000.0,
+                   y: Float(metadata.primaries.0.y) / 50000.0,
+                   z: 1.0 - Float(metadata.primaries.0.x + metadata.primaries.0.y) / 50000.0)
+        
         offset = 16
         
-        // Write matrix1 (12 bytes)
         writeFloat3(ptr.advanced(by: offset),
-                   x: Float(metadata.displayPrimaries.1.x) / 50000.0,
-                   y: Float(metadata.displayPrimaries.1.y) / 50000.0,
-                   z: 1.0 - Float(metadata.displayPrimaries.1.x + metadata.displayPrimaries.1.y) / 50000.0)
+                   x: Float(metadata.primaries.1.x) / 50000.0,
+                   y: Float(metadata.primaries.1.y) / 50000.0,
+                   z: 1.0 - Float(metadata.primaries.1.x + metadata.primaries.1.y) / 50000.0)
         
-        // Skip 4 bytes padding
         offset = 32
         
-        // Write matrix2 (12 bytes)
         writeFloat3(ptr.advanced(by: offset),
-                   x: Float(metadata.displayPrimaries.2.x) / 50000.0,
-                   y: Float(metadata.displayPrimaries.2.y) / 50000.0,
-                   z: 1.0 - Float(metadata.displayPrimaries.2.x + metadata.displayPrimaries.2.y) / 50000.0)
+                   x: Float(metadata.primaries.2.x) / 50000.0,
+                   y: Float(metadata.primaries.2.y) / 50000.0,
+                   z: 1.0 - Float(metadata.primaries.2.x + metadata.primaries.2.y) / 50000.0)
         
-        // Skip 4 bytes padding
         offset = 48
         
         // Write whitePoint (8 bytes)
@@ -132,6 +147,9 @@ class HDRRenderer {
         let width = CVPixelBufferGetWidth(sourceBuffer)
         let height = CVPixelBufferGetHeight(sourceBuffer)
         
+        print("Creating textures:")
+        print("Y texture - width: \(width), height: \(height)")
+        
         CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault,
                                                  textureCache!,
                                                  sourceBuffer,
@@ -144,6 +162,8 @@ class HDRRenderer {
         
         // Create CbCr texture (10-bit)
         var cbcrTexture: CVMetalTexture?
+        print("CbCr texture - width: \(width/2), height: \(height/2)")
+        
         CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault,
                                                  textureCache!,
                                                  sourceBuffer,
@@ -155,10 +175,17 @@ class HDRRenderer {
                                                  &cbcrTexture)
         
         guard let yMTLTexture = CVMetalTextureGetTexture(yTexture!),
-              let cbcrMTLTexture = CVMetalTextureGetTexture(cbcrTexture!),
-              let commandBuffer = commandQueue.makeCommandBuffer(),
+              let cbcrMTLTexture = CVMetalTextureGetTexture(cbcrTexture!) else {
+            print("Failed to create textures")
+            return
+        }
+        
+        print("Y format: \(yMTLTexture.pixelFormat.rawValue)")
+        print("CbCr format: \(cbcrMTLTexture.pixelFormat.rawValue)")
+        
+        guard let commandBuffer = commandQueue.makeCommandBuffer(),
               let computeEncoder = commandBuffer.makeComputeCommandEncoder() else {
-            print("Failed to create textures or command buffer")
+            print("Failed to create command buffer or compute encoder")
             return
         }
         

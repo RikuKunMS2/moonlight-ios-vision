@@ -48,24 +48,21 @@ float3 PQ_EOTF(float3 color) {
 }
 
 float3 ycbcr2rgb_10bit(float3 ycbcr) {
-    // Convert 10-bit values to normalized float
-    float y = ycbcr.x * (1023.0/1024.0);  // Scale 10-bit Y
-    float cb = ycbcr.y * (1023.0/1024.0); // Scale 10-bit Cb
-    float cr = ycbcr.z * (1023.0/1024.0); // Scale 10-bit Cr
+    // v210 format uses video range [64, 940] for Y and [64, 960] for CbCr
+    float y = (ycbcr.x - (64.0/1024.0)) / ((940.0-64.0)/1024.0);
+    float cb = (ycbcr.y - (64.0/1024.0)) / ((960.0-64.0)/1024.0) - 0.5;
+    float cr = (ycbcr.z - (64.0/1024.0)) / ((960.0-64.0)/1024.0) - 0.5;
     
-    // v210 uses video range
-    y = (y - 64.0/1023.0) * (1023.0/(940.0-64.0));   // Video range [64, 940]
-    cb = (cb - 512.0/1023.0) * (1023.0/(960.0-64.0)); // Video range [64, 960]
-    cr = (cr - 512.0/1023.0) * (1023.0/(960.0-64.0)); // Video range [64, 960]
+    // BT.2020 coefficients for 10-bit video range
+    const float Kb = 0.0593;
+    const float Kr = 0.2627;
     
-    // BT.2020 conversion matrix
-    const float3x3 bt2020 = float3x3(
-        float3( 1.0,  0.0,      1.4746),
-        float3( 1.0, -0.1645,  -0.5714),
-        float3( 1.0,  1.8814,   0.0)
-    );
+    // Convert to RGB
+    float r = y + 2.0 * (1.0 - Kr) * cr;
+    float b = y + 2.0 * (1.0 - Kb) * cb;
+    float g = (y - Kr * r - Kb * b) / (1.0 - Kr - Kb);
     
-    return clamp(bt2020 * float3(y, cb, cr), 0.0, 1.0);
+    return clamp(float3(r, g, b), 0.0, 1.0);
 }
 
 kernel void hdrProcessing(
@@ -79,34 +76,33 @@ kernel void hdrProcessing(
         return;
     }
     
-    // Read 10-bit Y and CbCr values
     float y = yTexture.read(gid).r;
     uint2 cbcrCoord = gid / 2;
     float2 cbcr = cbcrTexture.read(cbcrCoord).rg;
     
-    // Debug visualization - show raw 10-bit values
-    bool showDebug = true;
+    // Debug visualization
+    bool showDebug = true;  // Toggle for debugging
     if (showDebug) {
-        if (gid.x < output.get_width() / 3) {
-            // Show Y (scaled to visible range)
-            float y_scaled = (y - 64.0/1023.0) / (940.0/1023.0 - 64.0/1023.0);
-            output.write(float4(y_scaled, y_scaled, y_scaled, 1.0), gid);
-        } else if (gid.x < (output.get_width() * 2) / 3) {
-            // Show Cb (centered around 0.5)
-            float cb_scaled = (cbcr.x - 512.0/1023.0) / (960.0/1023.0 - 64.0/1023.0) + 0.5;
-            output.write(float4(cb_scaled, cb_scaled, cb_scaled, 1.0), gid);
+        // Show raw values before conversion
+        if (gid.x < output.get_width() / 4) {
+            // Y component
+            output.write(float4(y, y, y, 1.0), gid);
+        } else if (gid.x < output.get_width() * 2/4) {
+            // Cb component
+            output.write(float4(cbcr.x, cbcr.x, cbcr.x, 1.0), gid);
+        } else if (gid.x < output.get_width() * 3/4) {
+            // Cr component
+            output.write(float4(cbcr.y, cbcr.y, cbcr.y, 1.0), gid);
         } else {
-            // Show Cr (centered around 0.5)
-            float cr_scaled = (cbcr.y - 512.0/1023.0) / (960.0/1023.0 - 64.0/1023.0) + 0.5;
-            output.write(float4(cr_scaled, cr_scaled, cr_scaled, 1.0), gid);
+            // Show converted RGB
+            float3 rgb = ycbcr2rgb_10bit(float3(y, cbcr.x, cbcr.y));
+            output.write(float4(rgb, 1.0), gid);
         }
         return;
     }
     
-    // Convert to RGB
-    float3 rgb = ycbcr2rgb_10bit(float3(y, cbcr));
-    
-    // Apply HDR processing
+    // Normal processing
+    float3 rgb = ycbcr2rgb_10bit(float3(y, cbcr.x, cbcr.y));
     float3 nits = PQ_EOTF(rgb);
     float3 mapped = nits / (nits + metadata.maxCLL);
     

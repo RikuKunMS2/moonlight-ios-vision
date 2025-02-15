@@ -136,7 +136,15 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         decoderCallback = VTDecompressionOutputCallbackRecord()
         decoderCallback.decompressionOutputCallback = { decompressionOutputRefCon, sourceFrameRefCon, status, infoFlags, imageBuffer, presentationTimeStamp, presentationDuration in
             let mySelf = Unmanaged<DrawableVideoDecoder>.fromOpaque(decompressionOutputRefCon!).takeUnretainedValue()
-            mySelf.decompressionOutputCallback(decompressionOutputRefCon, sourceFrameRefCon, status, infoFlags, imageBuffer, presentationTimeStamp, presentationDuration)
+            mySelf.decompressionOutputCallback(
+                decompressionOutputRefCon: decompressionOutputRefCon,
+                sourceFrameRefCon: sourceFrameRefCon,
+                status: status,
+                infoFlags: infoFlags,
+                imageBuffer: imageBuffer,
+                presentationTimeStamp: presentationTimeStamp,
+                presentationDuration: presentationDuration
+            )
         }
 
         super.init()
@@ -154,7 +162,15 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         }
     }
 
-    func decompressionOutputCallback(_: UnsafeMutableRawPointer?, _: UnsafeMutableRawPointer?, _: OSStatus, _: VTDecodeInfoFlags, _ imageBuffer: CVImageBuffer?, _: CMTime, _: CMTime) {
+    func decompressionOutputCallback(
+        decompressionOutputRefCon: UnsafeMutableRawPointer?,
+        sourceFrameRefCon: UnsafeMutableRawPointer?,
+        status: OSStatus,
+        infoFlags: VTDecodeInfoFlags,
+        imageBuffer: CVImageBuffer?,
+        presentationTimeStamp: CMTime,
+        presentationDuration: CMTime?
+    ) -> Void {
         guard
             let imageBuffer = imageBuffer,
             let drawable = try? drawableQueue?.nextDrawable(),
@@ -165,6 +181,9 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         }
 
         if let hdrRenderer = hdrRenderer {
+            // Update metadata before processing frame
+            updateHDRMetadata()
+            
             // HDR path
             hdrRenderer.processFrame(
                 sourceBuffer: imageBuffer,
@@ -851,6 +870,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         }
 
         if metadataChanged {
+            updateHDRMetadata()
             LiRequestIdrFrame()
         }
     }
@@ -880,6 +900,17 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         -1, 1, 0, 0,
         1, 1, 1, 0,
     ]
+
+    // Add new method to update HDR metadata
+    private func updateHDRMetadata() {
+        if let hdrRenderer = hdrRenderer {
+            // Get HDR metadata from Moonlight
+            var metadata = SS_HDR_METADATA()
+            if LiGetHdrMetadata(&metadata) {
+                hdrRenderer.updateMetadata(metadata)
+            }
+        }
+    }
 }
 
 // MARK: - Constants Port
