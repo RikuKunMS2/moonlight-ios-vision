@@ -28,7 +28,7 @@ struct MoonlightVisionApp: SwiftUI.App {
                 RealityKitStreamView(streamConfig: Binding(
                     get: { streamConfig.wrappedValue! },
                     set: { n in streamConfig.wrappedValue = n }
-                ))
+                ), needsHdr: appDelegate.mainViewModel.streamSettings.enableHdr)
                 .onDisappear {
                     //print("SteamWindowClosedOutside")
                 }

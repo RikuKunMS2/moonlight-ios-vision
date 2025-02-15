@@ -6,25 +6,20 @@
 //  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
 
-import SwiftUI
-import RealityKit
 import GameController
+import RealityKit
+import SwiftUI
 
 let COOL_NUMBER: Float = 2.79945612 // 3.8
 let MAX_WIDTH_METERS: Float = 2
 
 @objc
 class DummyControllerDelegate: NSObject, ControllerSupportDelegate {
-    func gamepadPresenceChanged() {
-    }
+    func gamepadPresenceChanged() {}
 
-    func mousePresenceChanged() {
-    }
+    func mousePresenceChanged() {}
 
-    func streamExitRequested() {
-    }
-
-
+    func streamExitRequested() {}
 }
 
 struct RealityKitStreamView: View {
@@ -41,31 +36,29 @@ struct RealityKitStreamView: View {
     @State var height: Float = 0
 
     var aspectRatio: Float {
-        get {
-            Float(streamConfig.height) / Float(streamConfig.width)
-        }
+        Float(streamConfig.height) / Float(streamConfig.width)
     }
 
     @State var animationTimer: Timer?
 
     @State var _streamMan: StreamManager?
-    @ObservedObject var connectionCallbacks: ObservableConnectionManager = ObservableConnectionManager()
+    @ObservedObject var connectionCallbacks: ObservableConnectionManager = .init()
 
     @State var enlarge = false
 
     @State var texture: TextureResource
-    @State var screen: ModelEntity = ModelEntity()
+    @State var screen: ModelEntity = .init()
 
-    init(streamConfig: Binding<StreamConfiguration>) {
-        self._streamConfig = streamConfig
-        self.controllerSupport = ControllerSupport(config: streamConfig.wrappedValue, delegate: DummyControllerDelegate())
-        let data = Data.init(count: 4 * Int(streamConfig.wrappedValue.width) * Int(streamConfig.wrappedValue.height)) // Dummy data
-        self.texture = try! TextureResource(
+    init(streamConfig: Binding<StreamConfiguration>, needsHdr: Bool) {
+        _streamConfig = streamConfig
+        controllerSupport = ControllerSupport(config: streamConfig.wrappedValue, delegate: DummyControllerDelegate())
+        let data = Data(count: 4 * Int(streamConfig.wrappedValue.width) * Int(streamConfig.wrappedValue.height)) // Dummy data
+        texture = try! TextureResource(
             dimensions: .dimensions(width: Int(streamConfig.wrappedValue.width), height: Int(streamConfig.wrappedValue.height)),
-            format: .raw(pixelFormat: metalFormat),
+            format: .raw(pixelFormat: needsHdr ? HDR_FORMAT : SDR_FORMAT),
             contents: .init(
                 mipmapLevels: [
-                    .mip(data: data, bytesPerRow: 4 * Int(streamConfig.wrappedValue.width) ), // TODO is this even needed
+                    .mip(data: data, bytesPerRow: 4 * Int(streamConfig.wrappedValue.width)), // TODO: is this even needed
                 ]
             )
         )
@@ -75,11 +68,11 @@ struct RealityKitStreamView: View {
         GeometryReader3D { proxy in
             ZStack {
                 RealityView { content in
-                    let mesh = try! RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (50,50), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
+                    let mesh = try! RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (50, 50), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
                     screen = ModelEntity(mesh: mesh, materials: [UnlitMaterial(texture: self.texture)])
                     content.add(screen)
                 } update: { content in
-                    let mesh = try! RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (50,50), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
+                    let mesh = try! RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (50, 50), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
                     let size = content.convert(proxy.frame(in: .local), from: .local, to: .scene)
                     screen.transform.scale = .init(repeating: size.extents.x / 2)
                     screen.transform.translation.y = height
@@ -99,7 +92,7 @@ struct RealityKitStreamView: View {
                             viewModel.streamSettings.realitykitRendererCurvature = 0
                         }
                     }
-                    Slider(value: $viewModel.streamSettings.realitykitRendererCurvature, in: (0...1), step: 0.001)
+                    Slider(value: $viewModel.streamSettings.realitykitRendererCurvature, in: 0 ... 1, step: 0.001)
                         .frame(width: 300)
                         .padding([.trailing])
                         .hoverEffect { effect, isActive, proxy in
@@ -115,7 +108,7 @@ struct RealityKitStreamView: View {
                     Button("arrow.up.and.line.horizontal.and.arrow.down", systemImage: "arrow.up.and.line.horizontal.and.arrow.down") {
                         // Do nothing, just display this button like a neat littel label
                     }
-                    Slider(value: $height, in: (0...1), step: 0.001)
+                    Slider(value: $height, in: 0 ... 1, step: 0.001)
                         .frame(width: 300)
                         .padding([.trailing])
                         .hoverEffect { effect, isActive, proxy in
@@ -131,28 +124,28 @@ struct RealityKitStreamView: View {
 //                    self.controllerSupport?.updateTriggers(<#T##controller: Controller!##Controller!#>, left: <#T##UInt8#>, right: <#T##UInt8#>)
                 }.simultaneousGesture(
                     DragGesture(minimumDistance: 0)
-                        .onChanged({ _ in
+                        .onChanged { _ in
                             if let controller = self.controllerSupport?.getOscController() {
                                 self.controllerSupport?.setButtonFlag(controller, flags: 0x0400)
                                 self.controllerSupport?.updateFinished(controller)
                             }
-                        })
-                        .onEnded({ _ in
+                        }
+                        .onEnded { _ in
                             if let controller = self.controllerSupport?.getOscController() {
                                 self.controllerSupport?.clearButtonFlag(controller, flags: 0x0400)
                                 self.controllerSupport?.updateFinished(controller)
                             }
-                        })
+                        }
                 )
             }
         }
-        .onAppear() {
+        .onAppear {
             dismissWindow(id: "mainView")
             self.curveAnimationMultiplier = viewModel.streamSettings.realitykitRendererAnimateOpening ? 0 : 1
             self._streamMan = StreamManager(
-                config:self.streamConfig,
+                config: self.streamConfig,
                 rendererProvider: {
-                    return DrawableVideoDecoder(texture: self.texture, callbacks: self.connectionCallbacks, aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height), useFramePacing: self.streamConfig.useFramePacing) { texture, correctedResultion in
+                    DrawableVideoDecoder(texture: self.texture, callbacks: self.connectionCallbacks, aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height), useFramePacing: self.streamConfig.useFramePacing, enableHDR: self.viewModel.streamSettings.enableHdr) { texture, correctedResultion in
                         DispatchQueue.main.async {
                             if let correctedResultion = correctedResultion {
                                 streamConfig.width = Int32(correctedResultion.0)
@@ -161,11 +154,12 @@ struct RealityKitStreamView: View {
                             self.texture.replace(withDrawables: texture)
                             screen.model!.materials = [UnlitMaterial(texture: self.texture)]
                             self.controllerSupport!.connectionEstablished()
-                            if (self.curveAnimationMultiplier == 0) { animateOpening() }
+                            if self.curveAnimationMultiplier == 0 { animateOpening() }
                         }
                     }
                 },
-                connectionCallbacks:self.connectionCallbacks);
+                connectionCallbacks: self.connectionCallbacks
+            )
             let operationQueue = OperationQueue()
             operationQueue.addOperation(_streamMan!)
         }
@@ -175,13 +169,13 @@ struct RealityKitStreamView: View {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
-                //print("active")
+                // print("active")
                 break
             case .inactive:
-                //print("inactive")
+                // print("inactive")
                 dismissWindow()
             case .background:
-                //print("background -> a/b/c disappeared")
+                // print("background -> a/b/c disappeared")
                 dismissWindow()
                 viewModel.activelyStreaming = false
                 _streamMan?.stopStream()
@@ -189,18 +183,18 @@ struct RealityKitStreamView: View {
                 controllerSupport?.cleanup()
                 openWindow(id: "mainView")
             @unknown default: break
-                //print("unknown default")
+                // print("unknown default")
             }
         }
         .persistentSystemOverlays(viewModel.dimPassthrough ? .hidden : .automatic)
         .preferredSurroundingsEffect(viewModel.dimPassthrough ? .systemDark : nil)
-
     }
 
     func animateOpening() {
         Task {
             self.animationTimer = Timer.scheduledTimer(withTimeInterval: 0.04,
-                                                       repeats: true) { _ in
+                                                       repeats: true)
+            { _ in
                 Task { @MainActor in
                     if self.curveAnimationMultiplier < 1 {
                         self.curveAnimationMultiplier = min(self.curveAnimationMultiplier + 0.01, 1)
@@ -219,7 +213,7 @@ struct RealityKitStreamView: View {
     static func generateCurvedPlane(
         width: Float, aspectRatio: Float, resulotion: (UInt32, UInt32), curveMagnitude: Float = 1.0
     ) throws -> MeshResource {
-        //TODO maybe use a LowLevelMesh here, I think it can compute the mesh on the GPU AND avoid additional allocations
+        // TODO: maybe use a LowLevelMesh here, I think it can compute the mesh on the GPU AND avoid additional allocations
         var descr = MeshDescriptor()
         let height = width * aspectRatio
 
@@ -227,22 +221,22 @@ struct RealityKitStreamView: View {
         var meshPositions: [SIMD3<Float>] = .init(repeating: .zero, count: totalVertices)
         var textureMap: [SIMD2<Float>] = .init(repeating: .zero, count: totalVertices)
         var indices: [UInt32] = .init(repeating: .zero, count: totalVertices * 6)
-        let floorOffset: Float =  (1 - (height / 2))
+        let floorOffset: Float = (1 - (height / 2))
         let backOffset = curveMagnitude + 1
 
-        for x_v in 0..<(resulotion.0) {
+        for x_v in 0 ..< (resulotion.0) {
             let vertexCounts = x_v * resulotion.1
-            for y_v in 0..<(resulotion.1) {
-                let vertexIndex = Int(vertexCounts + y_v);
+            for y_v in 0 ..< (resulotion.1) {
+                let vertexIndex = Int(vertexCounts + y_v)
                 let xPosition = (Float(x_v) / Float(resulotion.0 - 1) - 0.5) * width
-                let yPosition = ((( 0.5 - Float(y_v) / Float(resulotion.1 - 1))) * height)
+                let yPosition = ((0.5 - Float(y_v) / Float(resulotion.1 - 1)) * height)
                 let zPosition = (pow(xPosition, 2) * curveMagnitude / pow(width / 2, 2))
 
-                meshPositions[vertexIndex] = [xPosition, (-yPosition) - floorOffset, zPosition - curveMagnitude + 1]
+                meshPositions[vertexIndex] = [xPosition, -yPosition - floorOffset, zPosition - curveMagnitude + 1]
                 textureMap[vertexIndex] = [Float(x_v) / Float(resulotion.0 - 1), Float(y_v) / Float(resulotion.1 - 1)]
                 if x_v > 0 && y_v > 0 {
                     let vertexCounts = vertexCounts + y_v - 1
-                    let vertexIndex = Int( ( ( x_v - 1) * ( resulotion.1 - 1 ) + ( y_v - 1 ) ) * 6)
+                    let vertexIndex = Int(((x_v - 1) * (resulotion.1 - 1) + (y_v - 1)) * 6)
 
                     indices[vertexIndex] = vertexCounts - resulotion.1
                     indices[vertexIndex + 1] = vertexCounts
@@ -263,7 +257,7 @@ struct RealityKitStreamView: View {
     }
 }
 
-//#Preview {
+// #Preview {
 ////    NativeStreamView()
 //    NativeStreamView()
-//}
+// }
