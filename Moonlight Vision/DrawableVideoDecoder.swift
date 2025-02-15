@@ -14,6 +14,8 @@ import RealityKit
 import SwiftUI
 import UIKit // If you still need UIColor, etc.
 import VideoToolbox
+import CoreVideo
+import MetalKit
 
 // https://gist.github.com/shinyquagsire23/81c86f4bf670aaa68b5804080ff964a0
 let MTLPixelFormatYCBCR8_420_2P_sRGB: UInt = 520
@@ -22,6 +24,15 @@ let FORMAT: [MTLPixelFormat] = [MTLPixelFormat(rawValue: MTLPixelFormatYCBCR8_42
 
 let HDR_FORMAT: MTLPixelFormat = .rgba16Float
 let SDR_FORMAT: MTLPixelFormat = .bgra8Unorm_srgb
+
+// Add these constants after your existing constants
+let kCVPixelBufferYCbCrMatrixKey = "YCbCrMatrix" as CFString
+let kCVPixelBufferColorPrimariesKey = "ColorPrimaries" as CFString
+let kCVPixelBufferTransferFunctionKey = "TransferFunction" as CFString
+
+let kCVImageBufferYCbCrMatrix_ITU_R_2020 = "ITU_R_2020" as CFString
+let kCVImageBufferColorPrimaries_ITU_R_2020 = "ITU_R_2020" as CFString
+let kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ = "SMPTE_ST_2084_PQ" as CFString
 
 // MARK: - External C references (from bridging header)
 
@@ -118,8 +129,12 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
         // Set up HDR formats if enabled
         if enableHDR {
-            metalFormat = .rgba16Float
+            metalFormat = .rgba16Float  // or .bgra10_xr for extended range
             decodingFormat = kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+            
+            // Additional HDR setup if needed
+            let colorspace = CGColorSpace(name: CGColorSpace.itur_2020)
+            // Setup additional HDR properties here
         }
 
         decoderCallback = VTDecompressionOutputCallbackRecord()
@@ -144,19 +159,51 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             return
         }
 
-        // Set HDR metadata if enabled
-        if hdrEnabled, #available(iOS 16.0, *) {
-            drawable.HDRMetadata = {
-                let metadata = MTLHDRMetadata()
-                metadata.pixelFormat = .rgba16Float
-                metadata.transferFunction = .smpte2084
-                metadata.colorspace = .ITU_R_2020
-                return metadata
-            }()
+        // Handle HDR through texture attributes instead of drawable properties
+        if hdrEnabled {
+            // Set HDR colorspace on the image buffer instead
+            CVBufferSetAttachment(
+                imageBuffer,
+                kCVImageBufferYCbCrMatrixKey,
+                kCVImageBufferYCbCrMatrix_ITU_R_2020,
+                .shouldPropagate
+            )
+            
+            CVBufferSetAttachment(
+                imageBuffer,
+                kCVImageBufferColorPrimariesKey,
+                kCVImageBufferColorPrimaries_ITU_R_2020,
+                .shouldPropagate
+            )
+            
+            CVBufferSetAttachment(
+                imageBuffer,
+                kCVImageBufferTransferFunctionKey,
+                kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ,
+                .shouldPropagate
+            )
+            
+            // Set HDR metadata if available
+            if let masteringDisplayColorVolume = masteringDisplayColorVolume {
+                CVBufferSetAttachment(
+                    imageBuffer,
+                    kCMFormatDescriptionExtension_MasteringDisplayColorVolume as CFString,
+                    masteringDisplayColorVolume as CFData,
+                    .shouldPropagate
+                )
+            }
+            
+            if let contentLightLevelInfo = contentLightLevelInfo {
+                CVBufferSetAttachment(
+                    imageBuffer,
+                    kCMFormatDescriptionExtension_ContentLightLevelInfo as CFString,
+                    contentLightLevelInfo as CFData,
+                    .shouldPropagate
+                )
+            }
         }
 
         var planes = CVPixelBufferGetPlaneCount(imageBuffer)
-        //            print("Image with planes: \(planes)")
         var imageTexture: CVMetalTexture?
         let width = CVPixelBufferGetWidth(imageBuffer)
         let height = CVPixelBufferGetHeight(imageBuffer)
@@ -776,7 +823,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
         let mediaType: CMMediaType = CMFormatDescriptionGetMediaType(formatDescription)
 
-        if mediaType == kCMMediaType_Audio {
+        if (mediaType == kCMMediaType_Audio) {
             print("this was an audio sample....")
             return
         }

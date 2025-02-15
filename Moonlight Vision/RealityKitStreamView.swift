@@ -52,13 +52,14 @@ struct RealityKitStreamView: View {
     init(streamConfig: Binding<StreamConfiguration>, needsHdr: Bool) {
         _streamConfig = streamConfig
         controllerSupport = ControllerSupport(config: streamConfig.wrappedValue, delegate: DummyControllerDelegate())
-        let data = Data(count: 4 * Int(streamConfig.wrappedValue.width) * Int(streamConfig.wrappedValue.height)) // Dummy data
+        let bytesPerPixel = needsHdr ? 8 : 4  // HDR is 64-bit (8 bytes), SDR is 32-bit (4 bytes)
+        let data = Data(count: bytesPerPixel * Int(streamConfig.wrappedValue.width) * Int(streamConfig.wrappedValue.height))
         texture = try! TextureResource(
             dimensions: .dimensions(width: Int(streamConfig.wrappedValue.width), height: Int(streamConfig.wrappedValue.height)),
             format: .raw(pixelFormat: needsHdr ? HDR_FORMAT : SDR_FORMAT),
             contents: .init(
                 mipmapLevels: [
-                    .mip(data: data, bytesPerRow: 4 * Int(streamConfig.wrappedValue.width)), // TODO: is this even needed
+                    .mip(data: data, bytesPerRow: bytesPerPixel * Int(streamConfig.wrappedValue.width)),
                 ]
             )
         )
