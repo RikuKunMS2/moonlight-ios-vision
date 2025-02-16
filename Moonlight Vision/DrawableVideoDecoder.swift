@@ -16,9 +16,15 @@ import RealityKit
 import SwiftUI
 import VideoToolbox
 
-let metalFormat: MTLPixelFormat = .rgba16Float //.bgra8Unorm_srgb
-/*kCVPixelFormatType_32BGRA , kCVPixelFormatType_420YpCbCr8BiPlanarFullRange*/
-let decodingFormat = kCVPixelFormatType_Lossless_32BGRA
+// Add these constants after your existing constants
+let kCVPixelBufferYCbCrMatrixKey = "YCbCrMatrix" as CFString
+let kCVPixelBufferColorPrimariesKey = "ColorPrimaries" as CFString
+let kCVPixelBufferTransferFunctionKey = "TransferFunction" as CFString
+
+let kCVImageBufferYCbCrMatrix_ITU_R_2020 = "ITU_R_2020" as CFString
+let kCVImageBufferColorPrimaries_ITU_R_2020 = "ITU_R_2020" as CFString
+let kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ = "SMPTE_ST_2084_PQ" as CFString
+
 // MARK: - External C references (from bridging header)
 
 // (In Swift, these can be called directly if included in a bridging header)
@@ -111,11 +117,12 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         enableHDR: Bool = false,
         callbackToRender: @MainActor @escaping (TextureResource.DrawableQueue, (Int, Int)?) -> Void
     ) {
+        metalFormat = .rgba16Float
+
         // Format setup based on HDR
-        metalFormat = enableHDR ? .rgba16Float : .bgra8Unorm_srgb
         decodingFormat = enableHDR ?
-            kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange : // Back to what was working
-            kCVPixelFormatType_32BGRA
+            kCVPixelFormatType_420YpCbCr8BiPlanarFullRange :
+            kCVPixelFormatType_Lossless_32BGRA
 
         self.texture = texture
         self.callbacks = callbacks
@@ -163,12 +170,6 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         presentationDuration _: CMTime?
     ) {
         // print("\n=== Decompression Output ===")
-
-        guard let imageBuffer = imageBuffer else {
-            print("No image buffer!")
-            return
-        }
-
         // printBufferAttributes(imageBuffer)
 
         guard
@@ -202,7 +203,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         }
         let srcMetalFormat = srcMetalFormats[0];
         
-        let numPlanes = CVPixelBufferGetPlaneCount(imageBuffer)
+        // let numPlanes = CVPixelBufferGetPlaneCount(imageBuffer)
         //            print("Image with planes: \(planes)")
         var imageTexture: CVMetalTexture?
         let width = CVPixelBufferGetWidth(imageBuffer)

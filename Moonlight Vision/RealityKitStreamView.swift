@@ -25,6 +25,7 @@ class DummyControllerDelegate: NSObject, ControllerSupportDelegate {
 struct RealityKitStreamView: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @Binding var streamConfig: StreamConfiguration?
+    var needsHdr: Bool
     
     
     var body: some View {
@@ -32,7 +33,7 @@ struct RealityKitStreamView: View {
             _RealityKitStreamView(streamConfig: Binding<StreamConfiguration>(
                 get: { streamConfig ?? StreamConfiguration() },
                 set: { streamConfig = $0 }
-            )) {
+            ), needsHdr: needsHdr) {
                 dismissWindow()
                 streamConfig = nil
             }
