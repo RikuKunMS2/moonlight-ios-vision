@@ -21,6 +21,12 @@ let kCVPixelBufferYCbCrMatrixKey = "YCbCrMatrix" as CFString
 let kCVPixelBufferColorPrimariesKey = "ColorPrimaries" as CFString
 let kCVPixelBufferTransferFunctionKey = "TransferFunction" as CFString
 
+struct HDRParams {
+    var boost: Float      // Range: 1.0 - 3.0, Default: 2.0
+    var contrast: Float   // Range: 1.0 - 2.0, Default: 1.5
+    var saturation: Float // Range: 1.0 - 2.0, Default: 1.5
+}
+
 let kCVImageBufferYCbCrMatrix_ITU_R_2020 = "ITU_R_2020" as CFString
 let kCVImageBufferColorPrimaries_ITU_R_2020 = "ITU_R_2020" as CFString
 let kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ = "SMPTE_ST_2084_PQ" as CFString
@@ -99,8 +105,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     private var imagePlaneVertexBuffer: MTLBuffer?
 
     private var hdrEnabled: Bool
-
-    private var hdrRenderer: HDRRenderer?
+    private var hdrMetadata: SS_HDR_METADATA = SS_HDR_METADATA()
 
     private var copyPipelineState: MTLRenderPipelineState?
     private var copyPipelineFormat: MTLPixelFormat?
@@ -117,12 +122,10 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     ) {
         metalFormat = .rgba16Float
 
-        // // Format setup based on HDR
-        // decodingFormat = enableHDR ?
-        //     kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange :
-        //     kCVPixelFormatType_Lossless_32BGRA
-
-        decodingFormat = kCVPixelFormatType_Lossless_32BGRA
+        // Format setup based on HDR
+        decodingFormat = enableHDR ?
+            kCVPixelFormatType_64RGBAHalf :
+            kCVPixelFormatType_Lossless_32BGRA
 
         self.texture = texture
         self.callbacks = callbacks
@@ -147,17 +150,6 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
         super.init()
         decoderCallback.decompressionOutputRefCon = Unmanaged.passUnretained(self).toOpaque()
-
-        // Create HDR renderer if needed - moved after super.init()
-        if enableHDR {
-            do {
-                hdrRenderer = try HDRRenderer(device: mtlDevice)
-            } catch {
-                print("Failed to initialize HDR renderer: \(error)")
-                // Fall back to SDR
-                hdrEnabled = false
-            }
-        }
     }
 
     func decompressionOutputCallback(
@@ -171,7 +163,6 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     ) {
         guard
             let imageBuffer = imageBuffer,
-            let drawable = try? drawableQueue?.nextDrawable(),
             let commandBuffer = commandQueue?.makeCommandBuffer(),
             let textureCache = textureCache
         else {
@@ -188,101 +179,96 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             print("ERROR")
             return
         }
-
-        if let hdrRenderer = hdrRenderer {
-            // Update metadata before processing frame
+        
+        if hdrEnabled {
             updateHDRMetadata()
-
-            // HDR path
-            hdrRenderer.processFrame(
-                sourceBuffer: imageBuffer,
-                targetTexture: drawable.texture,
-                commandQueue: commandQueue!
-            )
-        } else {
-            // The copy pipeline relines on a fixed output pixel format,
-            // so we have to make sure that matches the render target.
-            if self.copyPipelineState == nil || copyPipelineFormat != metalFormat {
-                self.copyPipelineState = buildCopyPipeline(metalFormat)
-                if self.copyPipelineState != nil {
-                    copyPipelineFormat = metalFormat
-                }
-            }
-            guard let copyPipelineState = copyPipelineState else {
-                print("Failed to set up copy render pipeline!")
-                return
-            }
-
-            // Figure out the Metal pixel format
-            let pixelFormat = CVPixelBufferGetPixelFormatType(imageBuffer)
-            let srcMetalFormats = CVMetalHelpers.getTextureTypesForFormat(pixelFormat)
-            if srcMetalFormats[1] != MTLPixelFormat.invalid {
-                print("TODO split planes")
-                return
-            }
-            let srcMetalFormat = srcMetalFormats[0]
-
-            // let numPlanes = CVPixelBufferGetPlaneCount(imageBuffer)
-            //            print("Image with planes: \(planes)")
-            var imageTexture: CVMetalTexture?
-            let width = CVPixelBufferGetWidth(imageBuffer)
-            let height = CVPixelBufferGetHeight(imageBuffer)
-            let planeWidth = CVPixelBufferGetWidthOfPlane(imageBuffer, 0)
-            let planeHeight = CVPixelBufferGetHeightOfPlane(imageBuffer, 0)
-
-            if width != videoWidth || height != videoHeight {
-                print("Got video frame with mismatching dimensions \(width)x\(height) (client texture dimensions \(videoWidth)x\(videoHeight)) - correcting")
-                videoWidth = width
-                videoHeight = height
-                setupLowLevelTexture()
-            }
-            // kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
-            let result = CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault, textureCache, imageBuffer, nil, srcMetalFormat /* bgra8Unorm */, planeWidth, planeHeight, 0, &imageTexture)
-            if result != 0 {
-                print("CVMetalTextureCacheCreateTextureFromImage \(result)")
-                return
-            }
-            let mtlTexture = CVMetalTextureGetTexture(imageTexture!)!
-
-            /*
-             NSLog(mtlTexture.debugDescription!)
-             if !((mtlTexture.debugDescription?.contains("decompressedPixelFormat") ?? true) || (mtlTexture.debugDescription?.contains("isCompressed = 1") ?? true)) {
-                 NSLog("NO COMPRESSION ON VT FRAME!!!! AAAAAAAAA!! RIP BANDWIDTH!!")
-             }
-             */
-
-            let renderPassDescriptor = MTLRenderPassDescriptor()
-            renderPassDescriptor.colorAttachments[0].texture = drawable.texture
-            renderPassDescriptor.colorAttachments[0].loadAction = .clear
-            renderPassDescriptor.colorAttachments[0].storeAction = .store
-
-            guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
-                fatalError("Failed to create render command encoder")
-            }
-            renderEncoder.setRenderPipelineState(copyPipelineState)
-            renderEncoder.setFragmentTexture(mtlTexture, index: 0)
-            renderEncoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
-            renderEncoder.endEncoding()
-
-            commandBuffer.commit()
-            commandBuffer.waitUntilCompleted()
-
-            // I'm not sure why I can't encode these into the same command buffer to be honest
-            // (Maybe I need a fence?)
-            guard let commandBufferBlit = commandQueue?.makeCommandBuffer(),
-                  let blits = commandBufferBlit.makeBlitCommandEncoder()
-            else {
-                print("ERROR")
-                return
-            }
-
-            // blits.copy(from: mtlTexture, to: drawable.texture)
-            blits.generateMipmaps(for: drawable.texture)
-            blits.endEncoding()
-
-            commandBufferBlit.commit()
-            commandBufferBlit.waitUntilCompleted()
         }
+
+        // The copy pipeline relines on a fixed output pixel format,
+        // so we have to make sure that matches the render target.
+        if self.copyPipelineState == nil || copyPipelineFormat != metalFormat {
+            self.copyPipelineState = buildCopyPipeline(metalFormat)
+            if self.copyPipelineState != nil {
+                copyPipelineFormat = metalFormat
+            }
+        }
+        guard let copyPipelineState = copyPipelineState else {
+            print("Failed to set up copy render pipeline!")
+            return
+        }
+
+        // Create HDR parameter buffers
+        let (displayBuffer, contentBuffer) = createHDRParameterBuffers()
+
+        // Figure out the Metal pixel format
+        let pixelFormat = CVPixelBufferGetPixelFormatType(imageBuffer)
+        let srcMetalFormats = CVMetalHelpers.getTextureTypesForFormat(pixelFormat)
+        if srcMetalFormats[1] != MTLPixelFormat.invalid {
+            print("TODO split planes")
+            return
+        }
+        let srcMetalFormat = srcMetalFormats[0]
+
+        var imageTexture: CVMetalTexture?
+        let width = CVPixelBufferGetWidth(imageBuffer)
+        let height = CVPixelBufferGetHeight(imageBuffer)
+        let planeWidth = CVPixelBufferGetWidthOfPlane(imageBuffer, 0)
+        let planeHeight = CVPixelBufferGetHeightOfPlane(imageBuffer, 0)
+
+        if width != videoWidth || height != videoHeight {
+            print("Got video frame with mismatching dimensions \(width)x\(height) (client texture dimensions \(videoWidth)x\(videoHeight)) - correcting")
+            videoWidth = width
+            videoHeight = height
+            setupLowLevelTexture()
+        }
+
+        let result = CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault, textureCache, imageBuffer, nil, srcMetalFormat, planeWidth, planeHeight, 0, &imageTexture)
+        if result != 0 {
+            print("CVMetalTextureCacheCreateTextureFromImage \(result)")
+            return
+        }
+        let mtlTexture = CVMetalTextureGetTexture(imageTexture!)!
+
+        let renderPassDescriptor = MTLRenderPassDescriptor()
+        renderPassDescriptor.colorAttachments[0].texture = drawable.texture
+        renderPassDescriptor.colorAttachments[0].loadAction = .clear
+        renderPassDescriptor.colorAttachments[0].storeAction = .store
+
+        guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
+            fatalError("Failed to create render command encoder")
+        }
+        renderEncoder.setRenderPipelineState(copyPipelineState)
+        renderEncoder.setFragmentTexture(mtlTexture, index: 0)
+        
+        // Set HDR parameter buffers
+        if let enabledBuffer = displayBuffer {
+            renderEncoder.setFragmentBuffer(enabledBuffer, offset: 0, index: 0)
+        }
+        if let paramsBuffer = contentBuffer {
+            renderEncoder.setFragmentBuffer(paramsBuffer, offset: 0, index: 1)
+        }
+        
+        renderEncoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+        renderEncoder.endEncoding()
+
+        commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+
+        // I'm not sure why I can't encode these into the same command buffer to be honest
+        // (Maybe I need a fence?)
+        guard let commandBufferBlit = commandQueue?.makeCommandBuffer(),
+              let blits = commandBufferBlit.makeBlitCommandEncoder()
+        else {
+            print("ERROR")
+            return
+        }
+
+        // blits.copy(from: mtlTexture, to: drawable.texture)
+        blits.generateMipmaps(for: drawable.texture)
+        blits.endEncoding()
+
+        commandBufferBlit.commit()
+        commandBufferBlit.waitUntilCompleted()
 
         drawable.present()
     }
@@ -299,7 +285,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                     pixelFormat: metalFormat,
                     width: Int(videoWidth),
                     height: Int(videoHeight),
-                    usage: [.renderTarget, .shaderRead, .shaderWrite], // .renderTarget only, so that we get framebuffer compression
+                    usage: [.renderTarget], // .renderTarget only, so that we get framebuffer compression
                     mipmapsMode: .allocateAll // shinyquagsire23: Wasteful bc we probably only need like 2, but we don't have a choice here.
                 )
                 do {
@@ -324,7 +310,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
                 desc.mipmapLevelCount = 1 // TODO(shinyquagsire23): Maybe 2?
                 desc.pixelFormat = metalFormat // .rgba16Float //.rgba16Float // .rg8Unorm //.r8Unorm// .bgra8Unorm
-                desc.textureUsage = [.renderTarget, .shaderRead, .shaderWrite] // .renderTarget only, so that we get framebuffer compression
+                desc.textureUsage = [.renderTarget] // .renderTarget only, so that we get framebuffer compression
                 desc.swizzle = .init(red: .red, green: .green, blue: .blue, alpha: .alpha)
 
                 return desc
@@ -705,6 +691,12 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             print("\nBuffer attachments:")
             for (key, value) in attachments {
                 print("\(key): \(value)")
+                
+                // Parse MasteringDisplayColorVolume if present
+                if key == kCMFormatDescriptionExtension_MasteringDisplayColorVolume as String,
+                   let masteringData = value as? Data {
+                    parseMasteringDisplayColorVolume(masteringData)
+                }
             }
         }
 
@@ -739,7 +731,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             let nals = UnsafeMutableBufferPointer<UInt8>(start: UnsafeMutablePointer(mutating: dataPtr), count: length)
             frameBlockBuffer = annexBBufferToCMSampleBuffer(buffer: nals, videoFormat: formatDesc)
         } else {
-            // AV1 or other codecs that don’t need rewriting
+            // AV1 or other codecs that don't need rewriting
             let statusDataBlock = CMBlockBufferCreateWithMemoryBlock(
                 allocator: nil,
                 memoryBlock: dataPtr,
@@ -1017,6 +1009,32 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         return try? mtlDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
     }
 
+    // Convert big endian UInt16 to host Float
+    private func convertBigEndianUInt16ToFloat(_ value: UInt16) -> Float {
+        let hostValue = CFSwapInt16BigToHost(value)
+        return Float(hostValue)
+    }
+
+    // Create parameter buffers for HDR metadata
+    private func createHDRParameterBuffers() -> (MTLBuffer?, MTLBuffer?) {
+        // Create HDR enabled flag buffer
+        var hdrEnabled = self.hdrEnabled
+        let enabledBuffer = mtlDevice.makeBuffer(bytes: &hdrEnabled,
+                                               length: MemoryLayout<Bool>.size,
+                                               options: .storageModeShared)
+        
+        // Create HDR parameters buffer
+        var hdrParams = HDRParams(boost: 2.0,      // Default value
+                                contrast: 1.5,    // Default value
+                                saturation: 1.5)  // Default value
+        
+        let paramsBuffer = mtlDevice.makeBuffer(bytes: &hdrParams,
+                                              length: MemoryLayout<HDRParams>.size,
+                                              options: .storageModeShared)
+        
+        return (enabledBuffer, paramsBuffer)
+    }
+
     // MARK: - METAL
 
     private func initializeRenderPipelineState() {
@@ -1045,13 +1063,47 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
     // Add new method to update HDR metadata
     private func updateHDRMetadata() {
-        if let hdrRenderer = hdrRenderer {
-            // Get HDR metadata from Moonlight
-            var metadata = SS_HDR_METADATA()
-            if LiGetHdrMetadata(&metadata) {
-                hdrRenderer.updateMetadata(metadata)
-            }
+        // Get HDR metadata from Moonlight
+        if !LiGetHdrMetadata(&hdrMetadata) {
+            print("Failed to fetch HDR metadata from Moonlight")
         }
+    }
+    
+    // Parse SMPTE ST 2086 mastering display color volume metadata
+    private func parseMasteringDisplayColorVolume(_ data: Data) {
+        // Data should be 24 bytes
+        guard data.count == 24 else {
+            print("Invalid metadata length: \(data.count)")
+            return
+        }
+
+        // Extract values (stored as normalized 16-bit unsigned integers)
+        let displayPrimariesX = [
+            Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 0, as: UInt16.self) })) / 50000.0,
+            Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 4, as: UInt16.self) })) / 50000.0,
+            Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 8, as: UInt16.self) })) / 50000.0
+        ]
+        
+        let displayPrimariesY = [
+            Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 2, as: UInt16.self) })) / 50000.0,
+            Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 6, as: UInt16.self) })) / 50000.0,
+            Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 10, as: UInt16.self) })) / 50000.0
+        ]
+        
+        let whitePointX = Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 12, as: UInt16.self) })) / 50000.0
+        let whitePointY = Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 14, as: UInt16.self) })) / 50000.0
+        
+        let maxDisplayLuminance = Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 16, as: UInt16.self) }))
+        let minDisplayLuminance = Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 18, as: UInt16.self) })) / 10000.0
+
+        print("\nHDR Display Metadata:")
+        print("Display Primaries (x,y):")
+        print("Red:   (\(displayPrimariesX[0]), \(displayPrimariesY[0]))")
+        print("Green: (\(displayPrimariesX[1]), \(displayPrimariesY[1]))")
+        print("Blue:  (\(displayPrimariesX[2]), \(displayPrimariesY[2]))")
+        print("White Point: (\(whitePointX), \(whitePointY))")
+        print("Max Display Luminance: \(maxDisplayLuminance) nits")
+        print("Min Display Luminance: \(minDisplayLuminance) nits")
     }
 }
 
