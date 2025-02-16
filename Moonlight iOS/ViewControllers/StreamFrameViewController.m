@@ -328,7 +328,7 @@
     
     [_statsUpdateTimer invalidate];
     _statsUpdateTimer = nil;
-    
+    [_streamMan stopStream];
     [self.navigationController popToRootViewControllerAnimated:YES];
 }
 
@@ -402,6 +402,10 @@
                                                                      selector:@selector(updateStatsOverlay)
                                                                      userInfo:nil
                                                                       repeats:YES];
+        }
+        
+        if (self->_connectedCallback) {
+            self->_connectedCallback();
         }
     });
 }
@@ -482,6 +486,10 @@
             [self returnToMainFrame];
         }]];
         [self presentViewController:conTermAlert animated:YES completion:nil];
+        
+        if (self->_disconnectedCallback) {
+            self->_disconnectedCallback();
+        }
     });
 
     [_streamMan stopStream];
@@ -535,8 +543,7 @@
 
 - (void) launchFailed:(NSString*)message {
     Log(LOG_I, @"Launch failed: %@", message);
-    
-    dispatch_async(dispatch_get_main_queue(), ^{
+
         // Allow the display to go to sleep now
         [UIApplication sharedApplication].idleTimerDisabled = NO;
         
@@ -548,7 +555,6 @@
             [self returnToMainFrame];
         }]];
         [self presentViewController:alert animated:YES completion:nil];
-    });
 }
 
 - (void)rumble:(unsigned short)controllerNumber lowFreqMotor:(unsigned short)lowFreqMotor highFreqMotor:(unsigned short)highFreqMotor {

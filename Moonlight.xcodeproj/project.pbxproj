@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -58,6 +58,9 @@
 		B1EDB13D2D4D95BF00EB1839 /* StreamConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB13B2D4D95BF00EB1839 /* StreamConfiguration.swift */; };
 		B1EDB13E2D4D95BF00EB1839 /* StreamConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB13B2D4D95BF00EB1839 /* StreamConfiguration.swift */; };
 		DC1F5A07206436B20037755F /* ConnectionHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = DC1F5A06206436B20037755F /* ConnectionHelper.m */; };
+		E77582CD2D53F3EB00948545 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = E77582CC2D53F3E500948545 /* Shaders.metal */; };
+		E77582CF2D54020700948545 /* CVMetalHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = E77582CE2D54020300948545 /* CVMetalHelpers.swift */; };
+		E77582EB2D5550D500948545 /* AudioHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = E77582EA2D5550D200948545 /* AudioHelpers.swift */; };
 		F71801422B65483D00A9336B /* AppsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71801412B65483D00A9336B /* AppsView.swift */; };
 		F71801442B654D9100A9336B /* TemporaryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71801432B654D9100A9336B /* TemporaryApp.swift */; };
 		F71801452B65583700A9336B /* TemporaryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71801432B654D9100A9336B /* TemporaryApp.swift */; };
@@ -331,6 +334,9 @@
 		D4746EEA1CBC740C006FB401 /* Moonlight-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Moonlight-Bridging-Header.h"; path = "Input/Moonlight-Bridging-Header.h"; sourceTree = "<group>"; };
 		DC1F5A05206436B10037755F /* ConnectionHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ConnectionHelper.h; sourceTree = "<group>"; };
 		DC1F5A06206436B20037755F /* ConnectionHelper.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ConnectionHelper.m; sourceTree = "<group>"; };
+		E77582CC2D53F3E500948545 /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
+		E77582CE2D54020300948545 /* CVMetalHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CVMetalHelpers.swift; sourceTree = "<group>"; };
+		E77582EA2D5550D200948545 /* AudioHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioHelpers.swift; sourceTree = "<group>"; };
 		F71801412B65483D00A9336B /* AppsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppsView.swift; sourceTree = "<group>"; };
 		F71801432B654D9100A9336B /* TemporaryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemporaryApp.swift; sourceTree = "<group>"; };
 		F71801492B655C1F00A9336B /* Utils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utils.swift; sourceTree = "<group>"; };
@@ -531,6 +537,10 @@
 		FBDE86E519F82297001C18A8 /* UIAppView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = UIAppView.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		B10D61AE2D54D0F600550218 /* AppIntents */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = AppIntents; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
 		F7A1193D2B5DDF73001E8686 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
@@ -641,7 +651,11 @@
 			children = (
 				998720D42D60A60100BB0EA2 /* HDRRenderer.swift */,
 				998720D52D60A60100BB0EA2 /* HDRShaders.metal */,
+				B10D61AE2D54D0F600550218 /* AppIntents */,
+				E77582CC2D53F3E500948545 /* Shaders.metal */,
 				3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */,
+				E77582EA2D5550D200948545 /* AudioHelpers.swift */,
+				E77582CE2D54020300948545 /* CVMetalHelpers.swift */,
 				B1EDB1302D4D95A700EB1839 /* DrawableVideoDecoder.swift */,
 				B1EDB1312D4D95A700EB1839 /* ObservableConnectionManager.swift */,
 				B1EDB1322D4D95A700EB1839 /* RealityKitStreamView.swift */,
@@ -1093,6 +1107,9 @@
 			dependencies = (
 				F7A119092B5DDF73001E8686 /* PBXTargetDependency */,
 			);
+			fileSystemSynchronizedGroups = (
+				B10D61AE2D54D0F600550218 /* AppIntents */,
+			);
 			name = "Moonlight XrOS";
 			packageProductDependencies = (
 				F718014E2B657DB600A9336B /* OrderedCollections */,
@@ -1265,6 +1282,7 @@
 				F7A119122B5DDF73001E8686 /* AppListResponse.m in Sources */,
 				F7A119132B5DDF73001E8686 /* Utils.m in Sources */,
 				F7A119152B5DDF73001E8686 /* Connection.m in Sources */,
+				E77582EB2D5550D500948545 /* AudioHelpers.swift in Sources */,
 				F7A119162B5DDF73001E8686 /* AppAssetRetriever.m in Sources */,
 				F7A119172B5DDF73001E8686 /* WakeOnLanManager.m in Sources */,
 				B1EDB1352D4D95A700EB1839 /* StreamControls.swift in Sources */,
@@ -1282,6 +1300,7 @@
 				F7199AFB2B72F33000E6D62D /* SettingsView.swift in Sources */,
 				F7A1191B2B5DDF73001E8686 /* HttpResponse.m in Sources */,
 				F718014A2B655C1F00A9336B /* Utils.swift in Sources */,
+				E77582CF2D54020700948545 /* CVMetalHelpers.swift in Sources */,
 				F7A1195B2B5DE1E2001E8686 /* MoonlightVisionApp.swift in Sources */,
 				F7A119212B5DDF73001E8686 /* HttpManager.m in Sources */,
 				F7A1195D2B5DE1FD001E8686 /* MainContentView.swift in Sources */,
@@ -1298,6 +1317,7 @@
 				F7A1192D2B5DDF73001E8686 /* CryptoManager.m in Sources */,
 				F7A1192E2B5DDF73001E8686 /* ConnectionHelper.m in Sources */,
 				B1AC7CF12D4E011B0013B9A3 /* HDRParsingUtils.m in Sources */,
+				E77582CD2D53F3EB00948545 /* Shaders.metal in Sources */,
 				F7A1192F2B5DDF73001E8686 /* PairManager.m in Sources */,
 				F7A119302B5DDF73001E8686 /* HttpRequest.m in Sources */,
 				F7A119312B5DDF73001E8686 /* OnScreenControls.m in Sources */,
@@ -1484,7 +1504,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 2423V7K2Y5;
 				ENABLE_MODULE_VERIFIER = YES;
@@ -1532,7 +1552,7 @@
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS-Sim",
 				);
-				MARKETING_VERSION = 11.0.0;
+				MARKETING_VERSION = 11.0.1;
 				OTHER_LDFLAGS = "-ld64";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1561,7 +1581,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = 2423V7K2Y5;
 				ENABLE_MODULE_VERIFIER = YES;
@@ -1609,7 +1629,7 @@
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS-Sim",
 				);
-				MARKETING_VERSION = 11.0.0;
+				MARKETING_VERSION = 11.0.1;
 				OTHER_LDFLAGS = "-ld64";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";
 				PRODUCT_NAME = "$(TARGET_NAME)";

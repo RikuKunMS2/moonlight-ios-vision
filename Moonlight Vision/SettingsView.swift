@@ -152,6 +152,7 @@ struct SettingsView: View {
                     Text("Lowest Latency").tag(false)
                     Text("Smoothest Video").tag(true)
                 }
+                Toggle("Automatically dim passthrough and hide window controls", isOn: $settings.dimPassthrough)
             }
             .navigationTitle("Settings")
             .onDisappear {

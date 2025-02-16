@@ -9,7 +9,7 @@
 import Foundation
 
 @objcMembers
-class StreamConfiguration: NSObject, Codable {
+class StreamConfiguration: NSObject, Encodable, Decodable {
     var host: String!
     var httpsPort: UInt16
     var appVersion: String

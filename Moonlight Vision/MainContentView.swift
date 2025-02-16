@@ -18,7 +18,6 @@ struct MainContentView: View {
     @State private var isDeletingHost = false
     @State private var hostToDelete: TemporaryHost?
     @State private var newHostIp = ""
-    @State private var dimPassthrough = true
     @State private var isRefreshingDiscovery = false // State to track refresh status
 
 
@@ -54,6 +53,10 @@ struct MainContentView: View {
                     }
                     .navigationTitle("Computers") // Keep simple navigation title
                     // REMOVE the VStack navigationTitle we added before
+                    Text("Please actually read the Change Log")
+                        .font(.system(size: 10)) // Even smaller font size for the second line
+                        .foregroundColor(.gray)
+                        .padding(.bottom) // Add bottom padding for visual spacing
 
                     Button { // Make the Text a Button
                         isRefreshingDiscovery.toggle()
@@ -115,6 +118,15 @@ struct MainContentView: View {
                     name: UIApplication.didBecomeActiveNotification,
                     object: nil
                 )
+                // If we have some hosts in the host list and no host has been selected
+                // try to select the first paired host automatically.
+                // this will usually happen when we close the stream and reopen this window
+                // when we do, the host list won't change but we still want to keep the list looking nice and select something by default
+                if selectedHost == nil,
+                   let firstHost = viewModel.hosts.first(where: { $0.pairState == .paired })
+                {
+                    selectedHost = firstHost
+                }
                 //if !isRefreshingDiscovery { // Only begin refresh if not already toggled on
                 //    viewModel.beginRefresh()
                 //}

@@ -23,8 +23,29 @@ class DummyControllerDelegate: NSObject, ControllerSupportDelegate {
 }
 
 struct RealityKitStreamView: View {
+    @Environment(\.dismissWindow) private var dismissWindow
+    @Binding var streamConfig: StreamConfiguration?
+    
+    
+    var body: some View {
+        if streamConfig != nil {
+            _RealityKitStreamView(streamConfig: Binding<StreamConfiguration>(
+                get: { streamConfig ?? StreamConfiguration() },
+                set: { streamConfig = $0 }
+            )) {
+                dismissWindow()
+                streamConfig = nil
+            }
+        } else {
+            ProgressView().onAppear { dismissWindow() }
+        }
+    }
+}
+
+struct _RealityKitStreamView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var viewModel: MainViewModel
 
@@ -34,6 +55,8 @@ struct RealityKitStreamView: View {
     @State var curveAnimationMultiplier: Float = 1
     @State var controllerSupport: ControllerSupport?
     @State var height: Float = 0
+    
+    @State var shouldClose: Bool = false
 
     var aspectRatio: Float {
         Float(streamConfig.height) / Float(streamConfig.width)
@@ -47,16 +70,19 @@ struct RealityKitStreamView: View {
     @State var enlarge = false
 
     @State var texture: TextureResource
-    @State var screen: ModelEntity = .init()
+    @State var screen: ModelEntity = ModelEntity()
+    
+    let closeAction: () -> Void
 
-    init(streamConfig: Binding<StreamConfiguration>, needsHdr: Bool) {
-        _streamConfig = streamConfig
-        controllerSupport = ControllerSupport(config: streamConfig.wrappedValue, delegate: DummyControllerDelegate())
+    init(streamConfig: Binding<StreamConfiguration>, needsHdr: Bool, closeAction: @escaping () -> Void) {
+        self.closeAction = closeAction
+        self._streamConfig = streamConfig
+        self.controllerSupport = ControllerSupport(config: streamConfig.wrappedValue, delegate: DummyControllerDelegate())
         let bytesPerPixel = needsHdr ? 8 : 4  // HDR is 64-bit (8 bytes), SDR is 32-bit (4 bytes)
-        let data = Data(count: bytesPerPixel * Int(streamConfig.wrappedValue.width) * Int(streamConfig.wrappedValue.height))
-        texture = try! TextureResource(
+        let data = Data.init(count: bytesPerPixel * Int(streamConfig.wrappedValue.width) * Int(streamConfig.wrappedValue.height)) // Dummy data
+        self.texture = try! TextureResource(
             dimensions: .dimensions(width: Int(streamConfig.wrappedValue.width), height: Int(streamConfig.wrappedValue.height)),
-            format: .raw(pixelFormat: needsHdr ? HDR_FORMAT : SDR_FORMAT),
+            format: .raw(pixelFormat: needsHdr ? .rgba16Float : .bgra8Unorm_srgb), // Doesn't matter, dummy data
             contents: .init(
                 mipmapLevels: [
                     .mip(data: data, bytesPerRow: bytesPerPixel * Int(streamConfig.wrappedValue.width)),
@@ -67,21 +93,38 @@ struct RealityKitStreamView: View {
 
     var body: some View {
         GeometryReader3D { proxy in
-            ZStack {
                 RealityView { content in
-                    let mesh = try! RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (50, 50), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
+                    let mesh = try! _RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (50,50), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
+                    let colBox = ShapeResource.generateBox(width: 2, height: 2 * aspectRatio, depth: 0.001).offsetBy(translation: .init(x: 0, y: -0.43, z: 1))
                     screen = ModelEntity(mesh: mesh, materials: [UnlitMaterial(texture: self.texture)])
+                    screen.collision = CollisionComponent(shapes: [
+                        colBox
+                    ], mode: .colliding)
+                    screen.components.set(InputTargetComponent())
                     content.add(screen)
                 } update: { content in
-                    let mesh = try! RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (50, 50), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
+                    let mesh = try! _RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (50,50), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
                     let size = content.convert(proxy.frame(in: .local), from: .local, to: .scene)
                     screen.transform.scale = .init(repeating: size.extents.x / 2)
                     screen.transform.translation.y = height
                     try! screen.model!.mesh.replace(with: mesh.contents)
                 }
-            }
+                .handlesGameControllerEvents(matching: .gamepad)
         }
-        .handlesGameControllerEvents(matching: .gamepad)
+        .ornament(visibility: connectionCallbacks.showAlert ? .visible :  .hidden , attachmentAnchor: .scene(.bottomFront), contentAlignment: .bottom) {
+            VStack(alignment: .center) {
+                Image(systemName: "exclamationmark.triangle")
+                Text("Stream error")
+                    .font(.title)
+                Text(connectionCallbacks.errorMessage ?? "Unknown error")
+                Button("Close") {
+                    shouldClose.toggle()
+                    dismissWindow()
+                }
+            }
+            .padding()
+            .glassBackgroundEffect()
+        }
         .ornament(attachmentAnchor: .scene(.bottomTrailingFront), contentAlignment: .bottomLeading) {
             StreamControls(horizontal: false, streamConfig: $streamConfig) {
                 HStack {
@@ -142,6 +185,8 @@ struct RealityKitStreamView: View {
         }
         .onAppear {
             dismissWindow(id: "mainView")
+            dismissWindow(id: "dummy")
+//            dismissWindow(id: "realitykitStreamingWindow")
             self.curveAnimationMultiplier = viewModel.streamSettings.realitykitRendererAnimateOpening ? 0 : 1
             self._streamMan = StreamManager(
                 config: self.streamConfig,
@@ -164,8 +209,11 @@ struct RealityKitStreamView: View {
             let operationQueue = OperationQueue()
             operationQueue.addOperation(_streamMan!)
         }
-        .onChange(of: connectionCallbacks.errorMessage) {
-            dismissWindow()
+        .onChange(of: shouldClose) { _, shouldClose in
+            if shouldClose {
+                openWindow(id: "mainView")
+                dismissWindow()
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -173,22 +221,26 @@ struct RealityKitStreamView: View {
                 // print("active")
                 break
             case .inactive:
-                // print("inactive")
-                dismissWindow()
+                print("inactive")
+                break
             case .background:
-                // print("background -> a/b/c disappeared")
-                dismissWindow()
+                print("background")
                 viewModel.activelyStreaming = false
                 _streamMan?.stopStream()
                 _streamMan = nil
                 controllerSupport?.cleanup()
-                openWindow(id: "mainView")
+//                streamConfig = nil
+                if !shouldClose { openWindow(id: "mainView") }
+                self.closeAction()
+//                dismissWindow()
             @unknown default: break
                 // print("unknown default")
             }
         }
-        .persistentSystemOverlays(viewModel.dimPassthrough ? .hidden : .automatic)
-        .preferredSurroundingsEffect(viewModel.dimPassthrough ? .systemDark : nil)
+        .persistentSystemOverlays(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
+        .preferredSurroundingsEffect(viewModel.streamSettings.dimPassthrough ? .systemDark : nil)
+        .volumeBaseplateVisibility(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
+        .supportedVolumeViewpoints(.front)
     }
 
     func animateOpening() {
@@ -261,4 +313,5 @@ struct RealityKitStreamView: View {
 // #Preview {
 ////    NativeStreamView()
 //    NativeStreamView()
-// }
+//}
+

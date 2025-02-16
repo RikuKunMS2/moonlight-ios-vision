@@ -18,6 +18,7 @@ import Combine
     @Published var errorMessage: String?
     @Published var isHDRModeEnabled: Bool = false
     @Published var videoShown: Bool = false
+    @Published var showAlert = false
     
     // Implement the protocol methods
     func connectionStarted() {
@@ -27,6 +28,7 @@ import Combine
     func connectionTerminated(_ errorCode: Int32) {
         print("Connection terminated with error code: \(errorCode)")
         errorMessage = "Connection terminated with error code: \(errorCode)"
+        showAlert = true
     }
     
     func stageStarting(_ stageName: UnsafePointer<CChar>!) {
@@ -48,12 +50,14 @@ import Combine
             let stageStr = String(cString: stage)
             print("Stage failed: \(stageStr), Error code: \(errorCode), Port test flags: \(portTestFlags)")
             errorMessage = "Stage \(stageStr) failed with error \(errorCode)"
+            showAlert = true
         }
     }
     
     func launchFailed(_ message: String!) {
         print("Launch failed: \(message ?? "Unknown error")")
         errorMessage = message
+        showAlert = true
     }
     
     func rumble(_ controllerNumber: UInt16, lowFreqMotor: UInt16, highFreqMotor: UInt16) {
@@ -85,5 +89,6 @@ import Combine
     func videoContentShown() {
         print("Video content shown")
         videoShown = true
+        showAlert = false
     }
 }

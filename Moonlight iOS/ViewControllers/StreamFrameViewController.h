@@ -20,5 +20,9 @@
 #endif
 @property (nonatomic, strong) StreamConfiguration* streamConfig;
 
+typedef void (^noargCallbackType)(void);
+@property (nonatomic, strong) noargCallbackType connectedCallback;
+@property (nonatomic, strong) noargCallbackType disconnectedCallback;
+
 -(void)updatePreferredDisplayMode:(BOOL)streamActive;
 @end

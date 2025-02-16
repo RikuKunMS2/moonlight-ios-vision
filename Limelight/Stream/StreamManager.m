@@ -138,8 +138,10 @@
     [hMan executeRequestSynchronously:[HttpRequest requestForResponse:resumeResp withUrlRequest:[hMan newLaunchOrResumeRequest:@"resume" config:_config]]];
     NSString* resume = [resumeResp getStringTag:@"resume"];
     if (![resumeResp isStatusOk]) {
-        [_callbacks launchFailed:resumeResp.statusMessage];
-        Log(LOG_E, @"Failed Resume Response: %@", resumeResp.statusMessage);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [_callbacks launchFailed:resumeResp.statusMessage];
+            Log(LOG_E, @"Failed Resume Response: %@", resumeResp.statusMessage);
+        });
         return FALSE;
     } else if (resume == NULL || [resume isEqualToString:@"0"]) {
         [_callbacks launchFailed:@"Failed to resume app"];

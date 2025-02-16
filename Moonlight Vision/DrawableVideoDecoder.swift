@@ -16,23 +16,9 @@ import RealityKit
 import SwiftUI
 import VideoToolbox
 
-// https://gist.github.com/shinyquagsire23/81c86f4bf670aaa68b5804080ff964a0
-let MTLPixelFormatYCBCR8_420_2P_sRGB: UInt = 520
-let MTLPixelFormatBGRA10_XR: UInt = 552
-let FORMAT: [MTLPixelFormat] = [MTLPixelFormat(rawValue: MTLPixelFormatYCBCR8_420_2P_sRGB)!, MTLPixelFormat.invalid]
-
-let HDR_FORMAT: MTLPixelFormat = .rgba16Float
-let SDR_FORMAT: MTLPixelFormat = .bgra8Unorm_srgb
-
-// Add these constants after your existing constants
-let kCVPixelBufferYCbCrMatrixKey = "YCbCrMatrix" as CFString
-let kCVPixelBufferColorPrimariesKey = "ColorPrimaries" as CFString
-let kCVPixelBufferTransferFunctionKey = "TransferFunction" as CFString
-
-let kCVImageBufferYCbCrMatrix_ITU_R_2020 = "ITU_R_2020" as CFString
-let kCVImageBufferColorPrimaries_ITU_R_2020 = "ITU_R_2020" as CFString
-let kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ = "SMPTE_ST_2084_PQ" as CFString
-
+let metalFormat: MTLPixelFormat = .rgba16Float //.bgra8Unorm_srgb
+/*kCVPixelFormatType_32BGRA , kCVPixelFormatType_420YpCbCr8BiPlanarFullRange*/
+let decodingFormat = kCVPixelFormatType_Lossless_32BGRA
 // MARK: - External C references (from bridging header)
 
 // (In Swift, these can be called directly if included in a bridging header)
@@ -95,20 +81,25 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     var session: VTDecompressionSession?
     var decoderCallback: VTDecompressionOutputCallbackRecord
     lazy var mtlDevice: MTLDevice = {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            fatalError()
-        }
-        return device
-    }()
+            guard let device = MTLCreateSystemDefaultDevice() else {
+                fatalError()
+            }
+            return device
+        }()
+    
+    private lazy var commandQueue: MTLCommandQueue? = {
+            return mtlDevice.makeCommandQueue()
+        }()
+        
+        private var renderPipelineState: MTLComputePipelineState?
+        private var imagePlaneVertexBuffer: MTLBuffer?
 
-    private lazy var commandQueue: MTLCommandQueue? = mtlDevice.makeCommandQueue()
-
-    private var renderPipelineState: MTLComputePipelineState?
-    private var imagePlaneVertexBuffer: MTLBuffer?
-
-    private var hdrEnabled: Bool
+        private var hdrEnabled: Bool
 
     private var hdrRenderer: HDRRenderer?
+    
+    private var copyPipelineState: MTLRenderPipelineState?
+    private var copyPipelineFormat: MTLPixelFormat?
 
     // MARK: - Initialization
 
@@ -181,54 +172,96 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         // printBufferAttributes(imageBuffer)
 
         guard
-            let drawable = try? drawableQueue?.nextDrawable(),
-            let commandBuffer = commandQueue?.makeCommandBuffer()
-        else {
+            let imageBuffer = imageBuffer,
+            let drawable = try? self.drawableQueue?.nextDrawable(),
+            let commandBuffer = commandQueue?.makeCommandBuffer(),
+            let textureCache = self.textureCache else {
             print("ERROR")
             return
         }
-
-        if let hdrRenderer = hdrRenderer {
-            // Update metadata before processing frame
-            updateHDRMetadata()
-
-            // HDR path
-            hdrRenderer.processFrame(
-                sourceBuffer: imageBuffer,
-                targetTexture: drawable.texture,
-                commandQueue: commandQueue!
-            )
-        } else {
-            // SDR path - simple blit
-            guard let blits = commandBuffer.makeBlitCommandEncoder() else { return }
-
-            var imageTexture: CVMetalTexture?
-            let width = CVPixelBufferGetWidth(imageBuffer)
-            let height = CVPixelBufferGetHeight(imageBuffer)
-
-            let result = CVMetalTextureCacheCreateTextureFromImage(
-                kCFAllocatorDefault,
-                textureCache!,
-                imageBuffer,
-                nil,
-                metalFormat,
-                width,
-                height,
-                0,
-                &imageTexture
-            )
-
-            guard result == kCVReturnSuccess,
-                  let mtlTexture = CVMetalTextureGetTexture(imageTexture!)
-            else {
-                return
+        
+        // The copy pipeline relines on a fixed output pixel format,
+        // so we have to make sure that matches the render target.
+        if self.copyPipelineState == nil || self.copyPipelineFormat != metalFormat {
+            self.copyPipelineState = self.buildCopyPipeline(metalFormat);
+            if self.copyPipelineState != nil {
+                self.copyPipelineFormat = metalFormat;
             }
-
-            blits.copy(from: mtlTexture, to: drawable.texture)
-            blits.endEncoding()
         }
+        guard let copyPipelineState = self.copyPipelineState else {
+            print("Failed to set up copy render pipeline!")
+            return
+        }
+        
+        // Figure out the Metal pixel format
+        let pixelFormat = CVPixelBufferGetPixelFormatType(imageBuffer);
+        let srcMetalFormats = CVMetalHelpers.getTextureTypesForFormat(pixelFormat)
+        if srcMetalFormats[1] != MTLPixelFormat.invalid {
+            print("TODO split planes")
+            return
+        }
+        let srcMetalFormat = srcMetalFormats[0];
+        
+        let numPlanes = CVPixelBufferGetPlaneCount(imageBuffer)
+        //            print("Image with planes: \(planes)")
+        var imageTexture: CVMetalTexture?
+        let width = CVPixelBufferGetWidth(imageBuffer)
+        let height = CVPixelBufferGetHeight(imageBuffer)
+        let planeWidth = CVPixelBufferGetWidthOfPlane(imageBuffer, 0)
+        let planeHeight = CVPixelBufferGetHeightOfPlane(imageBuffer, 0)
+        
+        if (width != videoWidth || height != videoHeight) {
+            print("Got video frame with mismatching dimensions \(width)x\(height) (client texture dimensions \(videoWidth)x\(videoHeight)) - correcting")
+            self.videoWidth = width
+            self.videoHeight = height
+            self.setupLowLevelTexture()
+        }
+        // kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
+        let result = CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault, textureCache, imageBuffer, nil, srcMetalFormat /*bgra8Unorm*/, planeWidth, planeHeight, 0, &imageTexture)
+        if result != 0 {
+            print("CVMetalTextureCacheCreateTextureFromImage \(result)")
+            return
+        }
+        let mtlTexture = CVMetalTextureGetTexture(imageTexture!)!
+        
+        /*
+        NSLog(mtlTexture.debugDescription!)
+        if !((mtlTexture.debugDescription?.contains("decompressedPixelFormat") ?? true) || (mtlTexture.debugDescription?.contains("isCompressed = 1") ?? true)) {
+            NSLog("NO COMPRESSION ON VT FRAME!!!! AAAAAAAAA!! RIP BANDWIDTH!!")
+        }
+        */
+        
+        let renderPassDescriptor = MTLRenderPassDescriptor()
+        renderPassDescriptor.colorAttachments[0].texture = drawable.texture
+        renderPassDescriptor.colorAttachments[0].loadAction = .clear
+        renderPassDescriptor.colorAttachments[0].storeAction = .store
+        
+        guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
+            fatalError("Failed to create render command encoder")
+        }
+        renderEncoder.setRenderPipelineState(copyPipelineState)
+        renderEncoder.setFragmentTexture(mtlTexture, index: 0)
+        renderEncoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+        renderEncoder.endEncoding()
 
         commandBuffer.commit()
+        commandBuffer.waitUntilCompleted()
+        
+        // I'm not sure why I can't encode these into the same command buffer to be honest
+        // (Maybe I need a fence?)
+        guard let commandBufferBlit = commandQueue?.makeCommandBuffer(),
+            let blits = commandBufferBlit.makeBlitCommandEncoder() else {
+            print("ERROR")
+            return
+        }
+        
+        //blits.copy(from: mtlTexture, to: drawable.texture)
+        blits.generateMipmaps(for: drawable.texture)
+        blits.endEncoding()
+
+        commandBufferBlit.commit()
+        commandBufferBlit.waitUntilCompleted()
+        
         drawable.present()
     }
 
@@ -244,8 +277,8 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                     pixelFormat: metalFormat,
                     width: Int(videoWidth),
                     height: Int(videoHeight),
-                    usage: [.renderTarget, .shaderRead, .shaderWrite],
-                    mipmapsMode: .none
+                    usage: [.renderTarget], // .renderTarget only, so that we get framebuffer compression
+                    mipmapsMode: .allocateAll // shinyquagsire23: Wasteful bc we probably only need like 2, but we don't have a choice here.
                 )
                 do {
                     let queue = try TextureResource.DrawableQueue(descriptor)
@@ -266,10 +299,10 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 desc.width = Int(videoWidth)
                 desc.height = Int(videoHeight)
                 desc.depth = 1
-
-                desc.mipmapLevelCount = 1
-                desc.pixelFormat = metalFormat // .rgba16Float //.rgba16Float // .rg8Unorm //.r8Unorm// .bgra8Unorm
-                desc.textureUsage = [.shaderRead, .shaderWrite, .renderTarget]
+                
+                desc.mipmapLevelCount = 1 // TODO(shinyquagsire23): Maybe 2?
+                desc.pixelFormat = metalFormat //.rgba16Float //.rgba16Float // .rg8Unorm //.r8Unorm// .bgra8Unorm
+                desc.textureUsage = [.renderTarget] // .renderTarget only, so that we get framebuffer compression
                 desc.swizzle = .init(red: .red, green: .green, blue: .blue, alpha: .alpha)
 
                 return desc
@@ -441,9 +474,16 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             ) {
                 self.formatDesc = formatDesc
                 // rgba16Float
-                let videoDecoderSpecification: [NSString: AnyObject] = [kVTVideoDecoderSpecification_EnableHardwareAcceleratedVideoDecoder: kCFBooleanTrue]
-                let attributes = [kCVPixelBufferPixelFormatTypeKey: decodingFormat /* kCVPixelFormatType_32BGRA , kCVPixelFormatType_420YpCbCr8BiPlanarFullRange */, kCVPixelBufferMetalCompatibilityKey: true, kCVPixelBufferPoolMinimumBufferCountKey: 3] as CFDictionary
-                VTDecompressionSessionCreate(allocator: kCFAllocatorDefault, formatDescription: formatDesc, decoderSpecification: videoDecoderSpecification as CFDictionary, imageBufferAttributes: attributes, outputCallback: &decoderCallback, decompressionSessionOut: &session)
+                let videoDecoderSpecification:[NSString: AnyObject] = [kVTVideoDecoderSpecification_EnableHardwareAcceleratedVideoDecoder:kCFBooleanTrue]
+                // NOTE(shinyquagsire23): Setting kCVPixelBufferPixelFormatTypeKey *at all* will trigger
+                // a VideoToolbox bug that results in the output CVPixelBuffer's underlying Metal textures
+                // being decompressed, resulting in GPU bandwidth penalties
+                var attributes: [CFString : Any] = [kCVPixelBufferMetalCompatibilityKey: true, kCVPixelBufferPoolMinimumBufferCountKey: 3]
+                if !forceFastSecretTextureFormats {
+                    attributes[kCVPixelBufferPixelFormatTypeKey] = decodingFormat
+                }
+                VTDecompressionSessionCreate(allocator: kCFAllocatorDefault, formatDescription: formatDesc, decoderSpecification: videoDecoderSpecification as CFDictionary, imageBufferAttributes: attributes as CFDictionary, outputCallback: &self.decoderCallback, decompressionSessionOut: &self.session)
+                AudioHelpers.fixAudioForSurroundForCurrentWindow() // TODO(shinyquagsire23): Make this configurable?
             } else {
                 // Couldn't create format description yet
 //                free(dataPtr)
@@ -667,62 +707,33 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         formatDesc: CMVideoFormatDescription,
         decodeUnit: PDECODE_UNIT!
     ) -> CMSampleBuffer? {
-        // // Add debug print at the start
-        // print("\n=== Creating Sample Buffer ===")
-        // printFormatDescription(formatDesc)
-
-        // Create block buffer from data
-        var dataBlockBuffer: CMBlockBuffer?
-        let statusDataBlock = CMBlockBufferCreateWithMemoryBlock(
-            allocator: nil,
-            memoryBlock: dataPtr,
-            blockLength: length,
-            blockAllocator: kCFAllocatorDefault,
-            customBlockSource: nil,
-            offsetToData: 0,
-            dataLength: length,
-            flags: 0,
-            blockBufferOut: &dataBlockBuffer
-        )
-        if statusDataBlock != kCMBlockBufferNoErr {
-            print("CMBlockBufferCreateWithMemoryBlock failed: \(statusDataBlock)")
-            return nil
-        }
-        // Now the CMBlockBuffer controls freeing `dataPtr`
-
         // Create an empty container block for rewriting AnnexB to length-delimited if needed
         var frameBlockBuffer: CMBlockBuffer?
-        let statusFrameBlock = CMBlockBufferCreateEmpty(
-            allocator: nil,
-            capacity: 0,
-            flags: 0,
-            blockBufferOut: &frameBlockBuffer
-        )
-        if statusFrameBlock != kCMBlockBufferNoErr {
-            print("CMBlockBufferCreateEmpty failed: \(statusFrameBlock)")
-            return nil
-        }
 
         // If H.264/HEVC, rewrite from AnnexB to length-delimited
         if (videoFormat & (VIDEO_FORMAT_MASK_H264 | VIDEO_FORMAT_MASK_H265)) != 0 {
-            rewriteAnnexBToLengthDelimited(
-                frameBlockBuffer: frameBlockBuffer!,
-                dataBlockBuffer: dataBlockBuffer!,
-                totalLength: length
-            )
+            // dataPtr is either tied to the resulting BB, or is copied and freed immediately.
+            // dataPtr is also freed even if the result is nil.
+            let nals = UnsafeMutableBufferPointer<UInt8>(start: UnsafeMutablePointer(mutating: dataPtr), count: length)
+            frameBlockBuffer = annexBBufferToCMSampleBuffer(buffer: nals, videoFormat: formatDesc)
         } else {
-            // AV1 or other codecs that don't need rewriting
-            let statusRef = CMBlockBufferAppendBufferReference(
-                frameBlockBuffer!,
-                targetBBuf: dataBlockBuffer!,
+            // AV1 or other codecs that don’t need rewriting
+            let statusDataBlock = CMBlockBufferCreateWithMemoryBlock(
+                allocator: nil,
+                memoryBlock: dataPtr,
+                blockLength: length,
+                blockAllocator: kCFAllocatorDefault,
+                customBlockSource: nil,
                 offsetToData: 0,
                 dataLength: length,
-                flags: 0
+                flags: 0,
+                blockBufferOut: &frameBlockBuffer
             )
-            if statusRef != kCMBlockBufferNoErr {
-                print("CMBlockBufferAppendBufferReference failed: \(statusRef)")
+            if statusDataBlock != kCMBlockBufferNoErr {
+                print("CMBlockBufferCreateWithMemoryBlock failed: \(statusDataBlock)")
                 return nil
             }
+            // Now the CMBlockBuffer controls freeing `dataPtr`
         }
 
         // Build the sample buffer
@@ -757,104 +768,142 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
         return sampleBuffer
     }
-
-    /// Rewrites the given data from Annex-B format to length-delimited for H.264/HEVC
-    private func rewriteAnnexBToLengthDelimited(
-        frameBlockBuffer: CMBlockBuffer,
-        dataBlockBuffer: CMBlockBuffer,
-        totalLength: Int
-    ) {
-        // NALU start prefix size is 3 or 4 bytes.
-        // The code finds start codes, then appends length prefixes instead.
-        let dataPtr = UnsafeMutablePointer<UInt8>.allocate(capacity: totalLength)
-        defer { dataPtr.deallocate() }
-
-        // We read out the original data
-        CMBlockBufferCopyDataBytes(dataBlockBuffer, atOffset: 0, dataLength: totalLength, destination: dataPtr)
-
-        var lastOffset = -1
-        for i in 0 ..< (totalLength - NALU_START_PREFIX_SIZE) {
-            // Search for 00 00 01
-            if dataPtr[i] == 0 && dataPtr[i + 1] == 0 && dataPtr[i + 2] == 1 {
-                // Found a new NALU start
-                if lastOffset != -1 {
-                    updateAnnexBBuffer(
-                        frameBlockBuffer: frameBlockBuffer,
-                        dataBlockBuffer: dataBlockBuffer,
-                        offset: lastOffset,
-                        length: i - lastOffset
-                    )
+    
+    // Based on https://webrtc.googlesource.com/src/+/refs/heads/main/common_video/h264/h264_common.cc
+    private func findNaluIndices(bufferBounded: UnsafeMutableBufferPointer<UInt8>) -> ([NaluIndex], Bool) {
+        var elgibleForModifyInPlace = true
+        guard bufferBounded.count >= /* kNaluShortStartSequenceSize */ 3 else {
+            return ([], false)
+        }
+        
+        var sequences = [NaluIndex]()
+        
+        let end = bufferBounded.count - /* kNaluShortStartSequenceSize */ 3
+        var i = 0
+        let buffer = Data(bytesNoCopy: bufferBounded.baseAddress!, count: bufferBounded.count, deallocator: .none) // ?? why is this faster
+        while i < end {
+            if buffer[i + 2] > 1 {
+                i += 3
+            } else if buffer[i + 2] == 1 {
+                if buffer[i + 1] == 0 && buffer[i] == 0 {
+                    var index = NaluIndex(startOffset: i, payloadStartOffset: i + 3, payloadSize: 0, threeByteHeader: true)
+                    if index.startOffset > 0 && buffer[index.startOffset - 1] == 0 {
+                        index.startOffset -= 1
+                        index.threeByteHeader = false
+                    }
+                    else {
+                        elgibleForModifyInPlace = false
+                    }
+                    
+                    if !sequences.isEmpty {
+                        sequences[sequences.count - 1].payloadSize = index.startOffset - sequences.last!.payloadStartOffset
+                    }
+                    
+                    sequences.append(index)
                 }
-                lastOffset = i
+                
+                i += 3
+            } else {
+                i += 1
             }
         }
-
-        if lastOffset != -1 {
-            // Append the last chunk
-            updateAnnexBBuffer(
-                frameBlockBuffer: frameBlockBuffer,
-                dataBlockBuffer: dataBlockBuffer,
-                offset: lastOffset,
-                length: totalLength - lastOffset
-            )
+        
+        if !sequences.isEmpty {
+            sequences[sequences.count - 1].payloadSize = bufferBounded.count - sequences.last!.payloadStartOffset
+        }
+        
+        return (sequences, elgibleForModifyInPlace)
+    }
+    
+    private struct NaluIndex {
+        var startOffset: Int
+        var payloadStartOffset: Int
+        var payloadSize: Int
+        var threeByteHeader: Bool
+    }
+    
+    // Based on https://webrtc.googlesource.com/src/+/refs/heads/main/sdk/objc/components/video_codec/nalu_rewriter.cc
+    private func annexBBufferToCMSampleBuffer(buffer: UnsafeMutableBufferPointer<UInt8>, videoFormat: CMFormatDescription) -> CMBlockBuffer? {
+        let (naluIndices, elgibleForModifyInPlace) = findNaluIndices(bufferBounded: buffer)
+        
+        if elgibleForModifyInPlace {
+            return annexBBufferToCMSampleBufferModifyInPlace(buffer: buffer, videoFormat: videoFormat, naluIndices: naluIndices)
+        }
+        else {
+            return annexBBufferToCMSampleBufferWithCopy(buffer: buffer, videoFormat: videoFormat, naluIndices: naluIndices)
         }
     }
+    
+    private func annexBBufferToCMSampleBufferWithCopy(buffer: UnsafeMutableBufferPointer<UInt8>, videoFormat: CMFormatDescription, naluIndices: [NaluIndex]) -> CMBlockBuffer? {
+        var err: OSStatus = 0
+        defer { buffer.deallocate() }
 
-    /// This function does the final rewriting step for each found NALU
-    private func updateAnnexBBuffer(
-        frameBlockBuffer: CMBlockBuffer,
-        dataBlockBuffer: CMBlockBuffer,
-        offset: Int,
-        length: Int
-    ) {
-        // Insert the 4-byte length prefix instead of start code
-        let oldOffset = CMBlockBufferGetDataLength(frameBlockBuffer)
-        let statusAppend = CMBlockBufferAppendMemoryBlock(
-            frameBlockBuffer,
-            memoryBlock: nil,
-            length: NAL_LENGTH_PREFIX_SIZE,
-            blockAllocator: kCFAllocatorDefault,
-            customBlockSource: nil,
-            offsetToData: 0,
-            dataLength: NAL_LENGTH_PREFIX_SIZE,
-            flags: 0
-        )
-        if statusAppend != noErr {
-            print("CMBlockBufferAppendMemoryBlock failed: \(statusAppend)")
-            return
+        // we're replacing the 3/4 nalu headers with a 4 byte length, so add an extra byte on top of the original length for each 3-byte nalu header
+        let blockBufferLength = buffer.count + naluIndices.filter(\.threeByteHeader).count
+        let blockBuffer = try! CMBlockBuffer(length: blockBufferLength, flags: .assureMemoryNow)
+        
+        var contiguousBuffer: CMBlockBuffer!
+        if !CMBlockBufferIsRangeContiguous(blockBuffer, atOffset: 0, length: 0) {
+            err = CMBlockBufferCreateContiguous(allocator: nil, sourceBuffer: blockBuffer, blockAllocator: nil, customBlockSource: nil, offsetToData: 0, dataLength: 0, flags: 0, blockBufferOut: &contiguousBuffer)
+            if err != 0 {
+                print("CMBlockBufferCreateContiguous error")
+                return nil
+            }
+        } else {
+            contiguousBuffer = blockBuffer
         }
-
-        // The new length (strip out the start code bytes)
-        let dataLength = length - NALU_START_PREFIX_SIZE
-        let lengthBytes: [UInt8] = [
-            UInt8((dataLength >> 24) & 0xFF),
-            UInt8((dataLength >> 16) & 0xFF),
-            UInt8((dataLength >> 8) & 0xFF),
-            UInt8(dataLength & 0xFF),
-        ]
-
-        let statusReplace = CMBlockBufferReplaceDataBytes(
-            with: lengthBytes,
-            blockBuffer: frameBlockBuffer,
-            offsetIntoDestination: oldOffset,
-            dataLength: NAL_LENGTH_PREFIX_SIZE
-        )
-        if statusReplace != noErr {
-            print("CMBlockBufferReplaceDataBytes failed: \(statusReplace)")
-            return
+        
+        var blockBufferSize = 0
+        var dataPtr: UnsafeMutablePointer<Int8>!
+        err = CMBlockBufferGetDataPointer(contiguousBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &blockBufferSize, dataPointerOut: &dataPtr)
+        if err != 0 {
+            print("CMBlockBufferGetDataPointer error")
+            return nil
         }
+        
+        let pointer = UnsafeMutablePointer<UInt8>(OpaquePointer(dataPtr))!
+        var offset = 0
+        
+        buffer.withUnsafeBytes { (unsafeBytes) in
+            let bytes = unsafeBytes.bindMemory(to: UInt8.self).baseAddress!
 
-        // Attach the data buffer by reference
-        let statusRef = CMBlockBufferAppendBufferReference(
-            frameBlockBuffer,
-            targetBBuf: dataBlockBuffer,
-            offsetToData: offset + NALU_START_PREFIX_SIZE,
-            dataLength: dataLength,
-            flags: 0
-        )
-        if statusRef != noErr {
-            print("CMBlockBufferAppendBufferReference failed: \(statusRef)")
+            for index in naluIndices {
+                pointer.advanced(by: offset    ).pointee = UInt8((index.payloadSize >> 24) & 0xFF)
+                pointer.advanced(by: offset + 1).pointee = UInt8((index.payloadSize >> 16) & 0xFF)
+                pointer.advanced(by: offset + 2).pointee = UInt8((index.payloadSize >>  8) & 0xFF)
+                pointer.advanced(by: offset + 3).pointee = UInt8((index.payloadSize      ) & 0xFF)
+                offset += 4
+                
+                pointer.advanced(by: offset).update(from: bytes.advanced(by: index.payloadStartOffset), count: blockBufferSize - offset)
+                offset += index.payloadSize
+            }
         }
+        
+        return contiguousBuffer
+    }
+    
+    private func annexBBufferToCMSampleBufferModifyInPlace(buffer: UnsafeMutableBufferPointer<UInt8>, videoFormat: CMFormatDescription, naluIndices: [NaluIndex]) -> CMBlockBuffer? {
+        var offset = 0
+
+        let umrbp = UnsafeMutableRawBufferPointer(start: buffer.baseAddress, count: buffer.count)
+        let bb = try! CMBlockBuffer.init(buffer: umrbp, deallocator: {(_, _) in buffer.deallocate() }, flags: .assureMemoryNow)
+
+        let pointer = UnsafeMutablePointer<UInt8>(OpaquePointer(buffer.baseAddress!))!
+        for index in naluIndices {
+            pointer.advanced(by: offset+0).pointee = UInt8((index.payloadSize >> 24) & 0xFF)
+            pointer.advanced(by: offset+1).pointee = UInt8((index.payloadSize >> 16) & 0xFF)
+            pointer.advanced(by: offset+2).pointee = UInt8((index.payloadSize >>  8) & 0xFF)
+            pointer.advanced(by: offset+3).pointee = UInt8((index.payloadSize      ) & 0xFF)
+            offset += 4
+            
+            offset += index.payloadSize
+        }
+        
+        if bb == nil {
+            buffer.deallocate()
+        }
+        
+        return bb
     }
 
     // MARK: - Rendering to the Drawable
@@ -926,7 +975,28 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             LiRequestIdrFrame()
         }
     }
-
+    
+    // Builds a simple copy pipeline with no input buffers, just
+    // draw 4 vertices to copy the input texture to the output
+    private func buildCopyPipeline(_ srcColorFormat: MTLPixelFormat) -> MTLRenderPipelineState? {
+        guard
+            let library = mtlDevice.makeDefaultLibrary()
+        else {
+            return nil
+        }
+        let vertexFunction = library.makeFunction(name: "copyVertexShader")
+        let fragmentFunction = library.makeFunction(name: "copyFragmentShader")
+        let pipelineDescriptor = MTLRenderPipelineDescriptor()
+        pipelineDescriptor.label = "CopyBlitPipeline"
+        pipelineDescriptor.vertexFunction = vertexFunction
+        pipelineDescriptor.fragmentFunction = fragmentFunction
+        pipelineDescriptor.colorAttachments[0].pixelFormat = srcColorFormat
+        pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
+        pipelineDescriptor.maxVertexAmplificationCount = 1
+        
+        return try? mtlDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+    }
+    
     // MARK: - METAL
 
     private func initializeRenderPipelineState() {

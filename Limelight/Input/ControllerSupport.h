@@ -9,6 +9,9 @@
 #import "Controller.h"
 #import <UIKit/UIKit.h>
 
+// It's in Swift's hands now
+@class TemporarySettings;
+
 @class StreamConfiguration;
 
 @class OnScreenControls;
@@ -48,7 +51,7 @@
 -(void) setMotionEventState:(uint16_t)controllerNumber motionType:(uint8_t)motionType reportRateHz:(uint16_t)reportRateHz;
 -(void) setControllerLed:(uint16_t)controllerNumber r:(uint8_t)r g:(uint8_t)g b:(uint8_t)b;
 
-+(int) getConnectedGamepadMask:(StreamConfiguration*)streamConfig;
++(int) getConnectedGamepadMask:(StreamConfiguration*)streamConfig settings:(TemporarySettings* _Nullable)settings;
 
 -(NSUInteger) getConnectedGamepadCount;
 

@@ -33,7 +33,25 @@ struct UpdatesView: View {
 
                 Section(header: Text("Latest Updates")) { // Section for latest updates
                     VStack(alignment: .leading) { // Original VStack for text alignment
-                        Text("Version 11.0.0 (February, 2025)")
+                        Text("Version 11.0.1 (February 5, 2025)")
+                            .font(.headline)
+                        Text("- New error messages, this should help prevent crashes on disconnects!")
+                            .font(.body)
+                        Text("- Fixed some audio issues when switching between apps.")
+                            .font(.body)
+                        Text("- Changed some default settings so that the volume in reality kit is easier to move and resize. Please note that using the dimming feature will remove the handle, so to change it again after turn off the dimming")
+                            .font(.body)
+                        Text("- Fixed issues with the game controller losing focus when switching between apps, also improved reliability when the vision pro is low on resources (so that inputs do not get dropped).")
+                            .font(.body)
+                        Text("- We are aware of some devices having color inconsitency, we are unsure why this is, some users report more vibrant colors and some report less vibrant colors. I do not know what to make of this yet.")
+                            .font(.body)
+                        Text("- The Wizard of ALVR, shinyquagsire23 made some contributions, they are not in this version but they should be in the next version 11.0.2, and are being reviewed, but should improve edge shimmering issues AND fixes for HDR. The next update should also be more performant, bringing better performance when using 200mbps")
+                            .font(.body)
+                    }
+                    .padding(.vertical) // Keep vertical padding
+                    .frame(maxWidth: .infinity, alignment: .leading) // Ensure VStack takes full width and aligns content to leading
+                    VStack(alignment: .leading) { // Original VStack for text alignment
+                        Text("Version 11.0.0 (February 1, 2025)")
                             .font(.headline)
                         Text("- Initial support for Reality Kit Volume (for curved screens) thanks to https://www.reddit.com/user/tht7/ for his hard work on the new feature for Moonlight XrOS!")
                             .font(.body)
@@ -59,19 +77,16 @@ struct UpdatesView: View {
 
                 Section(header: Text("Noted Bugs")) { // Section for older updates
                     VStack(alignment: .leading) {
+                        Text("- (new v11.0.1) If you open moonlight and resume a stream of an app that reports 'running, reality kit maybe open a second black volume right underneath the volume with the stream.")
+                            .font(.body)
+                            .foregroundColor(.white)
                         Text("- There is a large delay on first launch, this has to do with the dedplication and it having to process network discovery, I am working on this.")
-                            .font(.body)
-                            .foregroundColor(.white)
-                        Text("- The reality kit buttons like to dim everything even when you don't touch the dim button.")
-                            .font(.body)
-                            .foregroundColor(.white)
-                        Text("- The reality kit moving handle hides and doesn't come back until you click one of the side buttons.")
                             .font(.body)
                             .foregroundColor(.white)
                         Text("- Sometimes selecting a differing computer host doesn't load the app data, you may have to go back to the settings tab and back to refresh it.")
                             .font(.body)
                             .foregroundColor(.white)
-                        Text("- HDR is noteably broken on both UiKit and RealityKit since vision OS 2.0, we're not really sure why so we're rewriting how we process HDR.")
+                        Text("- HDR is noteably broken on both UiKit and RealityKit this should be resolved in the next build 11.0.2.")
                             .font(.body)
                             .foregroundColor(.white)
                         Text("- Deleting a PC causes a crash, after deleting a computer (for example if you need to repair after installing Apollo or Sunshine) just force quit and re-open and you will be fine")
@@ -80,16 +95,10 @@ struct UpdatesView: View {
                         Text("- Even though you've already paired a computer, you may see the same computer host again with .local in the name")
                             .font(.body)
                             .foregroundColor(.white)
-                        Text("- The aspect ratio button is not 100% reliable, this is because UiKit launches like three windows before connecting to your stream and forgets to add the window identifier")
-                            .font(.body)
-                            .foregroundColor(.white)
                         Text("- Depending on how long you've waited before clicking a new host that isn't paired, it might show a default message and you have to go to settings and back to fix it. Either that or you will get a bunch of duplicate listings")
                             .font(.body)
                             .foregroundColor(.white)
                         Text("- Moonlight XrOS does not know when a computer is ONLINE, only that it's been saved and paired or it hasn't been paired yet..")
-                            .font(.body)
-                            .foregroundColor(.white)
-                        Text("- If a connection fails in UIKit, you are not able to close the window, you have to forcequit.")
                             .font(.body)
                             .foregroundColor(.white)
                         Text("- The uikit aspect ratio button likely won't work with onscreen controls turn on (but does anyone even use those?).")

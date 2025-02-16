@@ -36,8 +36,8 @@ struct StreamControls<Additions: View>: View {
 
     var controls: some View {
         Group {
-            Button("Toggle Dimming", systemImage: viewModel.dimPassthrough ? "moon.fill" : "moon") {
-                viewModel.dimPassthrough.toggle()
+            Button("Toggle Dimming", systemImage: viewModel.streamSettings.dimPassthrough ? "moon.fill" : "moon") {
+                viewModel.streamSettings.dimPassthrough.toggle()
             }
             HStack {
                 Button("Volume", systemImage: viewModel.vol == 0 || viewModel.mute ? "speaker.slash.fill" : "speaker.fill" ) {
