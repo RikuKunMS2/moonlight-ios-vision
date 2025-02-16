@@ -84,7 +84,6 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     private var displayLink: CADisplayLink?
 
     private let texture: TextureResource
-    private var lowTexture: LowLevelTexture?
     private var outTexture: MTLTexture?
     private var region = MTLRegionMake2D(0, 0, 1000, 1000)
     var textureCache: CVMetalTextureCache?
@@ -101,7 +100,6 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
     private lazy var commandQueue: MTLCommandQueue? = mtlDevice.makeCommandQueue()
 
-    private var renderPipelineState: MTLComputePipelineState?
     private var imagePlaneVertexBuffer: MTLBuffer?
 
     private var hdrEnabled: Bool
@@ -170,8 +168,8 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             return
         }
 
-        print("\n=== Decompression Output ===")
-        printBufferAttributes(imageBuffer)
+        // print("\n=== Decompression Output ===")
+        // printBufferAttributes(imageBuffer)
 
         guard
             let drawable = try? drawableQueue?.nextDrawable()
@@ -296,25 +294,9 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                     fatalError("Could not create DrawableQueue: \(error)")
                 }
             }()
+
             region = MTLRegionMake2D(0, 0, videoWidth, videoHeight)
 
-            self.lowTexture = try! LowLevelTexture(descriptor: {
-                var desc = LowLevelTexture.Descriptor()
-
-                desc.textureType = .type2D
-                desc.arrayLength = 1
-
-                desc.width = Int(videoWidth)
-                desc.height = Int(videoHeight)
-                desc.depth = 1
-
-                desc.mipmapLevelCount = 1 // TODO(shinyquagsire23): Maybe 2?
-                desc.pixelFormat = metalFormat // .rgba16Float //.rgba16Float // .rg8Unorm //.r8Unorm// .bgra8Unorm
-                desc.textureUsage = [.renderTarget] // .renderTarget only, so that we get framebuffer compression
-                desc.swizzle = .init(red: .red, green: .green, blue: .blue, alpha: .alpha)
-
-                return desc
-            }())
             self.callbackToRender(self.drawableQueue!, (videoWidth, videoHeight))
         }
     }
@@ -389,8 +371,6 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 decompressionSessionOut: &session
             )
         }
-
-        // Rest of setup remains the same...
     }
 
     /// Start the rendering loop (via CADisplayLink)
@@ -1036,23 +1016,6 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     }
 
     // MARK: - METAL
-
-    private func initializeRenderPipelineState() {
-        guard
-            let library = mtlDevice.makeDefaultLibrary()
-        else {
-            return
-        }
-        // Load a Metal compute kernel written in Metal Shading Language,
-        // or abort if that fails.
-        guard let library = mtlDevice.makeDefaultLibrary(),
-              let function = library.makeFunction(name: "lowLevelTextureKernel"),
-              let computePipelineState = try? mtlDevice.makeComputePipelineState(function: function)
-        else {
-            return
-        }
-        renderPipelineState = computePipelineState
-    }
 
     private let planeVertexData: [Float] = [
         -1, -1, 0, 1,
