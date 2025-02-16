@@ -15,46 +15,6 @@ struct HDRMetadata {
     float maxFALL;                  // 4 bytes
 };
 
-// BT.2020 constants
-constant float Kr = 0.2627;
-constant float Kb = 0.0593;
-constant float Kg = 1.0 - Kr - Kb;
-
-// Video range scale factors for 10-bit
-constant float Y_RANGE_MIN = 64.0 / 1023.0;    // 64 in 10-bit space
-constant float Y_RANGE_MAX = 940.0 / 1023.0;   // 940 in 10-bit space
-constant float C_RANGE_MIN = 64.0 / 1023.0;    // 64 in 10-bit space
-constant float C_RANGE_MAX = 960.0 / 1023.0;   // 960 in 10-bit space
-
-float3 ycbcr2rgb_bt2020(float3 ycbcr) {
-    // For full range 10-bit, we don't need to scale Y
-    float y = ycbcr.x;
-    
-    // For full range, Cb and Cr are centered at 0.5
-    float cb = ycbcr.y - 0.5;
-    float cr = ycbcr.z - 0.5;
-    
-    // BT.2020 conversion matrix for full range
-    const float3x3 bt2020 = float3x3(
-        float3( 1.0,  0.0,      1.4746),
-        float3( 1.0, -0.1646,  -0.5714),
-        float3( 1.0,  1.8814,   0.0)
-    );
-    
-    // Apply conversion
-    float3 rgb = bt2020 * float3(y, cb, cr);
-    
-    // For HDR, we might want to apply the PQ EOTF after clamping
-    rgb = clamp(rgb, 0.0, 1.0);
-    
-    // Debug: Split screen to show stages
-    if (any(rgb != clamp(rgb, 0.0, 1.0))) {
-        return float3(1.0, 0.0, 0.0);  // Show clipped pixels in red
-    }
-    
-    return rgb;
-}
-
 // PQ EOTF might need adjustment
 float3 PQ_EOTF(float3 color) {
     const float m1 = 0.1593017578125;
@@ -67,7 +27,13 @@ float3 PQ_EOTF(float3 color) {
     float3 temp2 = max(temp - c1, 0.0);
     float3 temp3 = pow(temp2 / (c2 - c3 * temp), float3(1.0 / m1));
     
-    return temp3 * 10000.0; // Maybe adjust this scaling factor
+    return temp3;
+}
+
+// Hable filmic tone mapping
+float3 hable(float3 x) {
+    const float A = 0.22, B = 0.30, C = 0.10, D = 0.20, E = 0.01, F = 0.30;
+    return ((x*(A*x+C*B)+D*E)/(x*(A*x+B)+D*F)) - E/F;
 }
 
 kernel void hdrProcessing(
@@ -97,9 +63,9 @@ kernel void hdrProcessing(
     rgb = clamp(rgb, 0.0, 1.0);
     
     // Apply PQ EOTF and tone mapping that worked
-    float3 nits = PQ_EOTF(rgb);
-    float maxNits = 1000.0;  // metadata seems not to help with visionPro
-    float3 mapped = nits / (nits + maxNits);
+    float3 nits = PQ_EOTF(rgb) * metadata.maxLuminance;
+
+    float3 mapped = hable(nits / 1000.0);
     
     output.write(float4(mapped, 1.0), gid);
 }
