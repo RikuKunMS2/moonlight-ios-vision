@@ -81,42 +81,25 @@ kernel void hdrProcessing(
         return;
     }
     
+    // YCbCr to RGB conversion (this part works)
     float y = yTexture.read(gid).r;
     uint2 cbcrCoord = gid / 2;
     float2 cbcr = cbcrTexture.read(cbcrCoord).rg;
-    
-    // Convert YCbCr to RGB
     float cb = cbcr.x - 0.5;
     float cr = cbcr.y - 0.5;
     
-    // Use BT.2020 constants
     float3 rgb = float3(
-        y + (2.0 - 2.0 * Kr) * cr,
-        y - ((2.0 * Kr * (1.0 - Kr) * cr) + (2.0 * Kb * (1.0 - Kb) * cb)) / Kg,
-        y + (2.0 - 2.0 * Kb) * cb
+        y + 1.4746 * cr,
+        y - 0.1646 * cb - 0.5714 * cr,
+        y + 1.8814 * cb
     );
     
     rgb = clamp(rgb, 0.0, 1.0);
     
-    // Apply PQ EOTF first
+    // Apply PQ EOTF and tone mapping that worked
     float3 nits = PQ_EOTF(rgb);
+    float maxNits = 1000.0;  // Or use metadata.maxLuminance if you prefer
+    float3 mapped = nits / (nits + maxNits);
     
-    // Use fixed tone mapping value for testing
-    float3 mapped = nits / (nits + float3(1000.0));
-    
-    // Since we store in GBR order but want RGB output, we need to:
-    float3 transformed = float3(
-        dot(mapped, float3(metadata.colorPrimariesMatrix0[0],  // R from matrix2
-                        metadata.colorPrimariesMatrix0[1], 
-                        metadata.colorPrimariesMatrix0[2])),
-        dot(mapped, float3(metadata.colorPrimariesMatrix1[0],  // G from matrix0
-                        metadata.colorPrimariesMatrix1[1], 
-                        metadata.colorPrimariesMatrix1[2])),
-        dot(mapped, float3(metadata.colorPrimariesMatrix2[0],  // B from matrix1
-                        metadata.colorPrimariesMatrix2[1], 
-                        metadata.colorPrimariesMatrix2[2]))
-    );
-    
-    output.write(float4(transformed, 1.0), gid);
+    output.write(float4(mapped, 1.0), gid);
 }
-
