@@ -157,6 +157,15 @@ class HDRRenderer {
 
     func processFrame(sourceBuffer: CVImageBuffer, targetTexture: MTLTexture, commandQueue: MTLCommandQueue) {
         // print("\n=== HDR Processing Frame ===")
+        
+        print("\nTexture creation details:")
+        print("Source buffer format: \(String(format: "0x%08x", CVPixelBufferGetPixelFormatType(sourceBuffer)))")
+        print("Y plane width: \(CVPixelBufferGetWidthOfPlane(sourceBuffer, 0))")
+        print("Y plane height: \(CVPixelBufferGetHeightOfPlane(sourceBuffer, 0))")
+        print("Y plane bytes per row: \(CVPixelBufferGetBytesPerRowOfPlane(sourceBuffer, 0))")
+        print("CbCr plane width: \(CVPixelBufferGetWidthOfPlane(sourceBuffer, 1))")
+        print("CbCr plane height: \(CVPixelBufferGetHeightOfPlane(sourceBuffer, 1))")
+        print("CbCr plane bytes per row: \(CVPixelBufferGetBytesPerRowOfPlane(sourceBuffer, 1))")
 
         // Create Y texture (10-bit)
         var yTexture: CVMetalTexture?
