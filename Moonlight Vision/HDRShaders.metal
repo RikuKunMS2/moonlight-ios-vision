@@ -81,7 +81,7 @@ kernel void hdrProcessing(
         return;
     }
     
-    // YCbCr to RGB conversion (this part works)
+    // YCbCr to RGB conversion
     float y = yTexture.read(gid).r;
     uint2 cbcrCoord = gid / 2;
     float2 cbcr = cbcrTexture.read(cbcrCoord).rg;
@@ -98,7 +98,7 @@ kernel void hdrProcessing(
     
     // Apply PQ EOTF and tone mapping that worked
     float3 nits = PQ_EOTF(rgb);
-    float maxNits = 1000.0;  // Or use metadata.maxLuminance if you prefer
+    float maxNits = 1000.0;  // metadata seems not to help with visionPro
     float3 mapped = nits / (nits + maxNits);
     
     output.write(float4(mapped, 1.0), gid);

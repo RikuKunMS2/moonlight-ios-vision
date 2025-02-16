@@ -134,8 +134,8 @@ class HDRRenderer {
         offset = 56
 
         // Write remaining floats (16 bytes total)
-        writeFloat(ptr.advanced(by: offset), Float(metadata.maxDisplayLuminance) * 10000.0)
-        writeFloat(ptr.advanced(by: offset + 4), Float(metadata.minDisplayLuminance))
+        writeFloat(ptr.advanced(by: offset), Float(metadata.maxDisplayLuminance))
+        writeFloat(ptr.advanced(by: offset + 4), Float(metadata.minDisplayLuminance) * 10000.0)
         writeFloat(ptr.advanced(by: offset + 8), Float(metadata.maxContentLightLevel))
         writeFloat(ptr.advanced(by: offset + 12), Float(metadata.maxFrameAverageLightLevel))
     }
