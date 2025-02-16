@@ -79,8 +79,8 @@ class HDRRenderer {
     }
 
     func updateMetadata(_ cMetadata: SS_HDR_METADATA) {
-        // First validate layout
-        HDRMetadataSwift.validateLayout()
+        // // First validate layout
+        // HDRMetadataSwift.validateLayout()
 
         // Safely copy C struct to our Swift struct
         var metadata = withUnsafePointer(to: cMetadata) { ptr in
@@ -156,16 +156,16 @@ class HDRRenderer {
     }
 
     func processFrame(sourceBuffer: CVImageBuffer, targetTexture: MTLTexture, commandQueue: MTLCommandQueue) {
-        print("\n=== HDR Processing Frame ===")
+        // print("\n=== HDR Processing Frame ===")
 
         // Create Y texture (10-bit)
         var yTexture: CVMetalTexture?
         let width = CVPixelBufferGetWidth(sourceBuffer)
         let height = CVPixelBufferGetHeight(sourceBuffer)
 
-        print("\nTexture creation:")
-        print("Y plane format requested: \(MTLPixelFormat.r16Unorm.rawValue)")
-        print("CbCr plane format requested: \(MTLPixelFormat.rg16Unorm.rawValue)")
+        // print("\nTexture creation:")
+        // print("Y plane format requested: \(MTLPixelFormat.r16Unorm.rawValue)")
+        // print("CbCr plane format requested: \(MTLPixelFormat.rg16Unorm.rawValue)")
 
         CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault,
                                                   textureCache!,
@@ -197,13 +197,13 @@ class HDRRenderer {
             return
         }
 
-        print("\nTexture details:")
-        print("Y texture created: \(yMTLTexture != nil)")
-        print("CbCr texture created: \(cbcrMTLTexture != nil)")
-        print("Y texture actual format: \(yMTLTexture.pixelFormat.rawValue)")
-        print("CbCr texture actual format: \(cbcrMTLTexture.pixelFormat.rawValue)")
-        print("Y texture dimensions: \(yMTLTexture.width)x\(yMTLTexture.height)")
-        print("CbCr texture dimensions: \(cbcrMTLTexture.width)x\(cbcrMTLTexture.height)")
+        // print("\nTexture details:")
+        // print("Y texture created: \(yMTLTexture != nil)")
+        // print("CbCr texture created: \(cbcrMTLTexture != nil)")
+        // print("Y texture actual format: \(yMTLTexture.pixelFormat.rawValue)")
+        // print("CbCr texture actual format: \(cbcrMTLTexture.pixelFormat.rawValue)")
+        // print("Y texture dimensions: \(yMTLTexture.width)x\(yMTLTexture.height)")
+        // print("CbCr texture dimensions: \(cbcrMTLTexture.width)x\(cbcrMTLTexture.height)")
 
         guard let commandBuffer = commandQueue.makeCommandBuffer(),
               let computeEncoder = commandBuffer.makeComputeCommandEncoder()
@@ -230,7 +230,7 @@ class HDRRenderer {
             1
         )
 
-        print("Dispatching compute shader with dimensions: \(width)x\(height)")
+        // print("Dispatching compute shader with dimensions: \(width)x\(height)")
 
         computeEncoder.dispatchThreadgroups(threadgroupsPerGrid,
                                             threadsPerThreadgroup: threadsPerThreadgroup)

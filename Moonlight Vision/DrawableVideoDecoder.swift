@@ -171,14 +171,14 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         presentationTimeStamp _: CMTime,
         presentationDuration _: CMTime?
     ) {
-        print("\n=== Decompression Output ===")
+        // print("\n=== Decompression Output ===")
 
         guard let imageBuffer = imageBuffer else {
             print("No image buffer!")
             return
         }
 
-        printBufferAttributes(imageBuffer)
+        // printBufferAttributes(imageBuffer)
 
         guard
             let drawable = try? drawableQueue?.nextDrawable(),
@@ -667,9 +667,9 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         formatDesc: CMVideoFormatDescription,
         decodeUnit: PDECODE_UNIT!
     ) -> CMSampleBuffer? {
-        // Add debug print at the start
-        print("\n=== Creating Sample Buffer ===")
-        printFormatDescription(formatDesc)
+        // // Add debug print at the start
+        // print("\n=== Creating Sample Buffer ===")
+        // printFormatDescription(formatDesc)
 
         // Create block buffer from data
         var dataBlockBuffer: CMBlockBuffer?
