@@ -168,8 +168,8 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             return
         }
 
-        // print("\n=== Decompression Output ===")
-        // printBufferAttributes(imageBuffer)
+//         print("\n=== Decompression Output ===")
+//         printBufferAttributes(imageBuffer)
 
         guard
             let drawable = try? drawableQueue?.nextDrawable()
@@ -343,34 +343,6 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         }
 
         setupLowLevelTexture()
-
-        // Configure decoder with HDR settings if enabled
-        if let formatDesc = formatDesc {
-            let decoderConfiguration: [String: Any] = {
-                var config: [String: Any] = [
-                    kVTVideoDecoderSpecification_EnableHardwareAcceleratedVideoDecoder as String: true,
-                ]
-
-                if hdrEnabled {
-                    config[kVTDecompressionPropertyKey_PixelTransferProperties as String] = [
-                        kVTPixelTransferPropertyKey_DestinationColorPrimaries: kCMFormatDescriptionColorPrimaries_ITU_R_2020,
-                        kVTPixelTransferPropertyKey_DestinationTransferFunction: kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ,
-                        kVTPixelTransferPropertyKey_DestinationYCbCrMatrix: kCMFormatDescriptionYCbCrMatrix_ITU_R_2020,
-                    ]
-                }
-
-                return config
-            }()
-
-            VTDecompressionSessionCreate(
-                allocator: kCFAllocatorDefault,
-                formatDescription: formatDesc,
-                decoderSpecification: decoderConfiguration as CFDictionary,
-                imageBufferAttributes: textureAttributes as CFDictionary,
-                outputCallback: &decoderCallback,
-                decompressionSessionOut: &session
-            )
-        }
     }
 
     /// Start the rendering loop (via CADisplayLink)
@@ -461,8 +433,23 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 dataPtr: dataPtr, length: length
             ) {
                 self.formatDesc = formatDesc
-                // rgba16Float
-                let videoDecoderSpecification: [NSString: AnyObject] = [kVTVideoDecoderSpecification_EnableHardwareAcceleratedVideoDecoder: kCFBooleanTrue]
+                
+                let decoderConfiguration: [String: Any] = {
+                    var config: [String: Any] = [
+                        kVTVideoDecoderSpecification_EnableHardwareAcceleratedVideoDecoder as String: true,
+                    ]
+
+                    if hdrEnabled {
+                        config[kVTDecompressionPropertyKey_PixelTransferProperties as String] = [
+                            kVTPixelTransferPropertyKey_DestinationColorPrimaries: kCMFormatDescriptionColorPrimaries_ITU_R_2020,
+                            kVTPixelTransferPropertyKey_DestinationTransferFunction: kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ,
+                            kVTPixelTransferPropertyKey_DestinationYCbCrMatrix: kCMFormatDescriptionYCbCrMatrix_ITU_R_2020,
+                        ]
+                    }
+
+                    return config
+                }()
+                
                 // NOTE(shinyquagsire23): Setting kCVPixelBufferPixelFormatTypeKey *at all* will trigger
                 // a VideoToolbox bug that results in the output CVPixelBuffer's underlying Metal textures
                 // being decompressed, resulting in GPU bandwidth penalties
@@ -470,7 +457,9 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 if !forceFastSecretTextureFormats {
                     attributes[kCVPixelBufferPixelFormatTypeKey] = decodingFormat
                 }
-                VTDecompressionSessionCreate(allocator: kCFAllocatorDefault, formatDescription: formatDesc, decoderSpecification: videoDecoderSpecification as CFDictionary, imageBufferAttributes: attributes as CFDictionary, outputCallback: &decoderCallback, decompressionSessionOut: &session)
+                
+                VTDecompressionSessionCreate(allocator: kCFAllocatorDefault, formatDescription: formatDesc, decoderSpecification: decoderConfiguration as CFDictionary, imageBufferAttributes: attributes as CFDictionary, outputCallback: &decoderCallback, decompressionSessionOut: &session)
+                
                 AudioHelpers.fixAudioForSurroundForCurrentWindow() // TODO(shinyquagsire23): Make this configurable?
             } else {
                 // Couldn't create format description yet
@@ -1004,9 +993,9 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                                                options: .storageModeShared)
         
         // Create HDR parameters buffer
-        var hdrParams = HDRParams(boost: 2.0,      // Default value
-                                contrast: 1.5,    // Default value
-                                saturation: 1.5)  // Default value
+        var hdrParams = HDRParams(boost: 1.0,      // Default value
+                                  contrast: 1.25,    // Default value
+                                  saturation: 1.25)  // Default value
         
         let paramsBuffer = mtlDevice.makeBuffer(bytes: &hdrParams,
                                               length: MemoryLayout<HDRParams>.size,
