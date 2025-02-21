@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		3E86FC1D2D4FFDF20016BB8E /* UpdatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */; };
 		3E9440F62D4EB9ED0047E0C2 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = 3E9440F52D4EB9ED0047E0C2 /* OpenSSL */; };
+		6581B5F12D5434100022400F /* VideoTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6581B5F02D5434100022400F /* VideoTypes.swift */; };
+		659789EC2D55A93A00B88B25 /* SBSMaterial.usda in Resources */ = {isa = PBXBuildFile; fileRef = 659789EB2D55A93A00B88B25 /* SBSMaterial.usda */; };
 		693B3A9B218638CD00982F7B /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 693B3A9A218638CD00982F7B /* Settings.bundle */; };
 		98181BE92791277400E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BE82791275D00E43572 /* libSDL2.a */; };
 		98181BEB2791278F00E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BEA2791278300E43572 /* libSDL2.a */; };
@@ -279,6 +281,8 @@
 /* Begin PBXFileReference section */
 		3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatesView.swift; sourceTree = "<group>"; };
 		566E9D2B2770B23A00EF7BFE /* Moonlight v1.7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.7.xcdatamodel"; sourceTree = "<group>"; };
+		6581B5F02D5434100022400F /* VideoTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTypes.swift; sourceTree = "<group>"; };
+		659789EB2D55A93A00B88B25 /* SBSMaterial.usda */ = {isa = PBXFileReference; lastKnownFileType = text; path = SBSMaterial.usda; sourceTree = "<group>"; };
 		693B3A9A218638CD00982F7B /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
 		9803CCAB254F9EAF00EE185E /* ConnectionCallbacks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ConnectionCallbacks.h; sourceTree = "<group>"; };
 		98132E8C20BC9A62007A053F /* Moonlight v1.1.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.1.xcdatamodel"; sourceTree = "<group>"; };
@@ -645,6 +649,8 @@
 		F7A119592B5DE1AB001E8686 /* Moonlight Vision */ = {
 			isa = PBXGroup;
 			children = (
+				659789EB2D55A93A00B88B25 /* SBSMaterial.usda */,
+				6581B5F02D5434100022400F /* VideoTypes.swift */,
 				B10D61AE2D54D0F600550218 /* AppIntents */,
 				E77582CC2D53F3E500948545 /* Shaders.metal */,
 				3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */,
@@ -1233,6 +1239,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F7A1194E2B5DDF73001E8686 /* InfoPlist.strings in Resources */,
+				659789EC2D55A93A00B88B25 /* SBSMaterial.usda in Resources */,
 				F7A119502B5DDF73001E8686 /* Images.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1267,6 +1274,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6581B5F12D5434100022400F /* VideoTypes.swift in Sources */,
 				B19362F02D4ECDD6004F88FA /* NSData+Conversion.m in Sources */,
 				F7A1190C2B5DDF73001E8686 /* Limelight.xcdatamodeld in Sources */,
 				F7A1190D2B5DDF73001E8686 /* AbsoluteTouchHandler.m in Sources */,
