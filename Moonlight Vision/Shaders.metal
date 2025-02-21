@@ -15,6 +15,12 @@ struct CopyVertexOut {
     float2 uv;
 };
 
+struct HDRParams {
+    float boost;      // Range: 1.0 - 3.0, Default: 2.0
+    float contrast;   // Range: 1.0 - 2.0, Default: 1.5
+    float saturation; // Range: 1.0 - 2.0, Default: 1.5
+};
+
 vertex CopyVertexOut copyVertexShader(ushort vertexID [[vertex_id]]) {
     CopyVertexOut out;
     float2 uv = float2(float((vertexID << ushort(1)) & 2u), float(vertexID & ushort(2)) * 0.5);
@@ -23,12 +29,25 @@ vertex CopyVertexOut copyVertexShader(ushort vertexID [[vertex_id]]) {
     return out;
 }
 
-fragment half4 copyFragmentShader(CopyVertexOut in [[stage_in]], texture2d<half> in_tex) {
+fragment half4 copyFragmentShader(CopyVertexOut in [[stage_in]],
+                                texture2d<half> in_tex,
+                                constant bool& hdrEnabled [[buffer(0)]],
+                                constant HDRParams& hdrParams [[buffer(1)]]) {
     constexpr sampler colorSampler(coord::normalized,
                     address::clamp_to_edge,
                     filter::linear);
 
     half4 color = in_tex.sample(colorSampler, in.uv);
-
-    return color;
+    float3 hdrColor = float3(color.rgb);
+    
+    if (hdrEnabled) {
+        // Simple contrast adjustment
+        hdrColor = pow(hdrColor, float3(hdrParams.contrast));
+        
+        // Saturation adjustment
+        float3 desaturated = float3(dot(hdrColor, float3(0.333)));
+        hdrColor = mix(desaturated, hdrColor, hdrParams.saturation);
+    }
+    
+    return half4(half3(hdrColor), color.a);
 }

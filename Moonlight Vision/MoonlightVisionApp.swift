@@ -29,7 +29,7 @@ struct MoonlightVisionApp: SwiftUI.App {
         .handlesExternalEvents(matching: ["dummy"])
         
         WindowGroup(id: "realitykitStreamingWindow", for: StreamConfiguration.self) { streamConfig in
-                RealityKitStreamView(streamConfig: streamConfig)
+                RealityKitStreamView(streamConfig: streamConfig, needsHdr: appDelegate.mainViewModel.streamSettings.enableHdr)
                 .environmentObject(appDelegate.mainViewModel)
                 .onDisappear {
                     streamConfig.wrappedValue = nil
