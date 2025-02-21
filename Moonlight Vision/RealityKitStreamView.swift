@@ -75,6 +75,10 @@ struct _RealityKitStreamView: View {
     
     let closeAction: () -> Void
 
+    @State var videoMode: VideoMode = .standard2D
+
+    @State private var surfaceMaterial: ShaderGraphMaterial?
+
     init(streamConfig: Binding<StreamConfiguration>, needsHdr: Bool, closeAction: @escaping () -> Void) {
         self.closeAction = closeAction
         self._streamConfig = streamConfig
@@ -97,7 +101,27 @@ struct _RealityKitStreamView: View {
                 RealityView { content in
                     let mesh = try! _RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (50,50), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
                     let colBox = ShapeResource.generateBox(width: 2, height: 2 * aspectRatio, depth: 0.001).offsetBy(translation: .init(x: 0, y: -0.43, z: 1))
-                    screen = ModelEntity(mesh: mesh, materials: [UnlitMaterial(texture: self.texture)])
+                    screen = ModelEntity(mesh: mesh, materials: [])
+
+                    // Initialize material if needed
+                    if surfaceMaterial == nil {
+                        surfaceMaterial = try! await ShaderGraphMaterial(
+                            named: "/Root/SBSMaterial",
+                            from: "SBSMaterial.usda"
+                        )
+
+                        try! surfaceMaterial!.setParameter(
+                            name: "texture",
+                            value: .textureResource(self.texture)
+                        )
+                    }
+
+                    if videoMode == .sideBySide3D {
+                        screen.model?.materials = [surfaceMaterial!]
+                    } else {
+                        screen.model?.materials = [UnlitMaterial(texture: self.texture)]
+                    }
+
                     screen.collision = CollisionComponent(shapes: [
                         colBox
                     ], mode: .colliding)
@@ -148,6 +172,16 @@ struct _RealityKitStreamView: View {
                             ))
                             //                            effect.scaleEffect(x: isActive ? 1: 0.5, y: 1, anchor: .leading)
                         }
+                }
+                HStack {
+                    Button("3D Mode", systemImage: videoMode == .standard2D ? "rectangle" : "rectangle.split.2x1") {
+                        videoMode = videoMode == .standard2D ? .sideBySide3D : .standard2D
+                        if videoMode == .sideBySide3D {
+                            screen.model?.materials = [surfaceMaterial!]
+                        } else {
+                            screen.model?.materials = [UnlitMaterial(texture: texture)]
+                        }
+                    }
                 }
                 HStack {
                     Button("arrow.up.and.line.horizontal.and.arrow.down", systemImage: "arrow.up.and.line.horizontal.and.arrow.down") {
