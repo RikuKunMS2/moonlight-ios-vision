@@ -11,12 +11,14 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 [![Moonlight for iOS and tvOS](https://moonlight-stream.org/images/App_Store_Badge_135x40.svg)](https://apps.apple.com/us/app/moonlight-game-streaming/id1000551566) 
 
 The Vision OS Version is not available in the App Store, to download the latest stable-ish build please install it via Testflight
+
+
 [![Moonlight XrOS](https://i.imgur.com/DHhfmmK.png)](https://testflight.apple.com/join/poWcaME5) 
 
 ## Features
 
 * Curved Screen Support (Reality Kit Mode)
-* * To actiavte change the Renderer in settings to Reality Kit (note mouse and keyboard not supported in this mode at the moment)
+    ** To actiavte change the Renderer in settings to Reality Kit (note mouse and keyboard not supported in this mode at the moment)
 
 ![Curved Screen Support](https://preview.redd.it/moonlight-xros-1-year-anniversary-update-curved-screen-v0-xyro5aozeyge1.jpg?width=2254&format=pjpg&auto=webp&s=df631301423de93f161111df41543154e8fd5b04)
 
@@ -46,6 +48,45 @@ The Vision OS Version is not available in the App Store, to download the latest 
 * Controller Vibration isn't working, we are looking into this
 * According to user reports, PS4 touch pad does not work
 
+## FAQ
+* Uikit mode in moonlight supports keyboard and mouse, specifically it works very well with the Magic Trackpad. Mice with the Vision Pro can be a little hit or miss but as long as you Bluetooth it and make sure you've enabled the mouse in Vision Pro settings it should work, there are some settings in there you should double check:
+    * GENERAL -> KEYBOARD and TRACKPAD -> Enable Two Finger Secondary Click or for Magic Mouse enable Secondary Click (Set to Right)
+* Why does my cursor snap to where I'm looking - This is an OS level thing, but greatly improved since Vision OS 2.0
+* How do I activate Curved Screens?
+    * In settings, change the renderer to Reality Kit Mode then connect to your host
+* How do I Pair?
+    * You can add a computer with the + button, or you can try to scan for hosts using the scan for hosts text in the computers list. 
+    *If you have trouble with load times, try deleting hosts that are not online
+* How do I use SBS?
+    * In reality kit mode, use the rectangle button toggle above the height adjust
+* How do I use Ultrawide Mode?
+    * In settings set the resolution to 5120x1440, then set up [Apollo](https://github.com/ClassicOldSong/Apollo) or a virtual display driver / dumy plug and set the same settings on windows. In UIKit you can then use the aspect ratio button to fix the black bars, it should just be automatic on Reality Kit Mode. If you already connected with the wrong settings, you have to STOP the stream by long pressing the 'Virtual Display App' and start the stream again to apply the new settings.
+* Why is my connection so choppy?
+    * AWDL (apple wireless direct) is a special feature on apple devices that enable features like AirDrop and Handoff. Unforutenatly this can cause stutters at high bit rates, you can try turning off AirDrop and Continuity features, but it is best to use a 5ghz router with it set to use wifi Ch 149 
+* How do I use a wired connection?
+    * You can use a developer strap hooked up to a mac with ethernet and then some additional ifconfig commands
+    * Alternatively you can do something with a [Rapsberry Pi](https://x.com/ShinyQuagsire/status/1766286564408394186)
+    * I am not providing instrucitons for either but more information can be found [here](https://github.com/alvr-org/alvr-visionos/issues/106#issuecomment-2270249685) 
+* Recomended Settings?
+    * Resolution: 4k
+    * Aspect Ratio: 16:9
+    * Framerate: 60
+    * Bitrate: 50mbps
+    * Renderer: Reality Kit (unless you need mouse + keyboard use UiKit)
+    * Ui Kit Settings: Touch Mode Touchscreen
+    * Ui Kit Settings: On-Screen Controls Off
+
+## Feature Requests / Planned Features:
+* Check Ko-Fi for updates
+
+# Donations
+* Some people expressed intrest in donations so:
+* I set up a ko-fi for donations!
+https://ko-fi.com/lumanaire
+
+Thanks again for your support :)
+
+
 # Building From Source
 
 ## Requirements
@@ -71,9 +112,32 @@ The Vision OS Version is not available in the App Store, to download the latest 
     * If you didn't pay for a developer account you will have to re-install it using x-code every 7 days.
 
 ## FAQ
-* How do I right click?: You press and hold on the trackpad for more than half a second and it will right click, both magic trackpad and eye clicking will do the same thing
-* Why does my cursor snap to where I'm looking: I have no idea, this is an OS level thing that I don't think we have control over, oh boy I sure wish I could adjust the snapping delay though ha!
-
+* Uikit mode in moonlight supports keyboard and mouse, specifically it works very well with the Magic Trackpad. Mice with the Vision Pro can be a little hit or miss but as long as you Bluetooth it and make sure you've enabled the mouse in Vision Pro settings it should work, there are some settings in there you should double check:
+    * GENERAL -> KEYBOARD and TRACKPAD -> Enable Two Finger Secondary Click or for Magic Mouse enable Secondary Click (Set to Right)
+* Why does my cursor snap to where I'm looking - This is an OS level thing, but greatly improved since Vision OS 2.0
+* How do I activate Curved Screens?
+    * In settings, change the renderer to Reality Kit Mode then connect to your host
+* How do I Pair?
+    * You can add a computer with the + button, or you can try to scan for hosts using the scan for hosts text in the computers list. 
+    *If you have trouble with load times, try deleting hosts that are not online
+* How do I use SBS?
+    * In reality kit mode, use the rectangle button toggle above the height adjust
+* How do I use Ultrawide Mode?
+    * In settings set the resolution to 5120x1440, then set up [Apollo](https://github.com/ClassicOldSong/Apollo) or a virtual display driver / dumy plug and set the same settings on windows. In UIKit you can then use the aspect ratio button to fix the black bars, it should just be automatic on Reality Kit Mode. If you already connected with the wrong settings, you have to STOP the stream by long pressing the 'Virtual Display App' and start the stream again to apply the new settings.
+* Why is my connection so choppy?
+    * AWDL (apple wireless direct) is a special feature on apple devices that enable features like AirDrop and Handoff. Unforutenatly this can cause stutters at high bit rates, you can try turning off AirDrop and Continuity features, but it is best to use a 5ghz router with it set to use wifi Ch 149 
+* How do I use a wired connection?
+    * You can use a developer strap hooked up to a mac with ethernet and then some additional ifconfig commands
+    * Alternatively you can do something with a [Rapsberry Pi](https://x.com/ShinyQuagsire/status/1766286564408394186)
+    * I am not providing instrucitons for either but more information can be found [here](https://github.com/alvr-org/alvr-visionos/issues/106#issuecomment-2270249685) 
+* Recomended Settings?
+    * Resolution: 4k
+    * Aspect Ratio: 16:9
+    * Framerate: 60
+    * Bitrate: 50mbps
+    * Renderer: Reality Kit (unless you need mouse + keyboard use UiKit)
+    * Ui Kit Settings: Touch Mode Touchscreen
+    * Ui Kit Settings: On-Screen Controls Off
 
 ## Feature Requests / Planned Features:
 * Check Ko-Fi for updates
