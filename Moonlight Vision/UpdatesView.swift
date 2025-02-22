@@ -35,7 +35,7 @@ struct UpdatesView: View {
                     VStack(alignment: .leading) { // Original VStack for text alignment
                         Text("Version 11.0.3 (February 20, 2025)")
                             .font(.headline)
-                        Text("- I wanted to give special thanks to tht7 (https://www.reddit.com/user/tht7), ALVR for Vision Pro's shinyquagsire23 and Giovanni Petrantoni from Formabble https://formabble.com/ (sinkingsugar) and dereklucas (https://derekplucas.com) for their contributions to Moonlight XrOS")
+                        Text("- I wanted to give special thanks to tht7 (https://www.reddit.com/user/tht7), ALVR for Vision Pro's shinyquagsire23 and Giovanni Petrantoni (sinkingsugar) from Formabble https://formabble.com, dereklucas (https://derekplucas.com) for their contributions to Moonlight XrOS")
                             .font(.body)
                         Text("- Reality Kit HDR Support is now in beta, it mostly works but YMMV on color accuracy. More options to control HDR will likely be added later. Special thanks to ALVR for Vision Pro's shinyquagsire23 and Giovanni Petrantoni from Formabble (sinkingsugar) for bringing fixes to HDR to Moonlight XrOS")
                             .font(.body)
@@ -106,7 +106,7 @@ struct UpdatesView: View {
                         Text("- Sometimes selecting a differing computer host doesn't load the app data, you may have to go back to the settings tab and back to refresh it.")
                             .font(.body)
                             .foregroundColor(.white)
-                        Text("- HDR is noteably broken on both UiKit, Colors might not be perfect on Reality Kit, we are looking into adding some additional options to help adjust this.")
+                        Text("- HDR is noteably broken on UiKit, Colors might not be perfect on Reality Kit, we are looking into adding some additional options to help adjust this.")
                             .font(.body)
                             .foregroundColor(.white)
                         Text("- Deleting a PC causes a crash when PC scanning is on (or an app scan is trying to refresh), after deleting a computer (for example if you need to repair after installing Apollo or Sunshine) just force quit and re-open and you will be fine")
