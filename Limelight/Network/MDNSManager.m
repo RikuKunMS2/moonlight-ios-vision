@@ -24,16 +24,16 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
 
 - (id) initWithCallback:(id<MDNSCallback>)callback {
     self = [super init];
-
+    
     self.callback = callback;
-
+    
     scanActive = FALSE;
-
+    
     mDNSBrowser = [[NSNetServiceBrowser alloc] init];
     [mDNSBrowser setDelegate:self];
-
+    
     services = [[NSMutableArray alloc] init];
-
+    
     return self;
 }
 
@@ -41,7 +41,7 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
     if (scanActive) {
         return;
     }
-
+    
     Log(LOG_I, @"Starting mDNS discovery");
     scanActive = TRUE;
 
@@ -57,7 +57,7 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
     if (!scanActive) {
         return;
     }
-
+    
     Log(LOG_I, @"Stopping mDNS discovery");
     scanActive = FALSE;
     [mDNSBrowser stop];
@@ -104,10 +104,10 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
     if (sin6->sin6_family != AF_INET6) {
         return NO;
     }
-
+    
     uint8_t* addrBytes = sin6->sin6_addr.s6_addr;
     uint8_t prefix[2];
-
+    
     // fe80::/10
     prefix[0] = 0xfe;
     prefix[1] = 0x80;
@@ -115,7 +115,7 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
         // Link-local
         return YES;
     }
-
+    
     // fec0::/10
     prefix[0] = 0xfe;
     prefix[1] = 0xc0;
@@ -123,7 +123,7 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
         // Site local
         return YES;
     }
-
+    
     // fc00::/7
     prefix[0] = 0xfc;
     prefix[1] = 0x00;
@@ -131,7 +131,7 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
         // ULA
         return YES;
     }
-
+    
     return NO;
 }
 
@@ -141,15 +141,15 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
         if (sin6->sin6_family != AF_INET6) {
             continue;
         }
-
+        
         if ([MDNSManager isLocalIpv6Address:addrData]) {
             // Skip non-global addresses
             continue;
         }
-
+        
         uint8_t* addrBytes = sin6->sin6_addr.s6_addr;
         uint8_t prefix[2];
-
+        
         // 2002::/16
         prefix[0] = 0x20;
         prefix[1] = 0x02;
@@ -157,7 +157,7 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
             Log(LOG_I, @"Ignoring 6to4 address: %@", [MDNSManager sockAddrToString:addrData]);
             continue;
         }
-
+        
         // 2001::/32
         prefix[0] = 0x20;
         prefix[1] = 0x01;
@@ -165,31 +165,30 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
             Log(LOG_I, @"Ignoring Teredo address: %@", [MDNSManager sockAddrToString:addrData]);
             continue;
         }
-
+        
         return [MDNSManager sockAddrToString:addrData];
     }
-
+    
     return nil;
 }
 
 - (void)netServiceDidResolveAddress:(NSNetService *)service {
-    Log(LOG_I, @"MDNSManager: Starting address resolution for service: %@", service.name); // Added Log
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSArray<NSData*>* addresses = [service addresses];
-
+        
         for (NSData* addrData in addresses) {
             Log(LOG_I, @"Resolved address: %@ -> %@", [service hostName], [MDNSManager sockAddrToString: addrData]);
         }
-
+        
         TemporaryHost* host = [[TemporaryHost alloc] init];
-
+        
         // First, look for an IPv4 record for the local address
         for (NSData* addrData in addresses) {
             struct sockaddr_in* sin = (struct sockaddr_in*)[addrData bytes];
             if (sin->sin_family != AF_INET) {
                 continue;
             }
-
+            
             // Don't send a STUN request if we're connected to a VPN. We'll likely get the VPN
             // gateway's external address rather than the external address of the LAN.
             if (![Utils isActiveNetworkVPN]) {
@@ -208,12 +207,12 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
                     Log(LOG_E, @"STUN failed to get WAN address: %d", err);
                 }
             }
-
+            
             host.localAddress = [MDNSManager sockAddrToString:addrData];
             Log(LOG_I, @"Local address chosen: %@ -> %@", [service hostName], host.localAddress);
             break;
         }
-
+        
         if (host.localAddress == nil) {
             // If we didn't find an IPv4 record, look for a local IPv6 record
             for (NSData* addrData in addresses) {
@@ -224,23 +223,19 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
                 }
             }
         }
-
+        
         host.ipv6Address = [MDNSManager getBestIpv6Address:addresses];
         Log(LOG_I, @"IPv6 address chosen: %@ -> %@", [service hostName], host.ipv6Address);
-
+        
         host.activeAddress = host.localAddress;
         host.name = service.hostName;
-
-        Log(LOG_I, @"MDNSManager: Calling updateHost callback with host: Name: %@ ", host.name); // Added Log - Before Callback
         [self.callback updateHost:host];
-        Log(LOG_I, @"MDNSManager: Finished updateHost callback for service: %@", service.name); // Added Log - After Callback
     });
-     Log(LOG_I, @"MDNSManager: Exiting netServiceDidResolveAddress: for service: %@", service.name); // Added Log - Exit Point
 }
 
 - (void)netService:(NSNetService *)sender didNotResolve:(NSDictionary *)errorDict {
     Log(LOG_W, @"Did not resolve address for: %@\n%@", sender, [errorDict description]);
-
+    
     // Schedule a retry in 2 seconds
     [NSTimer scheduledTimerWithTimeInterval:2.0
                                      target:self
@@ -250,15 +245,13 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
 }
 
 - (void)netServiceBrowser:(NSNetServiceBrowser *)aNetServiceBrowser didFindService:(NSNetService *)aNetService moreComing:(BOOL)moreComing {
-   // Log(LOG_I, @"MDNSManager: Found service: %@", aNetService); // Added Log
-
+    Log(LOG_D, @"Found service: %@", aNetService);
+    
     if (![services containsObject:aNetService]) {
         Log(LOG_I, @"Found new host: %@", aNetService.name);
         [aNetService setDelegate:self];
-        Log(LOG_I, @"MDNSManager: Resolving address for service: %@", aNetService.name); // Added Log - Before Resolve
         [aNetService resolveWithTimeout:5];
         [services addObject:aNetService];
-         Log(LOG_I, @"MDNSManager: Address resolution started for service: %@", aNetService.name); // Added Log - After Resolve
     }
 }
 
@@ -269,7 +262,7 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
 
 - (void)netServiceBrowser:(NSNetServiceBrowser *)aNetServiceBrowser didNotSearch:(NSDictionary *)errorDict {
     Log(LOG_W, @"Did not perform search: \n%@", [errorDict description]);
-
+    
     // We'll schedule a retry in startSearchTimerCallback
 }
 
@@ -279,11 +272,11 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
         timerPending = FALSE;
         return;
     }
-
+    
     Log(LOG_D, @"Restarting mDNS search");
     [mDNSBrowser stop];
     [mDNSBrowser searchForServicesOfType:NV_SERVICE_TYPE inDomain:@""];
-
+    
     // Search again in 5 seconds. We need to do this because
     // we want more aggressive querying than Bonjour will normally
     // do for when we're at the hosts screen. This also covers scenarios
@@ -300,10 +293,10 @@ static NSString* NV_SERVICE_TYPE = @"_nvstream._tcp";
     if (!scanActive) {
         return;
     }
-
+    
     NSNetService* service = timer.userInfo;
     Log(LOG_I, @"Retrying mDNS resolution for %@", service);
-
+    
     if (service.hostName == nil) {
         [service setDelegate:self];
         [service resolveWithTimeout:5];

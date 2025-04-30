@@ -145,7 +145,8 @@ static const float POLL_RATE = 2.0f; // Poll every 2 seconds
 - (BOOL) checkResponse:(ServerInfoResponse*)response {
     
     if ([response isStatusOk]) {
-        // If the response is from a different host then do not update this host
+        return YES;
+        // Force yes because apple's .local finding messes up network discovery on vision os
         if ((_host.uuid == nil || [[response getStringTag:TAG_UNIQUE_ID] isEqualToString:_host.uuid])) {
             return YES;
         } else {

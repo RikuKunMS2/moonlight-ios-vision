@@ -199,7 +199,7 @@ struct _RealityKitStreamView: View {
                             //                            effect.scaleEffect(x: isActive ? 1: 0.5, y: 1, anchor: .leading)
                         }
                 }
-                Button("Main Button", systemImage: "house") {
+                Button("Main Button", systemImage: "gamecontroller.fill") {
 //                    self.controllerSupport?.updateTriggers(<#T##controller: Controller!##Controller!#>, left: <#T##UInt8#>, right: <#T##UInt8#>)
                 }.simultaneousGesture(
                     DragGesture(minimumDistance: 0)

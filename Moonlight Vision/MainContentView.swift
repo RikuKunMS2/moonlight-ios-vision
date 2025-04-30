@@ -19,6 +19,8 @@ struct MainContentView: View {
     @State private var hostToDelete: TemporaryHost?
     @State private var newHostIp = ""
     @State private var isRefreshingDiscovery = false // State to track refresh status
+    @State private var showDeletionTriggeredMessage = false
+
 
 
     var body: some View {
@@ -35,24 +37,16 @@ struct MainContentView: View {
                             if let hostToDelete {
                                 viewModel.removeHost(hostToDelete)
                                 selectedHost = nil
+                                showDeletionTriggeredMessage = false
                             }
                         }
                         Button("Cancel", role: .cancel) {
                             isDeletingHost = false
                             hostToDelete = nil
-                        }
-                    }
-                    .onChange(of: viewModel.hosts) {
-                        // If the hosts list changes and no host is selected,
-                        // try to select the first paired host automatically.
-                        if selectedHost == nil,
-                           let firstHost = viewModel.hosts.first(where: { $0.pairState == .paired })
-                        {
-                            selectedHost = firstHost
+                            showDeletionTriggeredMessage = false
                         }
                     }
                     .navigationTitle("Computers") // Keep simple navigation title
-                    // REMOVE the VStack navigationTitle we added before
                     Text("Please actually read the Change Log")
                         .font(.system(size: 10)) // Even smaller font size for the second line
                         .foregroundColor(.gray)
@@ -102,9 +96,19 @@ struct MainContentView: View {
                     }
                 }
             } detail: {
-                if let selectedHost = Binding<TemporaryHost>($selectedHost) {
-                    ComputerView(host: selectedHost)
+                if showDeletionTriggeredMessage {
+                    Text("Host deletion triggered")
                 }
+                else if let selectedHost = Binding<TemporaryHost>($selectedHost) {
+                    ComputerViewWrapper(selectedHost: $selectedHost)
+                        .environmentObject(viewModel)
+                } else {
+                    // If the 'if let' above failed, it means the @State variable selectedHost was nil.
+                    // Display the placeholder view in this case.
+                    Text("No host selected")
+                        .navigationTitle("") // Optionally clear title when nothing is selected
+                }
+
             }.tabItem {
                 Label("Computers", systemImage: "desktopcomputer")
             }
@@ -149,25 +153,78 @@ struct MainContentView: View {
     }
 
     private func hostRow(for host: TemporaryHost) -> some View {
-        VStack {
-            Label(host.name,
-                  systemImage: host.pairState == .paired ?
-                      "desktopcomputer" : "lock.desktopcomputer")
-                .foregroundColor(.primary)
-        }.contextMenu {
-            Button {
-                viewModel.wakeHost(host)
-            } label: {
-                Label("Wake PC", systemImage: "sun.horizon")
-            }
+        Label {
+            Text(host.name)
+        } icon: {
+            Image(systemName: hostIconName(for: host))
+                .foregroundColor(hostIconColor(for: host))
+        }
+        .foregroundColor(host.state == .online ? .primary : .secondary) // Dim text if offline
+        .opacity(host.state == .online ? 1.0 : 0.6) // Further dim if offline
+        .contextMenu {
+             // Show "Wake PC" only if host is NOT online
+             if host.state != .online {
+                 Button {
+                     viewModel.wakeHost(host)
+                 } label: {
+                     Label("Wake PC", systemImage: "sun.horizon")
+                 }
+                 .disabled(host.mac == nil || host.mac == "00:00:00:00:00:00") // Disable if MAC is missing
+             }
+
+             // Allow pairing attempt only if host is online and not paired
+             if host.state == .online && host.pairState != .paired {
+                  Button {
+                      viewModel.tryPairHost(host)
+                  } label: {
+                      Label("Pair", systemImage: "lock.open.desktopcomputer")
+                  }
+             }
+
+            // Always show Delete
             Button(role: .destructive) {
+                print("Setting showDeletionTriggeredMessage = true for selected host")
+                showDeletionTriggeredMessage = true
                 isDeletingHost = true
                 hostToDelete = host
             } label: {
                 Label("Delete PC", systemImage: "trash")
             }
         }
+        // Add an overlay or badge for specific states if desired
+        // .overlay(alignment: .bottomTrailing) {
+        //     if host.updatePending { ProgressView().scaleEffect(0.5) }
+        // }
     }
+
+    // Helper function for icon name based on state
+    private func hostIconName(for host: TemporaryHost) -> String {
+        switch host.state {
+        case .online:
+            return host.pairState == .paired ? "desktopcomputer" : "lock.desktopcomputer"
+        case .offline:
+            return "desktopcomputer.trianglebadge.exclamationmark" // Icon for offline
+        case .unknown:
+            return "questionmark.circle.fill" // Icon for unknown state
+        default: // Should not happen if using enum
+             return "questionmark.diamond"
+        }
+    }
+
+    // Helper function for icon color based on state
+      private func hostIconColor(for host: TemporaryHost) -> Color {
+          switch host.state {
+          case .online:
+              return host.pairState == .paired ? .green : .orange // Green if paired, orange if unpaired but online
+          case .offline:
+              return .red // Red for offline
+          case .unknown:
+              return .gray // Gray for unknown
+          default:
+              return .gray
+          }
+      }
+
 }
 
 #Preview {

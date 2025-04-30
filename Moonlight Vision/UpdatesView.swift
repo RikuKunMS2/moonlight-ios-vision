@@ -33,6 +33,24 @@ struct UpdatesView: View {
 
                 Section(header: Text("Latest Updates")) { // Section for latest updates
                     VStack(alignment: .leading) { // Original VStack for text alignment
+                        Text("Version 11.0.5 (April 30, 2025)")
+                            .font(.headline)
+                        Text("- Automatic Network discovery was causing a lot of issues, redid a lot of it, it should be much better, and less crashy.")
+                            .font(.body)
+                        Text("- Deleting PCs should no longer cause a crash")
+                            .font(.body)
+                        Text("- Detection for PC off states should help stabalize the app when there are multiple hosts saved, or avaialble or offline")
+                            .font(.body)
+                        Text("- CLOSE YOUR STREAM before restarting or unplugging, otherwise you will have to use force close, which can be triggered by holding down the crown and capture buttons for a few seconds to force close the app. I can't find an API for a scene or state case that is 'on startup launch' so I don't know how to fix this issue.")
+                            .font(.body)
+                        Text("- Detection for PC off states should help stabalize the app when there are multiple hosts saved, or avaialble or offline")
+                            .font(.body)
+                        Text("- I can't help you with Tailscale, it's not something I've tested, so YMMV when using this")
+                            .font(.body)
+                    }
+                    .padding(.vertical) // Keep vertical padding
+                    .frame(maxWidth: .infinity, alignment: .leading) // Ensure VStack takes full width and aligns content to leading
+                    VStack(alignment: .leading) { // Original VStack for text alignment
                         Text("Version 11.0.3 (February 20, 2025)")
                             .font(.headline)
                         Text("- I wanted to give special thanks to tht7 (https://www.reddit.com/user/tht7), ALVR for Vision Pro's shinyquagsire23 and Giovanni Petrantoni (sinkingsugar) from Formabble https://formabble.com, dereklucas (https://derekplucas.com) for their contributions to Moonlight XrOS")

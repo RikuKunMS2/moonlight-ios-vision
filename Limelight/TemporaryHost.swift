@@ -66,12 +66,11 @@ public class TemporaryHost: NSObject {
         self.mac = host.mac
         self.name = host.name ?? "Unnamed Host" // Default to "Unnamed Host" if Core Data name is nil!
         self.uuid = host.uuid ?? ""
-        if self.uuid.isEmpty {
-            self.uuid = UUID().uuidString
-            //Log(LOG_DEBUG, "TemporaryHost:init(fromHost) - MoonlightHost UUID was empty, generated new UUID: %@", self.uuid)
-        } else {
+//        if self.uuid.isEmpty {
+  //          self.uuid = UUID().uuidString
+            //Log(LOG_DEBUG, "TemporaryHost:init(fromHost) - MoonlightHost UUID was empty, generated new UUID: //      } else {
             //Log(LOG_DEBUG, "TemporaryHost:init(fromHost) - Using existing MoonlightHost UUID: %@", self.uuid)
-        }
+        //}
 
         self.serverCodecModeSupport = host.serverCodecModeSupport
         self.serverCert = host.serverCert

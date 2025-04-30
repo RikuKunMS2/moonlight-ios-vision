@@ -6,59 +6,244 @@
 //  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
 
-import OrderedCollections
+import OrderedCollections // Keep if AppsView or TemporaryHost uses it
 import SwiftUI
 
 struct ComputerView: View {
     @EnvironmentObject private var viewModel: MainViewModel
 
-    @Binding
-    public var host: TemporaryHost
+    // Stick with @Binding to ensure changes propagate back up if needed
+    // (e.g., when pairing succeeds, the parent view should see the updated host).
+    @Binding public var host: TemporaryHost
+
+    // State to manage view-specific behavior like stopping automatic checks
+    @State private var stopAutomaticStateUpdate = false
 
     var body: some View {
-        VStack {
+        VStack(spacing: 20) { // Add spacing for better layout
+            // --- Display Host Name Consistently (Optional: hide during initial unknown state) ---
+            // Show name unless it's the very first load (unknown state)
+            if host.state != .unknown || host.updatePending { // Show even if updating, but maybe not during initial unknown
+                Text(host.name)
+                    .font(.largeTitle)
+                    .padding(.top)
+            }
+
+            // --- Handle Main States ---
             if host.updatePending {
-                ProgressView()
+                // Show a generic updating indicator when manually refreshed or during initial task update
+                ProgressView("Updating \(host.name)...")
+                    .scaleEffect(1.5) // Make spinner larger
             } else {
-                // do something if disconnected too
-                switch host.pairState {
-                case PairState.paired:
-                    AppsView(host: $host)
-                case PairState.unpaired:
-                    Text(host.name)
-                    Button("Start Pairing") {
-                        viewModel.tryPairHost(host)
-                    }.alert(
-                        "Pairing",
-                        isPresented: $viewModel.pairingInProgress
-                    ) {
-                        Button(role: .cancel) {
-                            viewModel.endPairing()
-                        } label: {
-                            Text("Cancel")
+                // Switch based on the host's primary state (Online, Offline, Unknown)
+                switch host.state {
+                case .online:
+                    // Host is reachable, now determine pairing status
+                    onlineView
+                        .onAppear {
+                            // Reset flag if we enter online state, ensuring task runs if needed later
+                            stopAutomaticStateUpdate = false
                         }
-                    } message: {
-                        Text("""
-                        Enter the following PIN on the host machine:
-                        \(viewModel.currentPin).\n If your host PC is running Sunshine,
-                        navigate to the Sunshine web UI to enter the PIN.
-                        """)
-                    }
-                default:
-                    Text("Please Refresh by going to Settings and Back, or you've already paired this computer.")
+                case .offline:
+                    // Host is not reachable
+                    offlineView
+                case .unknown:
+                    // Waiting for initial discovery or update to determine state
+                    ProgressView("Connecting to \(host.name)...")
+                        .scaleEffect(1.5)
+                // No default needed if HostState enum covers all cases explicitly
                 }
             }
-        }.task {
-            await viewModel.updateHost(host: host)
+        }
+        .navigationTitle(host.name) // Set navigation title dynamically
+        .toolbar {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                // ... (Stop Discovery Button if you have it) ...
+
+                // Refresh Specific Host Button
+                Button {
+                    Task {
+                        print("Manual Refresh triggered for \(host.name)")
+                        stopAutomaticStateUpdate = false
+                        //viewModel.resumeBackgroundDiscovery(for: host) // Optional
+
+                        // --- Call with force: true ---
+                        await viewModel.updateHost(host: host, force: true)
+
+                        // Refresh apps if needed *after* the forced update
+                        if host.state == .online && host.pairState == .paired {
+                             print("Manual Refresh resulted in Online/Paired state, refreshing apps for \(host.name)")
+                             viewModel.refreshAppsFor(host: host)
+                        }
+                    }
+                } label: {
+                    Label("Refresh Status", systemImage: "arrow.clockwise")
+                }
+                .disabled(host.updatePending)
+            }
+        }
+        .onAppear {
+            print("ComputerView appearing for \(host.name). Resetting stop flag.")
+            stopAutomaticStateUpdate = false
+            // viewModel.resumeBackgroundDiscovery(for: host) // Optional
+        }
+        .task(id: host.id) {
+            // Perform initial check only if needed and not stopped by user
+            if !stopAutomaticStateUpdate && (host.state == .unknown || host.pairState == .unknown) {
+                print("ComputerView.task: Running initial updateHost for \(host.name) (State: \(host.state), PairState: \(host.pairState)).")
+
+                // --- Call with default force: false ---
+                await viewModel.updateHost(host: host) // Force is false here
+
+                if host.state == .online && host.pairState == .paired && host.appList.isEmpty {
+                    print("ComputerView.task: Host \(host.name) is Online/Paired after update, refreshing apps.")
+                     viewModel.refreshAppsFor(host: host)
+                }
+            } else {
+                 print("ComputerView.task: Skipping automatic updateHost for \(host.name). StopFlag: \(stopAutomaticStateUpdate), State: \(host.state), PairState: \(host.pairState)")
+            }
+        }
+        // Optional: React to state changes, e.g., refresh apps when coming online
+        .onChange(of: host.state) { oldState, newState in
+             print("Host \(host.name) state changed from \(oldState) to \(newState)")
+             if newState == .online && host.pairState == .paired {
+                 // Check if apps are already loaded? Avoid redundant refresh.
+                 if host.appList.isEmpty {
+                     print("Host \(host.name) became Online/Paired, refreshing apps.")
+                     Task {
+                         viewModel.refreshAppsFor(host: host) // Assuming this exists
+                     }
+                 }
+             }
+        }
+        // Use the view model's pairing state for the alert, as pairing is a global action
+        .alert(
+            "Pairing",
+            isPresented: $viewModel.pairingInProgress,
+            presenting: viewModel.currentPin // Use the PIN from the ViewModel
+        ) { pinData in // Action buttons using the presented data (PIN)
+            Button("Cancel", role: .cancel) {
+                viewModel.endPairing() // Call ViewModel's cancel function
+            }
+        } message: { pinData in // Message using the presented data (PIN)
+            // Ensure currentPin is properly published and updated in ViewModel
+            Text("""
+            Enter the following PIN on the host machine:
+            \(pinData)
+
+            If your host PC is running Sunshine, navigate to the Sunshine web UI to enter the PIN.
+            """)
         }
     }
-}
 
-#Preview {
-    let viewModel = MainViewModel()
-    viewModel.pairingInProgress = true
-    var outerHost: TemporaryHost = .init()
-    outerHost.pairState = PairState.unpaired
+    // MARK: - Subviews for States
 
-    return ComputerView(host: .constant(outerHost)).environmentObject(viewModel)
+    /// View displayed when the host is online. Handles pairing status.
+    @ViewBuilder // Use ViewBuilder for cleaner conditional logic if needed
+    private var onlineView: some View {
+        // Switch based on pairing state *only when online*
+        switch host.pairState {
+        case .paired:
+            // Host is Online and Paired -> Show Apps
+             // Ensure AppsView takes a Binding<TemporaryHost>
+            AppsView(host: $host)
+
+        case .unpaired:
+            // Host is Online but Unpaired -> Show Pairing UI
+            VStack(spacing: 15) {
+                 Label("Ready to Pair", systemImage: "lock.desktopcomputer")
+                     .font(.title2)
+                     .foregroundColor(.orange) // Use a distinct color
+
+                Text("This computer is online but needs to be paired with this device.")
+                     .font(.body)
+                     .multilineTextAlignment(.center)
+                     .padding(.horizontal)
+
+                Button("Start Pairing") {
+                    // ViewModel should handle checking if host is online again if necessary,
+                    // but ComputerView already knows it's online here.
+                    viewModel.tryPairHost(host)
+                }
+                .controlSize(.large) // Make button prominent
+                // The alert is attached higher up in the view hierarchy now
+            }
+
+        case .unknown:
+             // Host is Online, but we haven't determined pairing status yet
+             VStack(spacing: 15) {
+                 Label("Checking Pairing Status...", systemImage: "questionmark.circle")
+                      .font(.title2)
+                      .foregroundColor(.gray) // Indicate uncertainty
+                 ProgressView()
+                      .padding(.bottom)
+
+                 // Option to force pairing attempt
+                 Button("Start Pairing Anyway") {
+                     print("User initiated pairing while pairState is unknown for \(host.name).")
+                     viewModel.tryPairHost(host)
+                 }
+                 .controlSize(.regular)
+                 // The alert is attached higher up in the view hierarchy
+
+                 // Option to stop automatic background checks for this view instance
+                 Button("Stop Automatic Checks") {
+                     print("User stopped automatic checks for \(host.name).")
+                     stopAutomaticStateUpdate = true // Stop this view's task modifier
+                     // Optionally tell ViewModel to pause background *polling* if implemented
+                     // viewModel.pauseBackgroundDiscovery(for: host)
+                 }
+                 .controlSize(.small)
+                 .tint(.yellow) // Make stop button distinct
+             }
+
+        // No default needed if PairState enum covers all cases
+        }
+    }
+
+    /// View displayed when the host is offline.
+    private var offlineView: some View {
+        VStack(spacing: 15) {
+            Label("Offline", systemImage: "desktopcomputer.trianglebadge.exclamationmark")
+                .font(.title2)
+                .foregroundColor(.red) // Clear offline indicator
+            Text("Moonlight cannot connect to this computer. Ensure it is turned on and connected to the network.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+
+            //force refresh
+            Button {
+                Task {
+                    print("Manual Refresh triggered for \(host.name)")
+                    stopAutomaticStateUpdate = false
+                    //viewModel.resumeBackgroundDiscovery(for: host) // Optional
+
+                    // --- Call with force: true ---
+                    await viewModel.updateHost(host: host, force: true)
+
+                    // Refresh apps if needed *after* the forced update
+                    if host.state == .online && host.pairState == .paired {
+                         print("Manual Refresh resulted in Online/Paired state, refreshing apps for \(host.name)")
+                         viewModel.refreshAppsFor(host: host)
+                    }
+                }
+            } label: {
+                Label("Force Refresh Status", systemImage: "arrow.clockwise")
+            }
+            .disabled(host.updatePending)
+            // Wake-on-LAN button
+            Button {
+                viewModel.wakeHost(host)
+            } label: {
+                Label("Wake PC", systemImage: "sun.horizon")
+            }
+            .controlSize(.large)
+            // Disable if MAC address is missing or invalid
+            .disabled(host.mac == nil || host.mac == "00:00:00:00:00:00")
+            // Visually indicate disabled state
+            .opacity((host.mac == nil || host.mac == "00:00:00:00:00:00") ? 0.5 : 1.0)
+        }
+        .padding(.vertical) // Add some vertical padding to the offline view
+    }
 }
