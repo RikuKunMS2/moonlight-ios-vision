@@ -47,6 +47,8 @@ struct UpdatesView: View {
                             .font(.body)
                         Text("- I can't help you with Tailscale, it's not something I've tested, so YMMV when using this")
                             .font(.body)
+                        Text("- IF YOU ARE ON APOLLO YOU MUST ENABLE ALL PERMISSIONS OR YOU WILL NOT BE ABLE TO CONNECT")
+                            .font(.body)
                     }
                     .padding(.vertical) // Keep vertical padding
                     .frame(maxWidth: .infinity, alignment: .leading) // Ensure VStack takes full width and aligns content to leading

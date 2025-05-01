@@ -210,10 +210,29 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             pairingInProgress = false
             currentPin = "" // Clear PIN
             currentlyPairingHost = nil // Clear the host being paired
-            discoveryManager?.startDiscovery() // Resume discovery
-            print("endPairing - Pairing process finished, discovery resumed.")
+
+            // 1. Start discovery
+            discoveryManager?.startDiscovery()
+            print("endPairing - Pairing process finished, discovery starting.")
+
+            // 2. Wait for 5 seconds asynchronously
+            do {
+                // Use Duration (Swift 5.7+)
+                try await Task.sleep(for: .seconds(5))
+                // Or for older Swift versions:
+                // try await Task.sleep(nanoseconds: 5_000_000_000)
+
+                // 3. Stop discovery after the delay
+                discoveryManager?.stopDiscovery()
+                print("endPairing - Discovery stopped after 5 seconds.")
+
+            } catch {
+                // Handle the possibility that the Task was cancelled while sleeping
+                print("endPairing - Sleep task cancelled, discovery stop might have been skipped.")
+            }
         }
     }
+
 
 
     func updateHost(host: TemporaryHost, force: Bool = false) async {
