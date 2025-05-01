@@ -9,6 +9,7 @@
 import GameController
 import RealityKit
 import SwiftUI
+import simd
 
 let COOL_NUMBER: Float = 2.79945612 // 3.8
 let MAX_WIDTH_METERS: Float = 2
@@ -57,6 +58,8 @@ struct _RealityKitStreamView: View {
     @State var controllerSupport: ControllerSupport?
     @State var height: Float = 0
     
+    @State private var depthOffset: Float = 1.0
+    
     @State var shouldClose: Bool = false
 
     var aspectRatio: Float {
@@ -99,7 +102,7 @@ struct _RealityKitStreamView: View {
     var body: some View {
         GeometryReader3D { proxy in
                 RealityView { content in
-                    let mesh = try! _RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (50,50), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
+                    let mesh = try! _RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (100,100), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
                     let colBox = ShapeResource.generateBox(width: 2, height: 2 * aspectRatio, depth: 0.001).offsetBy(translation: .init(x: 0, y: -0.43, z: 1))
                     screen = ModelEntity(mesh: mesh, materials: [])
 
@@ -128,10 +131,10 @@ struct _RealityKitStreamView: View {
                     screen.components.set(InputTargetComponent())
                     content.add(screen)
                 } update: { content in
-                    let mesh = try! _RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (50,50), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
+                    let mesh = try! _RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (100,100), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
                     let size = content.convert(proxy.frame(in: .local), from: .local, to: .scene)
                     screen.transform.scale = .init(repeating: size.extents.x / 2)
-                    screen.transform.translation.y = height
+                    screen.transform.translation = SIMD3<Float>(0, height, depthOffset)
                     try! screen.model!.mesh.replace(with: mesh.contents)
                 }
                 .handlesGameControllerEvents(matching: .gamepad)
@@ -174,6 +177,17 @@ struct _RealityKitStreamView: View {
                         }
                 }
                 HStack {
+                    Button("arrow.left.and.line.horizontal.and.arrow.right", systemImage: "arrow.left.and.line.horizontal.and.right.down") {                         // Optional: Action for the button, e.g., reset depth
+                         depthOffset = -1.0 // Reset to default example
+                    }
+                    .accessibilityLabel("Adjust Depth") // Accessibility
+                    Slider(value: $depthOffset, in: -1.5 ... 2.5, step: 0.01) // Adjust range as needed
+                        .frame(width: 300)
+                        .padding([.trailing])
+                        // ... (hover effect if desired)
+                }
+
+                HStack {
                     Button("3D Mode", systemImage: videoMode == .standard2D ? "rectangle" : "rectangle.split.2x1") {
                         videoMode = videoMode == .standard2D ? .sideBySide3D : .standard2D
                         if videoMode == .sideBySide3D {
@@ -187,7 +201,7 @@ struct _RealityKitStreamView: View {
                     Button("arrow.up.and.line.horizontal.and.arrow.down", systemImage: "arrow.up.and.line.horizontal.and.arrow.down") {
                         // Do nothing, just display this button like a neat littel label
                     }
-                    Slider(value: $height, in: 0 ... 1, step: 0.001)
+                    Slider(value: $height, in: -2 ... 1, step: 0.001)
                         .frame(width: 300)
                         .padding([.trailing])
                         .hoverEffect { effect, isActive, proxy in
@@ -299,51 +313,123 @@ struct _RealityKitStreamView: View {
     }
 
     static func generateCurvedPlane(
-        width: Float, aspectRatio: Float, resulotion: (UInt32, UInt32), curveMagnitude: Float = 1.0
+        width: Float, // Chord width
+        aspectRatio: Float,
+        resulotion: (UInt32, UInt32),
+        curveMagnitude: Float // Value from 0 (flat) to 1 (max curve)
     ) throws -> MeshResource {
-        // TODO: maybe use a LowLevelMesh here, I think it can compute the mesh on the GPU AND avoid additional allocations
-        var descr = MeshDescriptor()
+
+        var descr = MeshDescriptor(name: "curved_plane_inward")
         let height = width * aspectRatio
+        let vertexCount = Int(resulotion.0 * resulotion.1)
+        // Correct calculation for number of triangles and indices
+        let numQuadsX = resulotion.0 - 1
+        let numQuadsY = resulotion.1 - 1
+        let triangleCount = Int(numQuadsX * numQuadsY * 2)
+        let indexCount = triangleCount * 3
 
-        let totalVertices = Int(resulotion.0 * resulotion.1)
-        var meshPositions: [SIMD3<Float>] = .init(repeating: .zero, count: totalVertices)
-        var textureMap: [SIMD2<Float>] = .init(repeating: .zero, count: totalVertices)
-        var indices: [UInt32] = .init(repeating: .zero, count: totalVertices * 6)
-        let floorOffset: Float = (1 - (height / 2))
-        let backOffset = curveMagnitude + 1
+        var positions: [SIMD3<Float>] = .init(repeating: .zero, count: vertexCount)
+        var textureCoordinates: [SIMD2<Float>] = .init(repeating: .zero, count: vertexCount)
+        var indices: [UInt32] = .init(repeating: 0, count: indexCount)
 
-        for x_v in 0 ..< (resulotion.0) {
-            let vertexCounts = x_v * resulotion.1
-            for y_v in 0 ..< (resulotion.1) {
-                let vertexIndex = Int(vertexCounts + y_v)
-                let xPosition = (Float(x_v) / Float(resulotion.0 - 1) - 0.5) * width
-                let yPosition = ((0.5 - Float(y_v) / Float(resulotion.1 - 1)) * height)
-                let zPosition = (pow(xPosition, 2) * curveMagnitude / pow(width / 2, 2))
+        // --- Angle and Radius Calculation ---
+        let maxCurveAngle: Float = (5.5 * .pi / 6.0) // Max curve: 120 degrees. Adjust as needed.
+        let currentAngle = maxCurveAngle * curveMagnitude.clamped(to: 0...1)
 
-                meshPositions[vertexIndex] = [xPosition, -yPosition - floorOffset, zPosition - curveMagnitude + 1]
-                textureMap[vertexIndex] = [Float(x_v) / Float(resulotion.0 - 1), Float(y_v) / Float(resulotion.1 - 1)]
-                if x_v > 0 && y_v > 0 {
-                    let vertexCounts = vertexCounts + y_v - 1
-                    let vertexIndex = Int(((x_v - 1) * (resulotion.1 - 1) + (y_v - 1)) * 6)
+        let radius: Float
+        let halfAngle = currentAngle / 2.0
 
-                    indices[vertexIndex] = vertexCounts - resulotion.1
-                    indices[vertexIndex + 1] = vertexCounts
-                    indices[vertexIndex + 2] = vertexCounts - resulotion.1 + 1
+        if abs(halfAngle) < 0.0001 {
+            radius = .infinity // Flat case
+        } else {
+            radius = width / (2.0 * sin(halfAngle))
+        }
+        // --- End Calculation ---
 
-                    indices[vertexIndex + 3] = vertexCounts - resulotion.1 + 1
-                    indices[vertexIndex + 4] = vertexCounts
-                    indices[vertexIndex + 5] = vertexCounts + 1
+        var vertexIndex: Int = 0
+        var indicesIndex: Int = 0
+
+        for y_v in 0 ..< resulotion.1 {
+            // v_geo goes 0 for the first row (y_v=0) to 1 for the last row
+            let v_geo = Float(y_v) / Float(resulotion.1 - 1)
+
+            // Y position: higher Y for lower v_geo (top of screen)
+            let yPosition = (0.5 - v_geo) * height
+
+            // Texture V coordinate: Flipped - V=1 at the top, V=0 at the bottom
+            let v_tex = 1.0 - v_geo
+
+            for x_v in 0 ..< resulotion.0 {
+                // u goes 0 (left) to 1 (right)
+                let u = Float(x_v) / Float(resulotion.0 - 1)
+
+                let xPosition: Float
+                let zPosition: Float
+
+                if radius.isFinite && radius > 0 && currentAngle > 0.0001 {
+                    // Curved Plane Case
+                    let theta = (u - 0.5) * currentAngle // Angle from center: -halfAngle to +halfAngle
+
+                    // X position on the circular arc
+                    xPosition = radius * sin(theta)
+
+                    // Z position: Make center positive Z (further away), edges Z=0
+                    zPosition = radius * (cos(halfAngle) - cos(theta))
+
+                } else {
+                    // Flat Plane Case
+                    xPosition = (u - 0.5) * width
+                    zPosition = 0.0
                 }
+
+                // Assign vertex position (Y is up, +Z is away from viewer)
+                positions[vertexIndex] = [xPosition, yPosition, zPosition]
+
+                // Assign texture coordinate (U=horizontal, V=vertical, V=0 is bottom)
+                textureCoordinates[vertexIndex] = [u, v_tex] // Use the flipped v_tex
+
+                // Add indices for the quad ending SE of this vertex
+                if x_v < numQuadsX && y_v < numQuadsY {
+                    let current = UInt32(vertexIndex)
+                    let nextRow = current + resulotion.0
+
+                    let topLeft = current
+                    let topRight = topLeft + 1
+                    let bottomLeft = nextRow
+                    let bottomRight = bottomLeft + 1
+
+                    // Triangle 1: Top-Left, Bottom-Left, Bottom-Right
+                    indices[indicesIndex + 0] = topLeft
+                    indices[indicesIndex + 1] = bottomLeft
+                    indices[indicesIndex + 2] = bottomRight
+
+                    // Triangle 2: Top-Left, Bottom-Right, Top-Right
+                    indices[indicesIndex + 3] = topLeft
+                    indices[indicesIndex + 4] = bottomRight
+                    indices[indicesIndex + 5] = topRight
+
+                    indicesIndex += 6
+                }
+                vertexIndex += 1
             }
         }
 
+        descr.positions = MeshBuffer(positions)
+        descr.textureCoordinates = MeshBuffers.TextureCoordinates(textureCoordinates)
         descr.primitives = .triangles(indices)
-        descr.positions = MeshBuffer(meshPositions)
-        descr.textureCoordinates = MeshBuffers.TextureCoordinates(textureMap)
 
-        return try .generate(from: [descr])
+        return try MeshResource.generate(from: [descr])
+    }
+
+
+}
+
+extension Comparable {
+    func clamped(to limits: ClosedRange<Self>) -> Self {
+        return min(max(self, limits.lowerBound), limits.upperBound)
     }
 }
+
 
 // #Preview {
 ////    NativeStreamView()
