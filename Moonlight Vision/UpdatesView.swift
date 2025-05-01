@@ -33,22 +33,23 @@ struct UpdatesView: View {
 
                 Section(header: Text("Latest Updates")) { // Section for latest updates
                     VStack(alignment: .leading) { // Original VStack for text alignment
-                        Text("Version 11.0.5 (April 30, 2025)")
+                        Text("Version 11.0.6 (April 30, 2025)")
                             .font(.headline)
                         Text("- Automatic Network discovery was causing a lot of issues, redid a lot of it, it should be much better, and less crashy.")
                             .font(.body)
                         Text("- Deleting PCs should no longer cause a crash")
                             .font(.body)
-                        Text("- Detection for PC off states should help stabalize the app when there are multiple hosts saved, or avaialble or offline")
+                        Text("- Detection for PC off states should help stabilize the app when there are multiple hosts saved, or avaialble or offline")
                             .font(.body)
                         Text("- CLOSE YOUR STREAM before restarting or unplugging, otherwise you will have to use force close, which can be triggered by holding down the crown and capture buttons for a few seconds to force close the app. I can't find an API for a scene or state case that is 'on startup launch' so I don't know how to fix this issue.")
-                            .font(.body)
-                        Text("- Detection for PC off states should help stabalize the app when there are multiple hosts saved, or avaialble or offline")
                             .font(.body)
                         Text("- I can't help you with Tailscale, it's not something I've tested, so YMMV when using this")
                             .font(.body)
                         Text("- IF YOU ARE ON APOLLO YOU MUST ENABLE ALL PERMISSIONS OR YOU WILL NOT BE ABLE TO CONNECT")
                             .font(.body)
+                        Text("- I changed the home button in reality kit to a controller button because its meant to be an XBOX HOME BUTTON not a go back to main menu, to get back to the menu just close the volume.")
+                            .font(.body)
+
                     }
                     .padding(.vertical) // Keep vertical padding
                     .frame(maxWidth: .infinity, alignment: .leading) // Ensure VStack takes full width and aligns content to leading
@@ -123,22 +124,13 @@ struct UpdatesView: View {
 
                 Section(header: Text("Noted Bugs")) { // Section for older updates
                     VStack(alignment: .leading) {
-                        Text("- Sometimes selecting a differing computer host doesn't load the app data, you may have to go back to the settings tab and back to refresh it.")
+                        Text("- If you get a blackscreen trying to resume a volume, this has to do with resumption, I am trying to figure out a better alert system for when this happens. Just force quit the app.")
+                            .font(.body)
+                            .foregroundColor(.white)
+                        Text("- The curve is not 100% accurate, it has some incorrect stretching, we are looking into how to update the rendering so it's not so warped.")
                             .font(.body)
                             .foregroundColor(.white)
                         Text("- HDR is noteably broken on UiKit, Colors might not be perfect on Reality Kit, we are looking into adding some additional options to help adjust this.")
-                            .font(.body)
-                            .foregroundColor(.white)
-                        Text("- Deleting a PC causes a crash when PC scanning is on (or an app scan is trying to refresh), after deleting a computer (for example if you need to repair after installing Apollo or Sunshine) just force quit and re-open and you will be fine")
-                            .font(.body)
-                            .foregroundColor(.white)
-                        Text("- Even though you've already paired a computer, you may see the same computer host again with .local in the name")
-                            .font(.body)
-                            .foregroundColor(.white)
-                        Text("- The app can get really slow if you have multiple hosts saved that aren't online (as it is trying to refresh to see available apps)")
-                            .font(.body)
-                            .foregroundColor(.white)
-                        Text("- Moonlight XrOS does not know when a computer is ONLINE, only that it's been saved and paired or it hasn't been paired yet..")
                             .font(.body)
                             .foregroundColor(.white)
                         Text("- Controller Vibration isn't working, we are looking into this.")
