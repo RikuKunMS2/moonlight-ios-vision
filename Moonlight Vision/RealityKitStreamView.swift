@@ -62,9 +62,20 @@ struct _RealityKitStreamView: View {
     
     @State var shouldClose: Bool = false
 
-    var aspectRatio: Float {
-        Float(streamConfig.height) / Float(streamConfig.width)
+
+    var isSBSVideo: Bool {
+        let ratio = Float(streamConfig.width) / Float(streamConfig.height)
+        return abs(ratio - (32.0 / 9.0)) < 0.01 
     }
+
+    var aspectRatio: Float {
+        if videoMode == .sideBySide3D && isSBSVideo {
+            return Float(streamConfig.height) / Float(streamConfig.width / 2)
+        } else {
+            return Float(streamConfig.height) / Float(streamConfig.width)
+        }
+    }
+    
 
     @State var animationTimer: Timer?
 
