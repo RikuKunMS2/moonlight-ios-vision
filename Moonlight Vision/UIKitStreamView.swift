@@ -1,23 +1,80 @@
 //
-//  UIKitStreamView.swift
-//  Moonlight Vision
+//  UIKitStreamView.swift
+//  Moonlight Vision
 //
-//  Created by Alex Haugland on 1/27/24.
-//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
+//  Created by Alex Haugland on 1/27/24.
+//  Copyright © 2024 Moonlight Game Streaming Project.
 //
 
 import SwiftUI
 
 struct UIKitStreamView: View {
-    @Binding var streamConfig: StreamConfiguration
+    @Binding var streamConfig: StreamConfiguration?
+
+    @EnvironmentObject private var viewModel: MainViewModel
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
+
+    // This state tracks if *we* triggered the close.
+    @State private var isClosingForHome = false
 
     var body: some View {
-        _UIKitStreamView(streamConfig: $streamConfig)
-            .ornament(attachmentAnchor: .scene(.top), contentAlignment: .bottom) {
-                StreamControls(horizontal: true, streamConfig: $streamConfig) {
-                    _UIKitStreamViewWindowButton(streamConfig: $streamConfig, controllerReference: _UIKitStreamView.controllerReference) // Pass the reference
+        if let configBinding = Binding($streamConfig) {
+            _UIKitStreamView(streamConfig: configBinding)
+                .ornament(attachmentAnchor: .scene(.top), contentAlignment: .bottom) {
+                    StreamControls(
+                        horizontal: true,
+                        streamConfig: configBinding,
+                        // This action just disconnects the stream
+                        // and opens the main menu.
+                        closeAction: {
+                            // 1. Tell the app we are no longer streaming.
+                            viewModel.activelyStreaming = false
+                            
+                            // 2. Open the main view.
+                            openWindow(id: "mainView")
+                            
+                            // 3. Find the view controller and tell it to stop.
+                            if let streamVC = _UIKitStreamView.controllerReference.object {
+                                streamVC.stopStream()
+                            }
+                            
+                            // 4. We DO NOT set streamConfig = nil.
+                        }
+                    ) {
+                        _UIKitStreamViewWindowButton(streamConfig: configBinding, controllerReference: _UIKitStreamView.controllerReference)
+                    }
                 }
-            }
+                .onAppear {
+                    // This is the "resume from sleep" fix
+                    if !viewModel.activelyStreaming {
+                        print("UIKitStreamView: Detected appearance without active stream state...")
+                        
+                        isClosingForHome = true // Act as if home was pressed
+                        openWindow(id: "mainView")
+                        streamConfig = nil
+                        dismissWindow(id: "classicStreamingWindow")
+                    } else {
+                        // This is a normal stream start
+                        isClosingForHome = false // Ensure flag is reset
+                        dismissWindow(id: "mainView")
+                    }
+                }
+        } else {
+            // This 'else' block is rendered when streamConfig becomes nil.
+            // Its .onAppear acts as the .onDisappear for the stream view.
+            EmptyView()
+                .onAppear {
+                    // Check if we got here by pressing the Home button.
+                    if isClosingForHome {
+                        // Safely open the main view *after* this window is gone.
+                        openWindow(id: "mainView")
+                    }
+                    
+                    // Always make sure this window is dismissed.
+                    dismissWindow(id: "classicStreamingWindow")
+                }
+        }
     }
 }
 

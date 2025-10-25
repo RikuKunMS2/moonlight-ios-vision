@@ -10,8 +10,11 @@ import SwiftUI
 
 struct StreamControls<Additions: View>: View {
     @EnvironmentObject private var viewModel: MainViewModel
+    @Environment(\.openWindow) private var openWindow // <-- ADDED
+    
     let horizontal: Bool
     @Binding var streamConfig: StreamConfiguration
+    let closeAction: () -> Void // <-- ADDED: The new action parameter
 
     @ViewBuilder var additions: () -> Additions
 
@@ -36,6 +39,13 @@ struct StreamControls<Additions: View>: View {
 
     var controls: some View {
         Group {
+            // --- START ADDITION ---
+            Button("Home", systemImage: "house.fill") {
+               // openWindow(id: "mainView")
+                closeAction() // Call the provided close action
+            }
+            // --- END ADDITION ---
+            
             Button("Toggle Dimming", systemImage: viewModel.streamSettings.dimPassthrough ? "moon.fill" : "moon") {
                 viewModel.streamSettings.dimPassthrough.toggle()
             }
@@ -55,7 +65,7 @@ struct StreamControls<Additions: View>: View {
                 ))
                 //effect.scaleEffect(x: isActive ? 1: 0.5, y: 1, anchor: .leading)
             }
-           // .help("Adjust window to stream aspect ratio") // Accessibility hint
+             // .help("Adjust window to stream aspect ratio") // Accessibility hint
             additions()
         }
     }

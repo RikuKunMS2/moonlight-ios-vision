@@ -33,6 +33,32 @@ struct UpdatesView: View {
 
                 Section(header: Text("Latest Updates")) { // Section for latest updates
                     VStack(alignment: .leading) { // Original VStack for text alignment
+                        Text("Version 11.0.11 (Oct 25, 2025)")
+                            .font(.headline)
+                        Text("- Fixed the memory resumption bug (previously the app had no idea how to handle the Vision OS 26 resumption of app on memoery exit mode) if you have an issue with an empty window press and hold the crowm and capture buttons to force quit, but hopefully this isn't an issue anymore.")
+                            .font(.body)
+                        Text("- Implemented fix for controller crashing from JFuellem (thank you so much) that changes a sync to an async (oops!)")
+                            .font(.body)
+                        Text("- Apparently AV1 on the new m5 vision pro works in UI Kit mode but not in Reality Kit Mode, we are looking into this.")
+                            .font(.body)
+                        Text("- Added HOME button that helps bring back up the connection menu, as the new (frankly annoying) vision OS 26 just HIDES the app instead of quitting it or closing the window for real.")
+                            .font(.body)
+
+                    }
+                    .padding(.vertical) // Keep vertical padding
+                    .frame(maxWidth: .infinity, alignment: .leading) // Ensure VStack takes full width and aligns content to leading
+                    VStack(alignment: .leading) { // Original VStack for text alignment
+                        Text("Version 11.0.08 (April 30, 2025)")
+                            .font(.headline)
+                        Text("- Fixed unpair state on relaunch or open app due to datamanger issue")
+                            .font(.body)
+                        Text("- Added SBS options")
+                            .font(.body)
+
+                    }
+                    .padding(.vertical) // Keep vertical padding
+                    .frame(maxWidth: .infinity, alignment: .leading) // Ensure VStack takes full width and aligns content to leading
+                    VStack(alignment: .leading) { // Original VStack for text alignment
                         Text("Version 11.0.6 (April 30, 2025)")
                             .font(.headline)
                         Text("- Automatic Network discovery was causing a lot of issues, redid a lot of it, it should be much better, and less crashy.")

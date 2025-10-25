@@ -1,5 +1,5 @@
 //
-//  SettomgsView.swift
+//  SettingsView.swift
 //  Moonlight Vision
 //
 //  Created by Alex Haugland on 1/22/24.

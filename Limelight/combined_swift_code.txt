@@ -1,0 +1,360 @@
+```swift
+// TemporaryApp.swift
+//
+//  TemporaryApp.swift
+//  Moonlight Vision
+//
+//  Created by Alex Haugland on 1/27/24.
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
+//
+
+import Foundation
+import Observation
+
+#if os(visionOS)
+@Observable
+#endif
+@objc
+@MainActor
+public class TemporaryApp: NSObject {
+    @objc public var id: String
+    @objc public var name: String
+    @objc public var installPath: String?
+    @objc public var hdrSupported = false
+    @objc public var hidden = false
+    @objc public var maybeHost: Any?
+
+    
+    @objc public init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
+
+    // this is not the right thing to do here
+    @objc public init(from app: MoonlightApp, with tempHost: Any) {
+        self.id = app.id!
+        self.name = app.name!
+        self.hdrSupported = app.hdrSupported
+        self.hidden = app.hidden
+        self.maybeHost = tempHost
+    }
+
+    @objc public func propagateChangesTo(parent: MoonlightApp, withHost host: MoonlightHost) {
+        parent.id = self.id
+        parent.name = self.name
+        parent.hdrSupported = self.hdrSupported
+        parent.hidden = self.hidden
+        parent.host = host
+    }
+}
+
+```
+
+```swift
+// TemporaryHost.swift
+//
+//  TemporaryHost.swift
+//  Moonlight Vision
+//
+//  Created by Alex Haugland on 1/24/24.
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
+//
+
+import Foundation
+import SwiftUI
+import OrderedCollections
+
+#if os(visionOS)
+@Observable
+#endif
+@objc
+@MainActor
+public class TemporaryHost: NSObject {
+    @MainActor @objc public var state: HostState = .unknown
+    @MainActor @objc public var pairState: PairState = .unknown
+    @objc public var activeAddress: String?
+    @MainActor @objc public var currentGame: String?
+    @objc public var httpsPort: ushort = 0
+    @objc public var isNvidiaServerSoftware: Bool = false
+
+    @MainActor @objc public var updatePending: Bool = false
+
+    @objc public var serverCert: Data?
+    @objc public var address: String?
+    @objc public var externalAddress: String?
+    @objc public var localAddress: String?
+    @objc public var ipv6Address: String?
+    @objc public var mac: String?
+    @objc public var serverCodecModeSupport: Int32 = -1
+
+    @objc public var name = ""
+
+    @objc public var uuid = ""
+
+    public var appList = OrderedSet<TemporaryApp>()
+
+    @objc(appList) public func getAppList() -> NSSet {
+        return NSSet(array: self.appList.elements)
+    }
+
+    @objc public func setAppList(_ newList: NSSet) {
+        self.appList.removeAll()
+        for case let app as TemporaryApp in newList {
+            self.appList.append(app)
+        }
+    }
+
+    override init() { // Default initializer
+        super.init()
+        self.uuid = UUID().uuidString
+        //Log(LOG_DEBUG, "TemporaryHost:init - Generated new UUID: %@", self.uuid)
+        self.name = "New Host" // Default name for NEW hosts!
+    }
+
+    @objc public init(fromHost host: MoonlightHost) { // Initializer from MoonlightHost (Core Data)
+        super.init()
+        self.address = host.address
+        self.externalAddress = host.externalAddress
+        self.localAddress = host.localAddress
+        self.ipv6Address = host.ipv6Address
+        self.mac = host.mac
+        self.name = host.name ?? "Unnamed Host" // Default to "Unnamed Host" if Core Data name is nil!
+        self.uuid = host.uuid ?? ""
+//        if self.uuid.isEmpty {
+  //          self.uuid = UUID().uuidString
+            //Log(LOG_DEBUG, "TemporaryHost:init(fromHost) - MoonlightHost UUID was empty, generated new UUID: //      } else {
+            //Log(LOG_DEBUG, "TemporaryHost:init(fromHost) - Using existing MoonlightHost UUID: %@", self.uuid)
+        //}
+
+        self.serverCodecModeSupport = host.serverCodecModeSupport
+        self.serverCert = host.serverCert
+        self.pairState = (host.serverCert != nil) ? PairState(rawValue: host.pairState as! Int32)! : PairState.unpaired
+
+
+        // Older clients stored a non-URL-escaped IPv6 string. Try to detect that and fix it up.
+        if self.ipv6Address != nil && self.ipv6Address!.contains("[") {
+            self.ipv6Address = Utils.addressAndPort(toAddressPortString: self.ipv6Address, port: 47989)
+        }
+
+        if let hostAppList = host.appList {
+            for app in hostAppList {
+                let tempApp = TemporaryApp(from: app, with: self)
+                self.appList.append(tempApp)
+            }
+        }
+    }
+
+    @objc public func propagateChanges(toParent parentHost: MoonlightHost) {
+        // Avoid overwriting existing data with nil if
+        // we don't have everything populated in the temporary
+        // host.
+        if self.address != nil {
+            parentHost.address = self.address
+        }
+        if self.externalAddress != nil {
+            parentHost.externalAddress = self.externalAddress
+        }
+        if self.localAddress != nil {
+            parentHost.localAddress = self.localAddress
+        }
+        if self.ipv6Address != nil {
+            parentHost.ipv6Address = self.ipv6Address
+        }
+        if self.mac != nil {
+            parentHost.mac = self.mac
+        }
+        if self.serverCert != nil {
+            parentHost.serverCert = self.serverCert
+        }
+        
+        parentHost.serverCodecModeSupport = self.serverCodecModeSupport
+        
+        parentHost.name = self.name
+        parentHost.uuid = self.uuid
+            
+        parentHost.pairState = NSNumber(value: self.pairState.rawValue)
+    }
+    
+
+    static func ==(lhs: TemporaryHost, rhs: TemporaryHost) -> Bool {
+        lhs.id == rhs.id
+    }
+    
+    public override var hash: Int {
+        return id.hash
+    }
+    
+    override public func isEqual(_ object: Any?) -> Bool {
+        if let other = object as? TemporaryHost {
+            return other.id == self.id
+        } else {
+            return false
+        }
+    }
+}
+
+extension TemporaryHost: @preconcurrency Identifiable {
+    /// `id` for Identifiable conformance is the `uuid`.
+    public var id: String { self.uuid }
+}
+
+```
+
+```swift
+// TemporarySettings.swift
+//
+
+import Foundation
+import Observation
+import AppIntents
+
+#if os(visionOS)
+@Observable
+#endif
+@objc
+@MainActor
+public class TemporarySettings: NSObject {
+    @objc public var bitrate: Int32
+    @objc public var framerate: Int32
+    @objc public var height: Int32
+    @objc public var width: Int32
+    @objc public var audioConfig: Int32
+    @objc public var onscreenControls: OnScreenControlsLevel
+    @objc public var uniqueId: String
+    @objc public var preferredCodec = PreferredCodec.auto
+    @objc public var renderer: Renderer = .classic
+
+    @objc public var realitykitRendererAnimateOpening: Bool = false
+    @objc public var realitykitRendererCurvature: Float = 0.0
+
+    @objc public var useFramePacing = false
+    @objc public var multiController = false
+    @objc public var swapABXYButtons = false
+    @objc public var playAudioOnPC = false
+    @objc public var optimizeGames = false
+    @objc public var enableHdr = false
+    @objc public var btMouseSupport = false
+    @objc public var absoluteTouchMode = false
+    @objc public var statsOverlay = false
+    @objc public var dimPassthrough = true
+
+    @objc public var parent: MoonlightSettings?
+
+    override public init() {
+        self.bitrate = 50000
+        self.framerate = 0
+        self.height = 0
+        self.width = 0
+        self.audioConfig = 0
+        self.uniqueId = ""
+        self.onscreenControls = OnScreenControlsLevel.off
+        self.renderer = .classic
+        self.realitykitRendererAnimateOpening = false
+        self.realitykitRendererCurvature = 0.0
+        self.dimPassthrough = false
+        super.init()
+    }
+
+    @objc public init(fromSettings settings: MoonlightSettings) {
+        #if TARGET_OS_TV
+        let settingsBundle = NSBundle.main.path(forResource: "Settings", ofType: "bundle")
+        let settingsData = NSDictionary(contentsOf: settingsBundle)
+        // TODO: Finish the tvos part
+        #else
+
+        self.bitrate = settings.bitrate?.int32Value ?? 0
+        self.framerate = settings.framerate?.int32Value ?? 0
+        self.height = settings.height?.int32Value ?? 0
+        self.width = settings.width?.int32Value ?? 0
+        self.audioConfig = settings.audioConfig?.int32Value ?? 0
+        self.preferredCodec = PreferredCodec(rawValue: Int(settings.preferredCodec)) ?? PreferredCodec.auto
+        self.onscreenControls = OnScreenControlsLevel(rawValue: settings.onscreenControls?.intValue ?? 0) ?? OnScreenControlsLevel.off
+        self.renderer = if let ren = settings.renderer?.uint8Value { Renderer(rawValue: UInt8(ren)) ?? .classic } else { .classic }
+        self.uniqueId = settings.uniqueId ?? ""
+
+        self.useFramePacing = settings.useFramePacing
+        self.multiController = settings.multiController
+        self.swapABXYButtons = settings.swapABXYButtons
+        self.playAudioOnPC = settings.playAudioOnPC
+        self.optimizeGames = settings.optimizeGames
+        self.enableHdr = settings.enableHdr
+        self.btMouseSupport = settings.btMouseSupport
+        self.absoluteTouchMode = settings.absoluteTouchMode
+        self.statsOverlay = settings.statsOverlay
+
+        self.realitykitRendererAnimateOpening = settings.realitykitRendererAnimateOpening == 1
+        self.realitykitRendererCurvature = settings.realitykitRendererCurvature?.floatValue ?? 0
+        self.dimPassthrough = settings.dimPassthrough?.boolValue ?? false
+        #endif
+
+        super.init()
+    }
+
+    @objc public func save() {
+        // save settings to parent
+        let dataManager = DataManager()
+        dataManager.saveSettings(withBitrate: Int(bitrate), framerate: Int(framerate), height: Int(height), width: Int(width), audioConfig: Int(audioConfig), onscreenControls: Int(onscreenControls.rawValue), optimizeGames: optimizeGames, multiController: multiController, swapABXYButtons: swapABXYButtons, audioOnPC: playAudioOnPC, preferredCodec: UInt32(preferredCodec.rawValue), renderer: renderer.rawValue, useFramePacing: useFramePacing, enableHdr: enableHdr, btMouseSupport: btMouseSupport, absoluteTouchMode: absoluteTouchMode, statsOverlay: statsOverlay, realitykitRendererAnimateOpening: realitykitRendererAnimateOpening, realitykitRendererCurvature: NSNumber(value: realitykitRendererCurvature), dimPassthrough: dimPassthrough)
+    }
+}
+
+@objc public enum PreferredCodec: Int {
+    case auto
+    case h264
+    case hevc
+    case av1
+}
+
+@objc public enum Renderer: UInt8, Codable, Sendable, AppEnum {
+    
+    public static var typeDisplayRepresentation: TypeDisplayRepresentation {
+            TypeDisplayRepresentation(
+                stringLiteral: "Renderer"
+            )
+        }
+    
+    public static var caseDisplayRepresentations: [Renderer : DisplayRepresentation] = [
+        .classic: .init(stringLiteral: "UIKit (Classic)"),
+        .realitykit: .init(stringLiteral: "RealityKit (Experimental)"),
+    ]
+    
+    case classic
+    case realitykit
+
+    // Swift-only computed property for mapping cases to strings
+    var windowId: String {
+        switch self {
+        case .classic: return "classicStreamingWindow"
+        case .realitykit: return "realitykitStreamingWindow"
+        }
+    }
+}
+
+```
+
+```swift
+// Utils.swift
+//
+//  Utils.swift
+//  Moonlight Vision
+//
+//  Created by Alex Haugland on 1/27/24.
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
+//
+
+import Foundation
+
+// We can hide our typecasting crimes here.
+@objc extension TemporaryApp {
+    func host() -> TemporaryHost? {
+        if let ret = maybeHost as? TemporaryHost {
+            return ret
+        }
+        return nil
+    }
+    
+    func setHost(_ newHost: TemporaryHost?) {
+        maybeHost = newHost
+    }
+}
+
+```

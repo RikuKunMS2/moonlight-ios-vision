@@ -25,9 +25,11 @@ class DummyControllerDelegate: NSObject, ControllerSupportDelegate {
 
 struct RealityKitStreamView: View {
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.openWindow) private var openWindow // Keep this
     @Binding var streamConfig: StreamConfiguration?
     var needsHdr: Bool
     
+    // @EnvironmentObject private var viewModel: MainViewModel // Not needed here
     
     var body: some View {
         if streamConfig != nil {
@@ -35,6 +37,12 @@ struct RealityKitStreamView: View {
                 get: { streamConfig ?? StreamConfiguration() },
                 set: { streamConfig = $0 }
             ), needsHdr: needsHdr) {
+                
+                // This is the ORIGINAL closeAction passed down.
+                // It's used when the view disappears for other reasons (like backgrounding)
+                // OR if the disconnect fails and we need to force close.
+                
+                // We keep the original logic here for safety/cleanup.
                 dismissWindow()
                 streamConfig = nil
             }
@@ -165,7 +173,26 @@ struct _RealityKitStreamView: View {
             .glassBackgroundEffect()
         }
         .ornament(attachmentAnchor: .scene(.bottomTrailingFront), contentAlignment: .bottomLeading) {
-            StreamControls(horizontal: false, streamConfig: $streamConfig) {
+            // --- START FIX ---
+                        // Provide the CORRECT closeAction to StreamControls
+                        StreamControls(
+                            horizontal: false,
+                            streamConfig: $streamConfig,
+                            closeAction: {
+                                // This is the action for the HOME BUTTON inside StreamControls
+                                
+                                // 1. Tell the app we are no longer streaming
+                                viewModel.activelyStreaming = false
+                                
+                                // 2. Stop the stream manager and cleanup controllers
+                                self._streamMan?.stopStream()
+                                self.controllerSupport?.cleanup()
+                                
+                                openWindow(id: "mainView")
+                                
+                                self.closeAction()
+                            }
+                        ) {
                 HStack {
                     Button("Flatten", systemImage: viewModel.streamSettings.realitykitRendererCurvature == 0 ? "light.panel" : "pano.fill") {
                         if viewModel.streamSettings.realitykitRendererCurvature == 0 {
@@ -244,29 +271,51 @@ struct _RealityKitStreamView: View {
             }
         }
         .onAppear {
-            dismissWindow(id: "mainView")
-            dismissWindow(id: "dummy")
-//            dismissWindow(id: "realitykitStreamingWindow")
-            self.curveAnimationMultiplier = viewModel.streamSettings.realitykitRendererAnimateOpening ? 0 : 1
-            self._streamMan = StreamManager(
-                config: self.streamConfig,
-                rendererProvider: {
-                    DrawableVideoDecoder(texture: self.texture, callbacks: self.connectionCallbacks, aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height), useFramePacing: self.streamConfig.useFramePacing, enableHDR: self.viewModel.streamSettings.enableHdr) { texture, correctedResultion in
-                        DispatchQueue.main.async {
-                            if let correctedResultion = correctedResultion {
-                                streamConfig.width = Int32(correctedResultion.0)
-                                streamConfig.height = Int32(correctedResultion.1)
+                    
+                    // --- START FIX ---
+                            // Check if the ViewModel thinks a stream is active.
+                            // If the app was restarted or resumed from sleep, `activelyStreaming` will be false.
+                            if !viewModel.activelyStreaming {
+                                print("_RealityKitStreamView: Detected appearance without active stream state. Closing stream window and opening main view.")
+                                
+                                // 1. Explicitly open the main window.
+                                openWindow(id: "mainView")
+                                
+                                // 2. Call the close action to dismiss this window and nil the config.
+                                self.closeAction()
+                                
+                                // 3. Stop processing the rest of onAppear.
+                                return
                             }
-                            self.texture.replace(withDrawables: texture)
-                            screen.model!.materials = [UnlitMaterial(texture: self.texture)]
-                            self.controllerSupport!.connectionEstablished()
-                            if self.curveAnimationMultiplier == 0 { animateOpening() }
-                        }
-                    }
-                },
-                connectionCallbacks: self.connectionCallbacks
-            )
-            let operationQueue = OperationQueue()
+                            // --- END FIX ---
+                    
+                    dismissWindow(id: "mainView")
+                    dismissWindow(id: "dummy")
+        //            dismissWindow(id: "realitykitStreamingWindow")
+                    self.curveAnimationMultiplier = viewModel.streamSettings.realitykitRendererAnimateOpening ? 0 : 1
+                    self._streamMan = StreamManager(
+                        config: self.streamConfig,
+                        rendererProvider: {
+                            DrawableVideoDecoder(texture: self.texture, callbacks: self.connectionCallbacks, aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height), useFramePacing: self.streamConfig.useFramePacing, enableHDR: self.viewModel.streamSettings.enableHdr) { texture, correctedResultion in
+                                DispatchQueue.main.async {
+                                    if let correctedResultion = correctedResultion {
+                                        streamConfig.width = Int32(correctedResultion.0)
+                                        streamConfig.height = Int32(correctedResultion.1)
+                                    }
+                                    self.texture.replace(withDrawables: texture)
+                                    
+                                    // --- REMOVE THIS LINE ---
+                                    // screen.model!.materials = [UnlitMaterial(texture: self.texture)] // <-- THIS LINE CAUSES THE BLACK SCREEN
+                                    // ---
+                                    
+                                    self.controllerSupport!.connectionEstablished()
+                                    if self.curveAnimationMultiplier == 0 { animateOpening() }
+                                }
+                            }
+                        },
+                        connectionCallbacks: self.connectionCallbacks
+                    )
+                    let operationQueue = OperationQueue()
             operationQueue.addOperation(_streamMan!)
         }
         .onChange(of: shouldClose) { _, shouldClose in

@@ -25,4 +25,6 @@ typedef void (^noargCallbackType)(void);
 @property (nonatomic, strong) noargCallbackType disconnectedCallback;
 
 -(void)updatePreferredDisplayMode:(BOOL)streamActive;
+- (void)stopStream;
+
 @end

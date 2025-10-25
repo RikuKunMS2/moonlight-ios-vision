@@ -1,3 +1,4 @@
+//
 //  MainViewModel.swift
 //  Moonlight Vision
 //
@@ -59,44 +60,49 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     // Computed property to filter hosts based on pairState and remove duplicates
     var hostsWithPairState: [TemporaryHost] {
-        // Filter based on desired states (e.g., paired or unpaired)
+        // Since the upsert logic now prevents duplicates in the `hosts` array,
+        // this computed property can be simplified to just filter by state.
         let filteredHosts = hosts.filter { host in
             let isPaired = host.pairState == .paired
             let isUnpaired = host.pairState == .unpaired
             return isPaired || isUnpaired
         }
+        return filteredHosts
+    }
+    
+    // MARK: - Host Management Logic
+    
+    /// Updates existing hosts or inserts new ones discovered on the network.
+    /// This prevents duplicate entries in the `hosts` array.
+    func upsertDiscoveredHosts(_ discoveredHosts: [TemporaryHost]) {
+        for discoveredHost in discoveredHosts {
+            // Find if a host with the same unique ID already exists in our main list
+            if let existingHost = hosts.first(where: { $0.uuid == discoveredHost.uuid }) {
+                // It exists. Update its volatile properties from the newly discovered one.
+                // We don't want to overwrite important persisted data like the certificate here,
+                // just things that change during discovery.
+                existingHost.state = discoveredHost.state
+                existingHost.name = discoveredHost.name
+                existingHost.address = discoveredHost.address // Update with the latest address
+                existingHost.localAddress = discoveredHost.localAddress
+                existingHost.externalAddress = discoveredHost.externalAddress
+                existingHost.ipv6Address = discoveredHost.ipv6Address
 
-        // Deduplicate based on name (ensure only one entry per host name appears in UI)
-        var uniqueFilteredHosts: [TemporaryHost] = []
-        var seenHostNames = Set<String>()
-
-        for host in filteredHosts {
-            // Use the base name (without .local) for deduplication checking if needed,
-            // though ideally, only non-.local names should be present now.
-            let baseName = host.name
-            if !seenHostNames.contains(baseName) {
-                uniqueFilteredHosts.append(host)
-                seenHostNames.insert(baseName)
+                // Trigger an update to get full server details if one isn't already pending
+                if !existingHost.updatePending {
+                    Task {
+                        await updateHost(host: existingHost)
+                    }
+                }
             } else {
-                // Handle duplicates if they still occur for reasons other than .local suffix
-                 print("Skipping duplicate host in hostsWithPairState: Name: \(host.name)")
+                // It's a new host. Add it to the array.
+                print("Discovered a new host, adding to list: \(discoveredHost.name)")
+                hosts.append(discoveredHost)
+                // Now trigger a full update to check its pairing status and get all details.
+                Task {
+                    await updateHost(host: discoveredHost, force: true)
+                }
             }
-        }
-
-        return uniqueFilteredHosts
-    }
-
-    func setHosts(newHosts: [TemporaryHost]) {
-        //hosts.removeAll()
-        hosts.append(contentsOf: newHosts)
-    }
-
-    func addHost(newHost: TemporaryHost) {
-        if !hosts.contains(newHost) {
-            print("Adding new host: \(newHost)")
-            hosts.append(newHost)
-        }else {
-            print("Host already exists: \(newHost)")
         }
     }
 
@@ -120,25 +126,24 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         WakeOnLanManager.wake(host)
     }
 
-    // MARK: App Icons
+    // MARK: - App Icons
 
     nonisolated func receivedAsset(for app: TemporaryApp!) {
         // pass
     }
 
-    // MARK: Pairing
+    // MARK: - Pairing
 
     func manuallyDiscoverHost(hostOrIp: String) {
         discoveryManager?.discoverHost(hostOrIp, withCallback: hostMaybeFound)
     }
 
-
     nonisolated func hostMaybeFound(host: TemporaryHost?, error: String?) {
         Task { @MainActor in
             if let host {
-                print("Discovered host: \(host)")
-                self.addHost(newHost: host)
-                await self.updateHost(host: host)
+                print("Discovered host: \(host.name)")
+                // Use the upsert logic to correctly add or update the manually found host
+                self.upsertDiscoveredHosts([host])
             } else {
                 print("Error discovering host: \(error ?? "Unknown error")")
                 self.errorAddingHost = true
@@ -171,38 +176,36 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
                  print("pairSuccessful - Pairing successful for host: \(pairingHost.name)")
                  pairingHost.serverCert = serverCert
                  // Update host state after successful pairing
-                 await updateHost(host: pairingHost, force: true) // Force update to refresh state
+                 await updateHost(host: pairingHost, force: true) // Force update to refresh state and persist
             } else {
                  print("pairSuccessful - Warning: currentlyPairingHost is nil.")
             }
-            endPairing() // Move endPairing call here
+            endPairing()
         }
     }
 
-
     nonisolated func pairFailed(_ message: String!) {
-         Task { @MainActor in // Ensure UI/state updates happen on main thread
-             print("pairFailed - Pairing failed for host: \(currentlyPairingHost?.name ?? "Unknown"). Reason: \(message ?? "Unknown error")")
-             endPairing() // Move endPairing call here
-         }
+        Task { @MainActor in
+            print("pairFailed - Pairing failed for host: \(currentlyPairingHost?.name ?? "Unknown"). Reason: \(message ?? "Unknown error")")
+            endPairing()
+        }
     }
-
 
     nonisolated func alreadyPaired() {
-         Task { @MainActor in // Ensure UI/state updates happen on main thread
-             print("alreadyPaired - Host \(currentlyPairingHost?.name ?? "Unknown") is already paired.")
-             if let host = currentlyPairingHost {
-                 // Ensure pair state is correct if discovery missed it somehow
-                 if host.pairState != .paired {
-                     host.pairState = .paired
-                     print("alreadyPaired - Corrected host pairState to paired.")
-                 }
-                 await updateHost(host: host, force: true) // Update to get latest info
-             }
-             endPairing() // Move endPairing call here
-         }
+        Task { @MainActor in
+            print("alreadyPaired - Host \(currentlyPairingHost?.name ?? "Unknown") is already paired.")
+            if let host = currentlyPairingHost {
+                // Ensure pair state is correct if discovery missed it somehow
+                if host.pairState != .paired {
+                    host.pairState = .paired
+                    print("alreadyPaired - Corrected host pairState to paired.")
+                }
+                // Update to get latest info and persist the corrected state
+                await updateHost(host: host, force: true)
+            }
+            endPairing()
+        }
     }
-
 
     // Simplified endPairing - called from the specific result handlers
     nonisolated func endPairing() {
@@ -217,10 +220,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
             // 2. Wait for 5 seconds asynchronously
             do {
-                // Use Duration (Swift 5.7+)
                 try await Task.sleep(for: .seconds(5))
-                // Or for older Swift versions:
-                // try await Task.sleep(nanoseconds: 5_000_000_000)
 
                 // 3. Stop discovery after the delay
                 discoveryManager?.stopDiscovery()
@@ -233,12 +233,10 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         }
     }
 
-
+    // MARK: - Host & App Data Sync
 
     func updateHost(host: TemporaryHost, force: Bool = false) async {
-
-        await MainActor.run { // Ensure UI/state updates happen on main thread
-
+        await MainActor.run {
             guard force || host.state != .offline else {
                 print("updateHost: Host \(host.name) is marked offline and force is false. Skipping request.")
                 if host.updatePending { host.updatePending = false }
@@ -260,12 +258,11 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             // --- Process Result ---
             host.updatePending = false // Clear pending flag regardless of outcome
 
-            // Double-check if the host still exists in our main list before updating state
             guard hosts.contains(where: { $0.uuid == host.uuid }) else {
                  print("updateHost: Host \(host.name) (UUID: \(host.uuid)) no longer in list after request. Discarding result.")
                  discoveryManager?.resumeDiscovery(for: host) // Still need to resume discovery
                  return
-             }
+            }
 
             if serverInfoResponse.isStatusOk() {
                 print("Successfully updated host: \(host.name). Populating host data.")
@@ -274,21 +271,23 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
                      host.state = .online // Ensure state reflects reachability
                 }
                 serverInfoResponse.populateHost(host) // Populate details (like pairState, etc.)
-                // You might need to trigger a UI refresh explicitly if populateHost doesn't change @Published properties directly
-                // objectWillChange.send() // If necessary
+                
+                // ------------------- FIX -------------------
+                // Save the updated host to persistent storage (Core Data).
+                // This is the critical step to "remember" the pairing.
+                dataManager.update(host)
+                // -------------------------------------------
+                
             } else {
                 print("Failed to update host: \(host.name) during server info request. Error: \(serverInfoResponse.statusMessage ?? "unknown error"). Setting state to offline.")
                 if host.state != .offline {
                     host.state = .offline
-                    // objectWillChange.send() // If necessary
                 }
             }
 
             discoveryManager?.resumeDiscovery(for: host)
         }
     }
-
-
 
     func refreshAppsFor(host: TemporaryHost) {
         // possibly put loading stuff somewhere?
@@ -331,8 +330,6 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
                 database.updateApps(forExisting: host) // Persist removals
             }
 
-
-            // self.updateHostShortcuts
             if host.appList != newAppList {
                  print("refreshAppsFor - App list changed. Updating host.")
                  host.appList = newAppList // Update the host's app list
@@ -346,14 +343,14 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         }
     }
 
-    // MARK: Host discovery
+    // MARK: - Host Discovery
 
     func loadSavedHosts() {
         if let savedHosts = dataManager.getHosts() as? [TemporaryHost] {
-            print("Loaded saved hosts: \(savedHosts)")
-            for host in savedHosts {
-                addHost(newHost: host)
-            }
+            print("Loaded saved hosts: \(savedHosts.count)")
+            // Directly assign saved hosts. The upsert logic will handle updates
+            // once network discovery starts.
+            self.hosts = savedHosts
         } else {
             print("Unable to fetch saved hosts")
         }
@@ -373,27 +370,27 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
             }
         }
     }
-
+    
+    /// Callback from the discovery manager.
     nonisolated func updateAllHosts(_ newHosts: [Any]!) {
         if let newHosts = newHosts as? [TemporaryHost] {
-            Task {
-                await setHosts(newHosts: newHosts)
+            Task { @MainActor in
+                // Use the new upsert function to prevent duplicates
+                self.upsertDiscoveredHosts(newHosts)
             }
         }
     }
-    
+     
     @objc func beginRefresh() {
         discoveryManager?.resetDiscoveryState()
         discoveryManager?.startDiscovery()
     }
-    
+     
     func stopRefresh() {
         discoveryManager?.stopDiscovery()
     }
-    
-
-
-    // MARK: Stream Control
+     
+    // MARK: - Stream Control
 
     func stream(app: TemporaryApp) -> StreamConfiguration? {
         let config = StreamConfiguration()
@@ -417,9 +414,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         config.serverCert = host.serverCert
         if config.serverCert == nil {
              print("stream - WARNING: Host \(host.name) has no server certificate. Streaming might fail if pairing is required.")
-             // Depending on the protocol, this might be an error or just a warning.
         }
-
 
         config.frameRate = streamSettings.framerate
         config.height = streamSettings.height
@@ -449,40 +444,39 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
         switch streamSettings.preferredCodec {
         case .av1 where av1_supported:
-             config.supportedVideoFormats |= AV1_MAIN8
-             print("stream - Adding AV1_MAIN8 support.")
+              config.supportedVideoFormats |= AV1_MAIN8
+              print("stream - Adding AV1_MAIN8 support.")
         case .hevc where hevc_supported:
-             config.supportedVideoFormats |= H265
-             print("stream - Adding H265 support.")
+              config.supportedVideoFormats |= H265
+              print("stream - Adding H265 support.")
         case .h264:
-             config.supportedVideoFormats |= H264
-             print("stream - Adding H264 support.")
+              config.supportedVideoFormats |= H264
+              print("stream - Adding H264 support.")
         case .auto:
-             // Auto: Prioritize based on availability (e.g., AV1 > HEVC > H264)
-             if av1_supported { config.supportedVideoFormats |= AV1_MAIN8; print("stream - Adding AV1_MAIN8 support (Auto).") }
-             if hevc_supported { config.supportedVideoFormats |= H265; print("stream - Adding H265 support (Auto).") }
-             config.supportedVideoFormats |= H264 // Always support H264 as fallback
-             print("stream - Adding H264 support (Auto Fallback).")
+              // Auto: Prioritize based on availability (e.g., AV1 > HEVC > H264)
+              if av1_supported { config.supportedVideoFormats |= AV1_MAIN8; print("stream - Adding AV1_MAIN8 support (Auto).") }
+              if hevc_supported { config.supportedVideoFormats |= H265; print("stream - Adding H265 support (Auto).") }
+              config.supportedVideoFormats |= H264 // Always support H264 as fallback
+              print("stream - Adding H264 support (Auto Fallback).")
         default: // Includes cases where preferred codec isn't supported
-             if hevc_supported { config.supportedVideoFormats |= H265; print("stream - Adding H265 support (Default).") }
-             config.supportedVideoFormats |= H264 // Fallback
-             print("stream - Adding H264 support (Default Fallback).")
-
+              if hevc_supported { config.supportedVideoFormats |= H265; print("stream - Adding H265 support (Default).") }
+              config.supportedVideoFormats |= H264 // Fallback
+              print("stream - Adding H264 support (Default Fallback).")
         }
 
         // HDR / High Resolution adjustments
         if streamSettings.enableHdr || config.width > 4096 || config.height > 4096 {
-             if hevc_supported {
-                 config.supportedVideoFormats |= H265 // Ensure HEVC is enabled for HDR/HighRes
-                 if streamSettings.enableHdr && hdr10_supported {
-                     config.supportedVideoFormats |= H265_MAIN10
-                     print("stream - Adding H265_MAIN10 support for HDR.")
-                 }
-             }
-             if av1_supported && streamSettings.enableHdr && hdr10_supported {
-                 config.supportedVideoFormats |= AV1_MAIN10
-                 print("stream - Adding AV1_MAIN10 support for HDR.")
-             }
+            if hevc_supported {
+                config.supportedVideoFormats |= H265 // Ensure HEVC is enabled for HDR/HighRes
+                if streamSettings.enableHdr && hdr10_supported {
+                    config.supportedVideoFormats |= H265_MAIN10
+                    print("stream - Adding H265_MAIN10 support for HDR.")
+                }
+            }
+            if av1_supported && streamSettings.enableHdr && hdr10_supported {
+                config.supportedVideoFormats |= AV1_MAIN10
+                print("stream - Adding AV1_MAIN10 support for HDR.")
+            }
         }
         print("stream - Final supportedVideoFormats: \(String(format: "0x%04X", config.supportedVideoFormats))")
 
@@ -494,7 +488,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 }
 
 extension String {
-    // Keep your existing helper function
+    // Helper function to remove a suffix if it exists.
     func dropSuffix(_ suffix: String) -> String {
         guard hasSuffix(suffix) else { return self }
         return String(dropLast(suffix.count))

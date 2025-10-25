@@ -54,6 +54,52 @@
 #endif
 }
 
+// --- ADD THIS ENTIRE METHOD ---
+- (void)stopStream {
+    Log(LOG_I, @"StreamFrameViewController: stopStream() called from SwiftUI.");
+
+    // Stop the stream manager
+    if (_streamMan) {
+        [_streamMan stopStream];
+        // Don't nil it here, let the view controller manage its lifecycle
+    }
+
+    // Clean up controllers
+    if (_controllerSupport) {
+        [_controllerSupport cleanup];
+    }
+
+    // Clean up timers
+    if (_statsUpdateTimer) {
+        [_statsUpdateTimer invalidate];
+        _statsUpdateTimer = nil;
+    }
+    
+    if (_inactivityTimer != nil) {
+        [_inactivityTimer invalidate];
+        _inactivityTimer = nil;
+    }
+
+    // Allow display to go to sleep
+    [UIApplication sharedApplication].idleTimerDisabled = NO;
+
+    // Reset display mode back to default
+    [self updatePreferredDisplayMode:NO];
+    
+    // Do NOT remove observers here, as the view controller is still alive.
+    // [[NSNotificationCenter defaultCenter] removeObserver:self];
+    
+    // Show the spinner and stage label again
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self->_spinner startAnimating];
+        [self->_stageLabel setText:@"Disconnected"];
+        [self->_stageLabel sizeToFit];
+        self->_stageLabel.hidden = NO;
+        self->_tipLabel.hidden = NO;
+    });
+}
+// --- END OF NEW METHOD ---
+
 - (void)viewDidAppear:(BOOL)animated
 {
     [super viewDidAppear:animated];

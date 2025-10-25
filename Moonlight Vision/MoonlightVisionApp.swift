@@ -42,15 +42,9 @@ struct MoonlightVisionApp: SwiftUI.App {
         .defaultSize(width: 2, height: 2, depth: 2, in: .meters)
 
         WindowGroup(id: "classicStreamingWindow", for: StreamConfiguration.self) { streamConfig in
-            if streamConfig.wrappedValue != nil {
-                UIKitStreamView(streamConfig: Binding(
-                    get: { streamConfig.wrappedValue! },
-                    set: { n in streamConfig.wrappedValue = n }
-                ))
-                    .environmentObject(appDelegate.mainViewModel)
-            } else {
-                Text("No computer selected")
-            }
+            // MODIFIED: Pass the optional binding 'streamConfig' directly
+            UIKitStreamView(streamConfig: streamConfig)
+            .environmentObject(appDelegate.mainViewModel)
         }
         .windowStyle(.plain)
         .windowResizability(.contentSize)
