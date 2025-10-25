@@ -251,7 +251,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                     GCRotationRate emptyGyroSample = {};
                     controller.lastGyroSample = emptyGyroSample;
                     
-                    dispatch_sync(dispatch_get_main_queue(), ^{
+                    dispatch_async(dispatch_get_main_queue(), ^{
                         controller.gyroTimer = [NSTimer scheduledTimerWithTimeInterval:1.0 / reportRateHz repeats:YES block:^(NSTimer *timer) {
                             // Don't send duplicate samples
                             GCRotationRate lastGyroSample = controller.lastGyroSample;
