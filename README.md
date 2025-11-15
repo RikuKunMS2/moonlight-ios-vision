@@ -61,8 +61,6 @@ The Vision OS Version is not available in the App Store, to download the latest 
     * In reality kit mode, use the rectangle button toggle above the height adjust
 * How do I use Ultrawide Mode?
     * In settings set the resolution to 5120x1440, then set up [Apollo](https://github.com/ClassicOldSong/Apollo) or a virtual display driver / dumy plug and set the same settings on windows. In UIKit you can then use the aspect ratio button to fix the black bars, it should just be automatic on Reality Kit Mode. If you already connected with the wrong settings, you have to STOP the stream by long pressing the 'Virtual Display App' and start the stream again to apply the new settings.
-* Why is my connection so choppy?
-    * AWDL (apple wireless direct) is a special feature on apple devices that enable features like AirDrop and Handoff. Unforutenatly this can cause stutters at high bit rates, you can try turning off AirDrop and Continuity features, but it is best to use a 5ghz router with it set to use wifi Ch 149 
 * How do I use a wired connection?
     * You can use a developer strap hooked up to a mac with ethernet and then some additional ifconfig commands
     * Alternatively you can do something with a [Rapsberry Pi](https://x.com/ShinyQuagsire/status/1766286564408394186)
@@ -124,8 +122,6 @@ Thanks again for your support :)
     * In reality kit mode, use the rectangle button toggle above the height adjust
 * How do I use Ultrawide Mode?
     * In settings set the resolution to 5120x1440, then set up [Apollo](https://github.com/ClassicOldSong/Apollo) or a virtual display driver / dumy plug and set the same settings on windows. In UIKit you can then use the aspect ratio button to fix the black bars, it should just be automatic on Reality Kit Mode. If you already connected with the wrong settings, you have to STOP the stream by long pressing the 'Virtual Display App' and start the stream again to apply the new settings.
-* Why is my connection so choppy?
-    * AWDL (apple wireless direct) is a special feature on apple devices that enable features like AirDrop and Handoff. Unforutenatly this can cause stutters at high bit rates, you can try turning off AirDrop and Continuity features, but it is best to use a 5ghz router with it set to use wifi Ch 149 
 * How do I use a wired connection?
     * You can use a developer strap hooked up to a mac with ethernet and then some additional ifconfig commands
     * Alternatively you can do something with a [Rapsberry Pi](https://x.com/ShinyQuagsire/status/1766286564408394186)
