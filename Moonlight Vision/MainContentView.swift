@@ -11,6 +11,7 @@ import SwiftUI
 
 struct MainContentView: View {
     @EnvironmentObject private var viewModel: MainViewModel
+    @Environment(\.dismissWindow) private var dismissWindow
 
     @State private var selectedHost: TemporaryHost?
 
@@ -32,22 +33,22 @@ struct MainContentView: View {
                             hostRow(for: host)
                         }
                     }
-                    .alert("Really delete?", isPresented: $isDeletingHost) {
-                        Button("Yes, delete it", role: .destructive) {
+                    .alert(viewModel.localized(english: "Really delete?", chinese: "确定要删除吗？"), isPresented: $isDeletingHost) {
+                        Button(viewModel.localized(english: "Yes, delete it", chinese: "是的，删除"), role: .destructive) {
                             if let hostToDelete {
                                 viewModel.removeHost(hostToDelete)
                                 selectedHost = nil
                                 showDeletionTriggeredMessage = false
                             }
                         }
-                        Button("Cancel", role: .cancel) {
+                        Button(viewModel.localized(english: "Cancel", chinese: "取消"), role: .cancel) {
                             isDeletingHost = false
                             hostToDelete = nil
                             showDeletionTriggeredMessage = false
                         }
                     }
-                    .navigationTitle("Computers") // Keep simple navigation title
-                    Text("Please actually read the Change Log")
+                    .navigationTitle(viewModel.localized(english: "Computers", chinese: "电脑"))
+                    Text(viewModel.localized(english: "Please actually read the Change Log", chinese: "请务必阅读更新日志"))
                         .font(.system(size: 10)) // Even smaller font size for the second line
                         .foregroundColor(.gray)
                         .padding(.bottom) // Add bottom padding for visual spacing
@@ -60,7 +61,7 @@ struct MainContentView: View {
                             viewModel.stopRefresh()
                         }
                     } label: {
-                        Text(isRefreshingDiscovery ? "Click here to Stop network discovery, or if things are unresponsive" : "Click here to scans for Hosts") // Conditional Text
+                        Text(isRefreshingDiscovery ? viewModel.localized(english: "Click here to Stop network discovery, or if things are unresponsive", chinese: "点击此处停止网络发现，或如果无响应") : viewModel.localized(english: "Click here to scans for Hosts", chinese: "点击此处扫描主机")) // Conditional Text
                             .font(.caption)
                             .foregroundColor(.gray)
                     }
@@ -69,25 +70,25 @@ struct MainContentView: View {
                 }
                 .toolbar { // Keep the toolbar as is for now
                     ToolbarItem(placement: .primaryAction) {
-                        Button("Add Server", systemImage: "plus") {
+                        Button(viewModel.localized(english: "Add Server", chinese: "添加服务器"), systemImage: "plus") {
                             addingHost = true
                         }.alert(
-                            "Enter server",
+                            viewModel.localized(english: "Enter server", chinese: "输入服务器"),
                             isPresented: $addingHost
                         ) {
-                            TextField("IP or Host", text: $newHostIp)
-                            Button("Add") {
+                            TextField(viewModel.localized(english: "IP or Host", chinese: "IP 或主机名"), text: $newHostIp)
+                            Button(viewModel.localized(english: "Add", chinese: "添加")) {
                                 addingHost = false
                                 viewModel.manuallyDiscoverHost(hostOrIp: newHostIp)
                             }
-                            Button("Cancel", role: .cancel) {
+                            Button(viewModel.localized(english: "Cancel", chinese: "取消"), role: .cancel) {
                                 addingHost = false
                             }
                         }.alert(
-                            "Unable to add host",
+                            viewModel.localized(english: "Unable to add host", chinese: "无法添加主机"),
                             isPresented: $viewModel.errorAddingHost
                         ) {
-                            Button("Ok", role: .cancel) {
+                            Button(viewModel.localized(english: "Ok", chinese: "确定"), role: .cancel) {
                                 viewModel.errorAddingHost = true
                             }
                         } message: {
@@ -97,7 +98,7 @@ struct MainContentView: View {
                 }
             } detail: {
                 if showDeletionTriggeredMessage {
-                    Text("Host deletion triggered")
+                    Text(viewModel.localized(english: "Host deletion triggered", chinese: "主机删除已触发"))
                 }
                 else if let selectedHost = Binding<TemporaryHost>($selectedHost) {
                     ComputerViewWrapper(selectedHost: $selectedHost)
@@ -105,12 +106,12 @@ struct MainContentView: View {
                 } else {
                     // If the 'if let' above failed, it means the @State variable selectedHost was nil.
                     // Display the placeholder view in this case.
-                    Text("No host selected")
+                    Text(viewModel.localized(english: "No host selected", chinese: "未选择主机"))
                         .navigationTitle("") // Optionally clear title when nothing is selected
                 }
 
             }.tabItem {
-                Label("Computers", systemImage: "desktopcomputer")
+                Label(viewModel.localized(english: "Computers", chinese: "电脑"), systemImage: "desktopcomputer")
             }
             .task {
                 viewModel.loadSavedHosts()
@@ -141,17 +142,25 @@ struct MainContentView: View {
                 NotificationCenter.default.removeObserver(self)
             }
 
-            SettingsView(settings: $viewModel.streamSettings).tabItem {
-                Label("Settings", systemImage: "gear")
-            }
+            SettingsView(settings: $viewModel.streamSettings)
+                .environmentObject(viewModel)
+                .tabItem {
+                    Label(viewModel.localized(english: "Settings", chinese: "设置"), systemImage: "gear")
+                }
 
-            UpdatesView().tabItem {
-                Label("Changelog", systemImage: "info.circle.fill")
-            }
+            UpdatesView()
+                .environmentObject(viewModel)
+                .tabItem {
+                    Label(viewModel.localized(english: "Changelog", chinese: "更新日志"), systemImage: "info.circle.fill")
+                }
 
         }
+        .sheet(isPresented: $viewModel.showLanguagePrompt) {
+            LanguagePromptView()
+                .environmentObject(viewModel)
+        }
     }
-
+    
     private func hostRow(for host: TemporaryHost) -> some View {
         Label {
             Text(host.name)
@@ -167,7 +176,7 @@ struct MainContentView: View {
                  Button {
                      viewModel.wakeHost(host)
                  } label: {
-                     Label("Wake PC", systemImage: "sun.horizon")
+                     Label(viewModel.localized(english: "Wake PC", chinese: "唤醒电脑"), systemImage: "sun.horizon")
                  }
                  .disabled(host.mac == nil || host.mac == "00:00:00:00:00:00") // Disable if MAC is missing
              }
@@ -177,7 +186,7 @@ struct MainContentView: View {
                   Button {
                       viewModel.tryPairHost(host)
                   } label: {
-                      Label("Pair", systemImage: "lock.open.desktopcomputer")
+                      Label(viewModel.localized(english: "Pair", chinese: "配对"), systemImage: "lock.open.desktopcomputer")
                   }
              }
 
@@ -188,7 +197,7 @@ struct MainContentView: View {
                 isDeletingHost = true
                 hostToDelete = host
             } label: {
-                Label("Delete PC", systemImage: "trash")
+                Label(viewModel.localized(english: "Delete PC", chinese: "删除电脑"), systemImage: "trash")
             }
         }
         // Add an overlay or badge for specific states if desired

@@ -40,17 +40,17 @@ struct StreamControls<Additions: View>: View {
     var controls: some View {
         Group {
             // --- START ADDITION ---
-            Button("Home", systemImage: "house.fill") {
+            Button(viewModel.localized(english: "Home", chinese: "主页"), systemImage: "house.fill") {
                // openWindow(id: "mainView")
                 closeAction() // Call the provided close action
             }
             // --- END ADDITION ---
             
-            Button("Toggle Dimming", systemImage: viewModel.streamSettings.dimPassthrough ? "moon.fill" : "moon") {
+            Button(viewModel.localized(english: "Toggle Dimming", chinese: "切换调暗"), systemImage: viewModel.streamSettings.dimPassthrough ? "moon.fill" : "moon") {
                 viewModel.streamSettings.dimPassthrough.toggle()
             }
             HStack {
-                Button("Volume", systemImage: viewModel.vol == 0 || viewModel.mute ? "speaker.slash.fill" : "speaker.fill" ) {
+                Button(viewModel.localized(english: "Volume", chinese: "音量"), systemImage: viewModel.vol == 0 || viewModel.mute ? "speaker.slash.fill" : "speaker.fill" ) {
                     viewModel.mute.toggle()
                 }
                 Slider(value: $viewModel.vol, in: 0...127)

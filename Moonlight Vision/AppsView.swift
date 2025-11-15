@@ -29,20 +29,9 @@ struct AppsView: View {
                         ProgressView()
                     }
                     AppButtonView(host: host, app: app) {
-                        if (nowLoading != nil) {
-                            return
-                        }
-                        nowLoading = app.id ?? app.name
-                        if let config = viewModel.stream(app: app) {
-                            if (viewModel.streamSettings.renderer == .realitykit) {
-                                openWindow(id: viewModel.streamSettings.renderer.windowId, value: config)
-                                dismissWindow(id: "mainView")
-                            } else {
-                                pushWindow(id: viewModel.streamSettings.renderer.windowId, value: config)
-                                nowLoading = nil
-                            }
-                        }
+                        Task { await handleStreamLaunch(for: app) }
                     }
+                    .environmentObject(viewModel)
                 }
             }
         }
@@ -53,21 +42,94 @@ struct AppsView: View {
                 print("LOAD")
                 viewModel.refreshAppsFor(host: host)
             }
-        }.refreshable() {
+        }
+        .alert(viewModel.localized(english: "Active Stream", chinese: "已有串流窗口"), isPresented: $viewModel.showActiveStreamAlert) {
+            Button(viewModel.localized(english: "Go back to window", chinese: "回到窗口")) {
+                if viewModel.streamSettings.renderer == .realitykit {
+                    openWindow(id: viewModel.streamSettings.renderer.windowId)
+                } else {
+                    pushWindow(id: viewModel.streamSettings.renderer.windowId)
+                }
+            }
+            Button(viewModel.localized(english: "Force quit", chinese: "强制结束"), role: .destructive) {
+                viewModel.forceStopActiveStream()
+                if let pendingApp = viewModel.pendingAppToStream {
+                    Task { await startStream(for: pendingApp) }
+                }
+                viewModel.pendingAppToStream = nil
+            }
+            Button(viewModel.localized(english: "Cancel", chinese: "取消"), role: .cancel) {
+                viewModel.pendingAppToStream = nil
+            }
+        } message: {
+            Text(viewModel.localized(english: "A stream is already running. Please return to that window or terminate it before starting a new one.", chinese: "检测到已有串流窗口在运行。请选择回到该窗口或强制结束后重新启动。"))
+        }
+        .alert(viewModel.localized(english: "Please close the previous window", chinese: "请先关闭旧窗口"), isPresented: $viewModel.showClassicWindowCloseAlert) {
+            Button(viewModel.localized(english: "Got it", chinese: "知道了"), role: .cancel) {}
+        } message: {
+            Text(viewModel.localized(english: "The previous classic window is still open. Please close it before starting another stream.", chinese: "上一次串流已停止，但窗口仍保持打开。请在原窗口横条上点击关闭按钮后再重试。"))
+        }
+        .alert(viewModel.localized(english: "Please close the RealityKit window", chinese: "请先关闭 RealityKit 窗口"), isPresented: $viewModel.showRealityWindowCloseAlert) {
+            Button(viewModel.localized(english: "Got it", chinese: "知道了"), role: .cancel) {}
+        } message: {
+            Text(viewModel.localized(english: "The RealityKit window is still open. Close it before launching another stream.", chinese: "RealityKit 窗口仍保持打开。请关闭后再尝试启动新的串流。"))
+        }
+        .refreshable() {
             print("REFRESH")
             viewModel.refreshAppsFor(host: host)
+        }
+    }
+    
+    @MainActor
+    private func handleStreamLaunch(for app: TemporaryApp) async {
+        guard nowLoading == nil else { return }
+        nowLoading = app.id ?? app.name
+        
+        defer { nowLoading = nil }
+        
+        if viewModel.activelyStreaming {
+            viewModel.pendingAppToStream = app
+            viewModel.showActiveStreamAlert = true
+            return
+        }
+        
+        if viewModel.streamSettings.renderer == .classic {
+            if viewModel.classicWindowNeedsManualClose {
+                viewModel.showClassicWindowCloseAlert = true
+                return
+            }
+        } else {
+            if viewModel.realityWindowNeedsManualClose {
+                viewModel.showRealityWindowCloseAlert = true
+                return
+            }
+        }
+        
+        await startStream(for: app)
+    }
+    
+    @MainActor
+    private func startStream(for app: TemporaryApp) async {
+        guard let config = viewModel.stream(app: app) else { return }
+        if viewModel.streamSettings.renderer == .realitykit {
+            openWindow(id: viewModel.streamSettings.renderer.windowId, value: config)
+            dismissWindow(id: "mainView")
+        } else {
+            openWindow(id: "classicStreamingWindow", value: config)
+            dismissWindow(id: "mainView")
         }
     }
 }
 
 struct AppButtonView: View {
+    @EnvironmentObject private var viewModel: MainViewModel
     let host: TemporaryHost
     let app: TemporaryApp
     let action: () -> Void
     
     var body: some View {
-        Button(app.name ?? "Unknown", action: action)
-            .badge(Text(app.id == host.currentGame ? "Running" : ""))
+        Button(app.name ?? viewModel.localized(english: "Unknown", chinese: "未知"), action: action)
+            .badge(Text(app.id == host.currentGame ? viewModel.localized(english: "Running", chinese: "运行中") : ""))
             .contextMenu {
                 if app.id == host.currentGame {
                     Button {
@@ -79,7 +141,7 @@ struct AppButtonView: View {
                             // lol no error handling...
                         }
                     } label: {
-                        Label("Stop", systemImage: "stop.circle")
+                        Label(viewModel.localized(english: "Stop", chinese: "停止"), systemImage: "stop.circle")
                     }
                 }
             }

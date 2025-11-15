@@ -32,6 +32,7 @@ struct RealityKitStreamView: View {
     // @EnvironmentObject private var viewModel: MainViewModel // Not needed here
     
     var body: some View {
+        let cornerRadius = CGFloat(MainViewModel.shared.streamSettings.windowCornerRadius)
         if streamConfig != nil {
             _RealityKitStreamView(streamConfig: Binding<StreamConfiguration>(
                 get: { streamConfig ?? StreamConfiguration() },
@@ -44,10 +45,31 @@ struct RealityKitStreamView: View {
                 
                 // We keep the original logic here for safety/cleanup.
                 dismissWindow()
+                dismissWindow(id: "realitykitStreamingWindow")
                 streamConfig = nil
             }
         } else {
-            ProgressView().onAppear { dismissWindow() }
+            VStack(spacing: 16) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.largeTitle)
+                Text(MainViewModel.localizedStatic(english: "Stream stopped", chinese: "串流已停止"))
+                    .font(.title2)
+                Text(MainViewModel.localizedStatic(english: "Please close this window before starting a new stream from the main menu.", chinese: "请在窗口横条上点击关闭按钮，之后即可在主菜单重新启动串流。"))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.thinMaterial)
+            .onAppear {
+                Task { @MainActor in
+                    MainViewModel.shared.realityWindowNeedsManualClose = true
+                }
+            }
+            .onDisappear {
+                Task { @MainActor in
+                    MainViewModel.shared.realityWindowNeedsManualClose = false
+                }
+            }
         }
     }
 }
@@ -69,6 +91,8 @@ struct _RealityKitStreamView: View {
     @State private var depthOffset: Float = 1.0
     
     @State var shouldClose: Bool = false
+    @State private var needsResume = false
+    @State private var didPerformFullClose = false
 
 
     var isSBSVideo: Bool {
@@ -119,7 +143,9 @@ struct _RealityKitStreamView: View {
     }
 
     var body: some View {
-        GeometryReader3D { proxy in
+        if viewModel.activelyStreaming {
+            let cornerRadius = CGFloat(viewModel.streamSettings.windowCornerRadius)
+            GeometryReader3D { proxy in
                 RealityView { content in
                     let mesh = try! _RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (100,100), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
                     let colBox = ShapeResource.generateBox(width: 2, height: 2 * aspectRatio, depth: 0.001).offsetBy(translation: .init(x: 0, y: -0.43, z: 1))
@@ -161,12 +187,11 @@ struct _RealityKitStreamView: View {
         .ornament(visibility: connectionCallbacks.showAlert ? .visible :  .hidden , attachmentAnchor: .scene(.bottomFront), contentAlignment: .bottom) {
             VStack(alignment: .center) {
                 Image(systemName: "exclamationmark.triangle")
-                Text("Stream error")
+                Text(MainViewModel.localizedStatic(english: "Stream error", chinese: "串流错误"))
                     .font(.title)
-                Text(connectionCallbacks.errorMessage ?? "Unknown error")
-                Button("Close") {
+                Text(connectionCallbacks.errorMessage ?? MainViewModel.localizedStatic(english: "Unknown error", chinese: "未知错误"))
+                Button(MainViewModel.localizedStatic(english: "Close", chinese: "关闭")) {
                     shouldClose.toggle()
-                    dismissWindow()
                 }
             }
             .padding()
@@ -179,22 +204,11 @@ struct _RealityKitStreamView: View {
                             horizontal: false,
                             streamConfig: $streamConfig,
                             closeAction: {
-                                // This is the action for the HOME BUTTON inside StreamControls
-                                
-                                // 1. Tell the app we are no longer streaming
-                                viewModel.activelyStreaming = false
-                                
-                                // 2. Stop the stream manager and cleanup controllers
-                                self._streamMan?.stopStream()
-                                self.controllerSupport?.cleanup()
-                                
-                                openWindow(id: "mainView")
-                                
-                                self.closeAction()
+                                handleUserRequestedClose()
                             }
                         ) {
                 HStack {
-                    Button("Flatten", systemImage: viewModel.streamSettings.realitykitRendererCurvature == 0 ? "light.panel" : "pano.fill") {
+                    Button(viewModel.localized(english: "Flatten", chinese: "扁平化"), systemImage: viewModel.streamSettings.realitykitRendererCurvature == 0 ? "light.panel" : "pano.fill") {
                         if viewModel.streamSettings.realitykitRendererCurvature == 0 {
                             viewModel.streamSettings.realitykitRendererCurvature = curveMagnitudeMemory
                         } else {
@@ -218,7 +232,7 @@ struct _RealityKitStreamView: View {
                     Button("arrow.left.and.line.horizontal.and.arrow.right", systemImage: "arrow.left.and.line.horizontal.and.right.down") {                         // Optional: Action for the button, e.g., reset depth
                          depthOffset = -1.0 // Reset to default example
                     }
-                    .accessibilityLabel("Adjust Depth") // Accessibility
+                    .accessibilityLabel(viewModel.localized(english: "Adjust Depth", chinese: "调整深度")) // Accessibility
                     Slider(value: $depthOffset, in: -1.5 ... 2.5, step: 0.01) // Adjust range as needed
                         .frame(width: 300)
                         .padding([.trailing])
@@ -226,7 +240,7 @@ struct _RealityKitStreamView: View {
                 }
 
                 HStack {
-                    Button("3D Mode", systemImage: videoMode == .standard2D ? "rectangle" : "rectangle.split.2x1") {
+                    Button(viewModel.localized(english: "3D Mode", chinese: "3D 模式"), systemImage: videoMode == .standard2D ? "rectangle" : "rectangle.split.2x1") {
                         videoMode = videoMode == .standard2D ? .sideBySide3D : .standard2D
                         if videoMode == .sideBySide3D {
                             screen.model?.materials = [surfaceMaterial!]
@@ -251,7 +265,7 @@ struct _RealityKitStreamView: View {
                             //                            effect.scaleEffect(x: isActive ? 1: 0.5, y: 1, anchor: .leading)
                         }
                 }
-                Button("Main Button", systemImage: "gamecontroller.fill") {
+                Button(viewModel.localized(english: "Main Button", chinese: "主按钮"), systemImage: "gamecontroller.fill") {
 //                    self.controllerSupport?.updateTriggers(<#T##controller: Controller!##Controller!#>, left: <#T##UInt8#>, right: <#T##UInt8#>)
                 }.simultaneousGesture(
                     DragGesture(minimumDistance: 0)
@@ -271,85 +285,152 @@ struct _RealityKitStreamView: View {
             }
         }
         .onAppear {
-                    
-                    // --- START FIX ---
-                            // Check if the ViewModel thinks a stream is active.
-                            // If the app was restarted or resumed from sleep, `activelyStreaming` will be false.
-                            if !viewModel.activelyStreaming {
-                                print("_RealityKitStreamView: Detected appearance without active stream state. Closing stream window and opening main view.")
-                                
-                                // 1. Explicitly open the main window.
-                                openWindow(id: "mainView")
-                                
-                                // 2. Call the close action to dismiss this window and nil the config.
-                                self.closeAction()
-                                
-                                // 3. Stop processing the rest of onAppear.
-                                return
-                            }
-                            // --- END FIX ---
-                    
-                    dismissWindow(id: "mainView")
-                    dismissWindow(id: "dummy")
-        //            dismissWindow(id: "realitykitStreamingWindow")
-                    self.curveAnimationMultiplier = viewModel.streamSettings.realitykitRendererAnimateOpening ? 0 : 1
-                    self._streamMan = StreamManager(
-                        config: self.streamConfig,
-                        rendererProvider: {
-                            DrawableVideoDecoder(texture: self.texture, callbacks: self.connectionCallbacks, aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height), useFramePacing: self.streamConfig.useFramePacing, enableHDR: self.viewModel.streamSettings.enableHdr) { texture, correctedResultion in
-                                DispatchQueue.main.async {
-                                    if let correctedResultion = correctedResultion {
-                                        streamConfig.width = Int32(correctedResultion.0)
-                                        streamConfig.height = Int32(correctedResultion.1)
-                                    }
-                                    self.texture.replace(withDrawables: texture)
-                                    
-                                    // --- REMOVE THIS LINE ---
-                                    // screen.model!.materials = [UnlitMaterial(texture: self.texture)] // <-- THIS LINE CAUSES THE BLACK SCREEN
-                                    // ---
-                                    
-                                    self.controllerSupport!.connectionEstablished()
-                                    if self.curveAnimationMultiplier == 0 { animateOpening() }
-                                }
-                            }
-                        },
-                        connectionCallbacks: self.connectionCallbacks
-                    )
-                    let operationQueue = OperationQueue()
-            operationQueue.addOperation(_streamMan!)
+            guard handleAppearanceValidation() else { return }
+            startStreamIfNeeded()
         }
         .onChange(of: shouldClose) { _, shouldClose in
             if shouldClose {
-                openWindow(id: "mainView")
-                dismissWindow()
+                handleUserRequestedClose()
             }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
-                // print("active")
-                break
-            case .inactive:
-                print("inactive")
-                break
+                if needsResume, viewModel.activelyStreaming {
+                    // Add a small delay to ensure we're truly back from background
+                    // This prevents resuming when just switching between regular apps
+                    Task {
+                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second delay
+                        if needsResume, viewModel.activelyStreaming {
+                            await MainActor.run {
+                                startStreamIfNeeded()
+                            }
+                        }
+                    }
+                }
             case .background:
-                print("background")
-                viewModel.activelyStreaming = false
-                _streamMan?.stopStream()
-                _streamMan = nil
-                controllerSupport?.cleanup()
-//                streamConfig = nil
-                if !shouldClose { openWindow(id: "mainView") }
-                self.closeAction()
-//                dismissWindow()
-            @unknown default: break
-                // print("unknown default")
+                // Only pause when truly backgrounded (e.g., immersive scene or headset removal)
+                // Don't pause on .inactive as it triggers too easily when switching apps
+                pauseStreamForBackground()
+            default:
+                break
             }
         }
         .persistentSystemOverlays(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
         .preferredSurroundingsEffect(viewModel.streamSettings.dimPassthrough ? .systemDark : nil)
         .volumeBaseplateVisibility(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
-        .supportedVolumeViewpoints(.front)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .supportedVolumeViewpoints(.front)
+            .onDisappear {
+                handleSceneDisappearance()
+            }
+        } else {
+            VStack(spacing: 16) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.largeTitle)
+                Text(viewModel.localized(english: "Stream stopped", chinese: "串流已停止"))
+                    .font(.title2)
+                Text(viewModel.localized(english: "Please close this window before starting a new stream from the main menu.", chinese: "请在窗口横条上点击关闭按钮，之后即可在主菜单重新启动串流。"))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.thinMaterial)
+        }
+    }
+
+    private func handleAppearanceValidation() -> Bool {
+        if !viewModel.activelyStreaming {
+            print("_RealityKitStreamView: Detected appearance without active stream state. Closing stream window and opening main view.")
+            openWindow(id: "mainView")
+            self.closeAction()
+            return false
+        }
+        return true
+    }
+
+    private func startStreamIfNeeded() {
+        guard _streamMan == nil else {
+            needsResume = false
+            return
+        }
+
+        dismissWindow(id: "mainView")
+        dismissWindow(id: "dummy")
+
+        self.curveAnimationMultiplier = viewModel.streamSettings.realitykitRendererAnimateOpening ? 0 : 1
+        didPerformFullClose = false
+        self._streamMan = StreamManager(
+            config: self.streamConfig,
+            rendererProvider: {
+                DrawableVideoDecoder(
+                    texture: self.texture,
+                    callbacks: self.connectionCallbacks,
+                    aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height),
+                    useFramePacing: self.streamConfig.useFramePacing,
+                    enableHDR: self.viewModel.streamSettings.enableHdr
+                ) { texture, correctedResultion in
+                    DispatchQueue.main.async {
+                        if let correctedResultion = correctedResultion {
+                            streamConfig.width = Int32(correctedResultion.0)
+                            streamConfig.height = Int32(correctedResultion.1)
+                        }
+                        self.texture.replace(withDrawables: texture)
+                        self.controllerSupport!.connectionEstablished()
+                        if self.curveAnimationMultiplier == 0 { animateOpening() }
+                    }
+                }
+            },
+            connectionCallbacks: self.connectionCallbacks
+        )
+        let operationQueue = OperationQueue()
+        operationQueue.addOperation(_streamMan!)
+        needsResume = false
+    }
+
+    private func pauseStreamForBackground() {
+        guard _streamMan != nil else { return }
+        stopStream(teardownCompletely: false)
+    }
+
+    private func handleUserRequestedClose() {
+        stopStream(teardownCompletely: true)
+        DispatchQueue.main.async {
+            openWindow(id: "mainView")
+        }
+        viewModel.realityWindowNeedsManualClose = true
+    }
+
+    private func stopStream(teardownCompletely: Bool) {
+        _streamMan?.stopStream()
+        _streamMan = nil
+        controllerSupport?.cleanup()
+
+        if teardownCompletely {
+            if didPerformFullClose {
+                return
+            }
+            didPerformFullClose = true
+            viewModel.activelyStreaming = false
+            needsResume = false
+            self.closeAction()
+        } else {
+            needsResume = true
+        }
+    }
+
+    private func handleSceneDisappearance() {
+        guard !didPerformFullClose else { return }
+        guard !needsResume else { return }
+        handleExternalWindowDismiss()
+    }
+
+    private func handleExternalWindowDismiss() {
+        stopStream(teardownCompletely: true)
+        DispatchQueue.main.async {
+            openWindow(id: "mainView")
+        }
+        viewModel.realityWindowNeedsManualClose = true
     }
 
     func animateOpening() {

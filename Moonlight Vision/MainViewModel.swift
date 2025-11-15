@@ -13,6 +13,7 @@ import AVFoundation
 
 @MainActor
 class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback, AppAssetCallback {
+    private let languagePromptDefaultsKey = "didCompleteLanguagePrompt"
     @objc
     static let shared = MainViewModel()
 
@@ -26,6 +27,16 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     @Published var currentStreamConfig = StreamConfiguration()
     @Published var activelyStreaming = false
+    @Published var showActiveStreamAlert = false
+    @Published var pendingAppToStream: TemporaryApp?
+    @Published var showLanguagePrompt = false
+    
+    // Store saved window size for aspect ratio lock restoration
+    @Published var savedStreamWindowSize: CGSize? = nil
+    @Published var classicWindowNeedsManualClose = false
+    @Published var realityWindowNeedsManualClose = false
+    @Published var showClassicWindowCloseAlert = false
+    @Published var showRealityWindowCloseAlert = false
     @Published var streamSettings: TemporarySettings
 
     @Published var volumeSliderValue: Float = 1.0
@@ -52,6 +63,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         clientCert = CryptoManager.readCertFromFile()
         uniqueId = IdManager.getUniqueId()
         streamSettings = dataManager.getSettings()
+        showLanguagePrompt = !UserDefaults.standard.bool(forKey: languagePromptDefaultsKey)
 
         super.init()
         appManager = AppAssetManager(callback: self)
@@ -481,9 +493,66 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         print("stream - Final supportedVideoFormats: \(String(format: "0x%04X", config.supportedVideoFormats))")
 
         currentStreamConfig = config
+        classicWindowNeedsManualClose = false
+        realityWindowNeedsManualClose = false
         activelyStreaming = true
         print("stream - Stream configuration complete. Ready to start streaming.")
         return currentStreamConfig
+    }
+
+    func updateLanguage(_ language: AppLanguage) {
+        streamSettings.appLanguage = language
+        streamSettings.save()
+        showLanguagePrompt = false
+        UserDefaults.standard.set(true, forKey: languagePromptDefaultsKey)
+    }
+
+    func forceStopActiveStream() {
+        activelyStreaming = false
+        classicWindowNeedsManualClose = false
+        realityWindowNeedsManualClose = false
+    }
+
+    nonisolated static func audioSessionMode() -> AudioSessionMode {
+        return MainActor.assumeIsolated {
+            MainViewModel.shared.streamSettings.audioSessionMode
+        }
+    }
+
+
+    var currentLanguage: AppLanguage {
+        streamSettings.appLanguage
+    }
+
+    func localized(english: String, chinese: String) -> String {
+        currentLanguage == .chinese ? chinese : english
+    }
+
+    nonisolated static func localizedStatic(english: String, chinese: String) -> String {
+        return MainActor.assumeIsolated {
+            MainViewModel.shared.streamSettings.appLanguage == .chinese ? chinese : english
+        }
+    }
+    
+    @objc nonisolated static func localizedString(english: String, chinese: String) -> String {
+        return localizedStatic(english: english, chinese: chinese)
+    }
+    
+    @objc nonisolated static func startingStreamFormatString() -> String {
+        return localizedStatic(english: "Starting %@...", chinese: "正在启动 %@...")
+    }
+
+    nonisolated static func shouldUseExclusiveAudio(microphoneActive: Bool) -> Bool {
+        return MainActor.assumeIsolated {
+            switch MainViewModel.shared.streamSettings.audioSessionMode {
+            case .exclusive:
+                return true
+            case .mixed:
+                return false
+            case .exclusiveWhenMicActive:
+                return microphoneActive
+            }
+        }
     }
 }
 

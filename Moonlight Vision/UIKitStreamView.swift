@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct UIKitStreamView: View {
     @Binding var streamConfig: StreamConfiguration?
@@ -14,66 +15,156 @@ struct UIKitStreamView: View {
     @EnvironmentObject private var viewModel: MainViewModel
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.scenePhase) private var scenePhase
 
-    // This state tracks if *we* triggered the close.
-    @State private var isClosingForHome = false
+    @State private var hasPerformedTeardown = false
+    @State private var needsResume = false
+    @State private var reloadToken = UUID()
+    @State private var backgroundTask: Task<Void, Never>?
 
     var body: some View {
-        if let configBinding = Binding($streamConfig) {
-            _UIKitStreamView(streamConfig: configBinding)
-                .ornament(attachmentAnchor: .scene(.top), contentAlignment: .bottom) {
-                    StreamControls(
-                        horizontal: true,
-                        streamConfig: configBinding,
-                        // This action just disconnects the stream
-                        // and opens the main menu.
-                        closeAction: {
-                            // 1. Tell the app we are no longer streaming.
-                            viewModel.activelyStreaming = false
-                            
-                            // 2. Open the main view.
-                            openWindow(id: "mainView")
-                            
-                            // 3. Find the view controller and tell it to stop.
-                            if let streamVC = _UIKitStreamView.controllerReference.object {
-                                streamVC.stopStream()
+        Group {
+            if viewModel.activelyStreaming,
+               let configBinding = Binding($streamConfig) {
+                let cornerRadius = CGFloat(viewModel.streamSettings.windowCornerRadius)
+                _UIKitStreamView(streamConfig: configBinding)
+                    .id(reloadToken)
+                    .compositingGroup()
+                    .applyCornerRadius(cornerRadius)
+                    .ornament(attachmentAnchor: .scene(.top), contentAlignment: .bottom) {
+                        StreamControls(
+                            horizontal: true,
+                            streamConfig: configBinding,
+                            closeAction: {
+                                handleHomeButtonClose()
                             }
-                            
-                            // 4. We DO NOT set streamConfig = nil.
+                        ) {
+                            _UIKitStreamViewWindowButton(
+                                streamConfig: configBinding,
+                                controllerReference: _UIKitStreamView.controllerReference
+                            )
                         }
-                    ) {
-                        _UIKitStreamViewWindowButton(streamConfig: configBinding, controllerReference: _UIKitStreamView.controllerReference)
                     }
-                }
-                .onAppear {
-                    // This is the "resume from sleep" fix
-                    if !viewModel.activelyStreaming {
-                        print("UIKitStreamView: Detected appearance without active stream state...")
-                        
-                        isClosingForHome = true // Act as if home was pressed
-                        openWindow(id: "mainView")
-                        streamConfig = nil
-                        dismissWindow(id: "classicStreamingWindow")
-                    } else {
-                        // This is a normal stream start
-                        isClosingForHome = false // Ensure flag is reset
+                    .onAppear {
+                        hasPerformedTeardown = false
                         dismissWindow(id: "mainView")
                     }
-                }
-        } else {
-            // This 'else' block is rendered when streamConfig becomes nil.
-            // Its .onAppear acts as the .onDisappear for the stream view.
-            EmptyView()
-                .onAppear {
-                    // Check if we got here by pressing the Home button.
-                    if isClosingForHome {
-                        // Safely open the main view *after* this window is gone.
-                        openWindow(id: "mainView")
+                    .onDisappear {
+                        handleWindowDisappearance()
                     }
-                    
-                    // Always make sure this window is dismissed.
-                    dismissWindow(id: "classicStreamingWindow")
+                    .onChange(of: scenePhase) { _, phase in
+                        switch phase {
+                        case .background:
+                            // Only pause when truly backgrounded (e.g., immersive scene or headset removal)
+                            // Don't pause on .inactive as it triggers too easily when switching apps
+                            prepareForBackground()
+                        case .active:
+                            resumeIfNeeded()
+                        default:
+                            break
+                        }
+                    }
+            } else {
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.largeTitle)
+                    Text(viewModel.localized(english: "Stream stopped", chinese: "串流已停止"))
+                        .font(.title2)
+                    Text(viewModel.localized(english: "Please close this window before starting a new stream from the main menu.", chinese: "在返回主菜单前请先关闭此窗口，之后即可在主菜单重新启动串流。"))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.thinMaterial)
+                .onAppear {
+                    viewModel.classicWindowNeedsManualClose = true
+                }
+                .onDisappear {
+                    viewModel.classicWindowNeedsManualClose = false
+                }
+            }
+        }
+    }
+
+    private func handleHomeButtonClose() {
+        tearDownStream(openMainWindow: true)
+    }
+
+    private func handleWindowDisappearance() {
+        guard !hasPerformedTeardown else { return }
+        guard !needsResume else { return }
+        tearDownStream(openMainWindow: true)
+    }
+
+    private func tearDownStream(openMainWindow: Bool) {
+        guard !hasPerformedTeardown else { return }
+        hasPerformedTeardown = true
+        needsResume = false
+
+        viewModel.activelyStreaming = false
+
+        if let streamVC = _UIKitStreamView.controllerReference.object {
+            streamVC.stopStream()
+        }
+
+        streamConfig = nil
+        if openMainWindow {
+            DispatchQueue.main.async {
+                openWindow(id: "mainView")
+            }
+        }
+        
+        viewModel.classicWindowNeedsManualClose = true
+    }
+
+    private func prepareForBackground() {
+        guard !hasPerformedTeardown else { return }
+        guard streamConfig != nil else { return }
+        
+        // Save current window size before backgrounding
+        saveCurrentWindowSize()
+        
+        // Cancel any pending background task
+        backgroundTask?.cancel()
+        
+        // Set needsResume flag
+        needsResume = true
+        
+        // Stop the stream
+        if let streamVC = _UIKitStreamView.controllerReference.object {
+            streamVC.stopStream()
+        }
+    }
+    
+    private func saveCurrentWindowSize() {
+        // Try to find the window and save its size
+        if let streamVC = _UIKitStreamView.controllerReference.object,
+           let window = streamVC.view.window ?? streamVC.view?.superview?.window {
+            let currentSize = window.bounds.size
+            viewModel.savedStreamWindowSize = currentSize
+            print("Saved window size before backgrounding: \(currentSize)")
+        }
+    }
+
+    private func resumeIfNeeded() {
+        guard needsResume else { return }
+        guard streamConfig != nil else { return }
+        
+        // Cancel any pending background task
+        backgroundTask?.cancel()
+        
+        // Only resume if we were actually backgrounded (not just briefly inactive)
+        // Add a small delay to ensure we're truly back from background
+        backgroundTask = Task {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second delay
+            
+            guard !Task.isCancelled else { return }
+            guard needsResume else { return }
+            
+            await MainActor.run {
+                needsResume = false
+                reloadToken = UUID()
+            }
         }
     }
 }
@@ -86,8 +177,10 @@ struct _UIKitStreamViewWindowButton: View {
     var body: some View {
         Button {
             if let window = currentWindow {
-                applyAspectRatioLock(streamConfig: streamConfig, targetWindow: window) // Pass the window
-                AudioHelpers.fixAudioForSurroundForUIKitWindow(window) // TODO(shinyquagsire23): Make this configurable
+                // When manually triggered, don't use saved size - recalculate
+                applyAspectRatioLock(streamConfig: streamConfig, targetWindow: window, useSavedSize: false)
+                let exclusive = MainViewModel.shouldUseExclusiveAudio(microphoneActive: false)
+                AudioHelpers.fixAudioForSurroundForUIKitWindow(window, exclusive: exclusive) // TODO(shinyquagsire23): Make this configurable
             } else {
                 print("Error: No window reference available to apply aspect ratio lock.")
                 // Optionally provide user feedback here, e.g., an alert
@@ -130,7 +223,8 @@ struct _UIKitStreamViewWindowButton: View {
                     if let window = viewToFindWindow?.window {
                         print("Found window by traversing view hierarchy: \(window)")
                         currentWindow = window
-                        AudioHelpers.fixAudioForSurroundForUIKitWindow(window)
+                        let exclusive = MainViewModel.shouldUseExclusiveAudio(microphoneActive: false)
+                        AudioHelpers.fixAudioForSurroundForUIKitWindow(window, exclusive: exclusive)
                         return
                     }
                     viewToFindWindow = viewToFindWindow?.superview
@@ -163,9 +257,18 @@ struct _UIKitStreamView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewControllerType {
         let streamView = StreamFrameViewController()
         streamView.streamConfig = streamConfig
-        streamView.connectedCallback = {
+        streamView.connectedCallback = { [weak streamView] in
             print("Connected in Swift!")
-            AudioHelpers.fixAudioForSurroundForCurrentWindow() // TODO(shinyquagsire23): Make this configurable
+            let exclusive = MainViewModel.shouldUseExclusiveAudio(microphoneActive: false)
+            AudioHelpers.fixAudioForSurroundForCurrentWindow(exclusive: exclusive) // TODO(shinyquagsire23): Make this configurable
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                guard
+                    let window = streamView?.view.window ?? streamView?.view?.superview?.window
+                else {
+                    return
+                }
+                applyAspectRatioLock(streamConfig: streamConfig, targetWindow: window)
+            }
         };
         streamView.disconnectedCallback = {
             print("Disconnected in Swift!")
@@ -184,9 +287,25 @@ class Reference<T: AnyObject> {
     weak var object: T?
 }
 
+// MARK: - View Modifiers
+
+extension View {
+    @ViewBuilder
+    func applyCornerRadius(_ radius: CGFloat) -> some View {
+        if radius > 0 {
+            // Use compositingGroup to optimize rendering, then clipShape
+            // This approach minimizes the impact on rendering quality
+            self.clipShape(RoundedRectangle(cornerRadius: radius))
+        } else {
+            self
+        }
+    }
+}
+
 // MARK: - Helper Functions
 
-func applyAspectRatioLock(streamConfig: StreamConfiguration, targetWindow: UIWindow?) {
+@MainActor
+func applyAspectRatioLock(streamConfig: StreamConfiguration, targetWindow: UIWindow?, useSavedSize: Bool = true) {
     guard let window = targetWindow else {
         print("Error: No target window provided to apply aspect ratio lock.")
         return
@@ -198,18 +317,40 @@ func applyAspectRatioLock(streamConfig: StreamConfiguration, targetWindow: UIWin
 
     print("Applying Aspect Ratio Lock - Stream Width: \(streamWidth), Stream Height: \(streamHeight), Stream AR: \(streamAspectRatio)")
 
-    let maxWidth: CGFloat = 2000 // Increased maxWidth for potentially larger screens
     var desiredSize = CGSize.zero
+    
+    // If we have a saved window size and useSavedSize is true, use it
+    if useSavedSize, let savedSize = MainViewModel.shared.savedStreamWindowSize {
+        // Verify the saved size maintains the correct aspect ratio (within tolerance)
+        let savedAspectRatio = savedSize.width / savedSize.height
+        let aspectRatioDifference = abs(savedAspectRatio - streamAspectRatio) / streamAspectRatio
+        
+        // If aspect ratio is close enough (within 5% tolerance), use saved size
+        if aspectRatioDifference < 0.05 {
+            desiredSize = savedSize
+            print("Using saved window size: \(savedSize)")
+            // Clear saved size after using it
+            MainViewModel.shared.savedStreamWindowSize = nil
+        } else {
+            print("Saved size aspect ratio mismatch, recalculating. Saved AR: \(savedAspectRatio), Stream AR: \(streamAspectRatio)")
+            // Fall through to calculate new size
+        }
+    }
+    
+    // If we don't have a saved size or it doesn't match, calculate new size
+    if desiredSize == .zero {
+        let maxWidth: CGFloat = 2000 // Increased maxWidth for potentially larger screens
+        
+        for desiredWidthInt in (1...Int(maxWidth)).reversed() {
+            let desiredWidth = CGFloat(desiredWidthInt)
+            let desiredHeightFloat = desiredWidth / streamAspectRatio
+            let desiredHeightInt = Int(round(desiredHeightFloat))
 
-    for desiredWidthInt in (1...Int(maxWidth)).reversed() {
-        let desiredWidth = CGFloat(desiredWidthInt)
-        let desiredHeightFloat = desiredWidth / streamAspectRatio
-        let desiredHeightInt = Int(round(desiredHeightFloat))
-
-        if desiredHeightInt > 0 {
-            desiredSize = CGSize(width: desiredWidth, height: CGFloat(desiredHeightInt))
-            //print("Calculated Desired Size - Width: \(desiredSize.width), Height: \(desiredSize.height)")
-            break
+            if desiredHeightInt > 0 {
+                desiredSize = CGSize(width: desiredWidth, height: CGFloat(desiredHeightInt))
+                //print("Calculated Desired Size - Width: \(desiredSize.width), Height: \(desiredSize.height)")
+                break
+            }
         }
     }
 

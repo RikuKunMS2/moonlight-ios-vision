@@ -3,6 +3,59 @@
 import Foundation
 import Observation
 import AppIntents
+import SwiftUI
+
+private let audioSessionModeDefaultsKey = "audioSessionModePreference"
+private let windowCornerRadiusDefaultsKey = "windowCornerRadiusPreference"
+private let appLanguageDefaultsKey = "appLanguagePreference"
+
+@objc public enum AudioSessionMode: Int, CaseIterable, Sendable, Hashable {
+    case exclusive = 0
+    case mixed
+    case exclusiveWhenMicActive
+
+    public var displayName: LocalizedStringKey {
+        switch self {
+        case .exclusive:
+            return "Microphone Exclusive"
+        case .mixed:
+            return "Allow Mixing with Other Audio"
+        case .exclusiveWhenMicActive:
+            return "Exclusive Only When Microphone Active"
+        }
+    }
+    
+    public func localizedDisplayName(for language: AppLanguage) -> String {
+        switch (self, language) {
+        case (.exclusive, .english):
+            return "Microphone Exclusive"
+        case (.exclusive, .chinese):
+            return "麦克风独占"
+        case (.mixed, .english):
+            return "Allow Mixing with Other Audio"
+        case (.mixed, .chinese):
+            return "允许与其他音频混音"
+        case (.exclusiveWhenMicActive, .english):
+            return "Exclusive Only When Microphone Active"
+        case (.exclusiveWhenMicActive, .chinese):
+            return "仅麦克风开启时独占"
+        }
+    }
+}
+
+@objc public enum AppLanguage: Int, CaseIterable, Sendable, Hashable {
+    case english = 0
+    case chinese
+
+    public var displayName: LocalizedStringKey {
+        switch self {
+        case .english:
+            return "English"
+        case .chinese:
+            return "简体中文"
+        }
+    }
+}
 
 #if os(visionOS)
 @Observable
@@ -27,6 +80,9 @@ public class TemporarySettings: NSObject {
     @objc public var multiController = false
     @objc public var swapABXYButtons = false
     @objc public var playAudioOnPC = false
+    @objc public var audioSessionMode: AudioSessionMode = .exclusive
+    @objc public var windowCornerRadius: Double = 0.0
+    @objc public var appLanguageRaw: Int = AppLanguage.english.rawValue
     @objc public var optimizeGames = false
     @objc public var enableHdr = false
     @objc public var btMouseSupport = false
@@ -48,6 +104,18 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererAnimateOpening = false
         self.realitykitRendererCurvature = 0.0
         self.dimPassthrough = false
+        self.windowCornerRadius = (UserDefaults.standard.object(forKey: windowCornerRadiusDefaultsKey) as? Double) ?? 0.0
+        if let storedMode = UserDefaults.standard.object(forKey: audioSessionModeDefaultsKey) as? Int,
+           let mode = AudioSessionMode(rawValue: storedMode) {
+            self.audioSessionMode = mode
+        } else {
+            self.audioSessionMode = .exclusive
+        }
+        if let storedLang = UserDefaults.standard.object(forKey: appLanguageDefaultsKey) as? Int {
+            self.appLanguageRaw = storedLang
+        } else {
+            self.appLanguageRaw = AppLanguage.english.rawValue
+        }
         super.init()
     }
 
@@ -81,6 +149,18 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererAnimateOpening = settings.realitykitRendererAnimateOpening == 1
         self.realitykitRendererCurvature = settings.realitykitRendererCurvature?.floatValue ?? 0
         self.dimPassthrough = settings.dimPassthrough?.boolValue ?? false
+        self.windowCornerRadius = (UserDefaults.standard.object(forKey: windowCornerRadiusDefaultsKey) as? Double) ?? 0.0
+        if let storedMode = UserDefaults.standard.object(forKey: audioSessionModeDefaultsKey) as? Int,
+           let mode = AudioSessionMode(rawValue: storedMode) {
+            self.audioSessionMode = mode
+        } else {
+            self.audioSessionMode = .exclusive
+        }
+        if let storedLang = UserDefaults.standard.object(forKey: appLanguageDefaultsKey) as? Int {
+            self.appLanguageRaw = storedLang
+        } else {
+            self.appLanguageRaw = AppLanguage.english.rawValue
+        }
         #endif
 
         super.init()
@@ -90,6 +170,20 @@ public class TemporarySettings: NSObject {
         // save settings to parent
         let dataManager = DataManager()
         dataManager.saveSettings(withBitrate: Int(bitrate), framerate: Int(framerate), height: Int(height), width: Int(width), audioConfig: Int(audioConfig), onscreenControls: Int(onscreenControls.rawValue), optimizeGames: optimizeGames, multiController: multiController, swapABXYButtons: swapABXYButtons, audioOnPC: playAudioOnPC, preferredCodec: UInt32(preferredCodec.rawValue), renderer: renderer.rawValue, useFramePacing: useFramePacing, enableHdr: enableHdr, btMouseSupport: btMouseSupport, absoluteTouchMode: absoluteTouchMode, statsOverlay: statsOverlay, realitykitRendererAnimateOpening: realitykitRendererAnimateOpening, realitykitRendererCurvature: NSNumber(value: realitykitRendererCurvature), dimPassthrough: dimPassthrough)
+        UserDefaults.standard.set(audioSessionMode.rawValue, forKey: audioSessionModeDefaultsKey)
+        UserDefaults.standard.set(windowCornerRadius, forKey: windowCornerRadiusDefaultsKey)
+        UserDefaults.standard.set(appLanguageRaw, forKey: appLanguageDefaultsKey)
+    }
+}
+
+extension TemporarySettings {
+    var appLanguage: AppLanguage {
+        get {
+            AppLanguage(rawValue: appLanguageRaw) ?? .english
+        }
+        set {
+            appLanguageRaw = newValue.rawValue
+        }
     }
 }
 

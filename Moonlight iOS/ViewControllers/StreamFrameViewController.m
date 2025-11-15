@@ -149,7 +149,8 @@
     _stageLabel = [[UILabel alloc] init];
     [self.view addSubview:_stageLabel];
     [_stageLabel setUserInteractionEnabled:NO];
-    [_stageLabel setText:[NSString stringWithFormat:@"Starting %@...", self.streamConfig.appName]];
+    NSString *formatString = [MainViewModel startingStreamFormatString];
+    [_stageLabel setText:[NSString stringWithFormat:formatString, self.streamConfig.appName]];
     [_stageLabel sizeToFit];
     _stageLabel.textAlignment = NSTextAlignmentCenter;
     _stageLabel.textColor = [UIColor whiteColor];
