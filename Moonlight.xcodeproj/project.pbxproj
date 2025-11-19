@@ -282,6 +282,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		3E0863FF2ECD6BB7006549CB /* Moonlight XrOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Moonlight XrOS.entitlements"; sourceTree = "<group>"; };
 		3E4F94682DC2E2D6006CF0C1 /* ComputerViewWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerViewWrapper.swift; sourceTree = "<group>"; };
 		3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatesView.swift; sourceTree = "<group>"; };
 		566E9D2B2770B23A00EF7BFE /* Moonlight v1.7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.7.xcdatamodel"; sourceTree = "<group>"; };
@@ -705,6 +706,7 @@
 		FB290CE519B2C406004C83CF = {
 			isa = PBXGroup;
 			children = (
+				3E0863FF2ECD6BB7006549CB /* Moonlight XrOS.entitlements */,
 				F7A119592B5DE1AB001E8686 /* Moonlight Vision */,
 				F7A119072B5DDECC001E8686 /* Moonlight iOS */,
 				9896219423D15C2900211983 /* X1Kit */,
@@ -1512,8 +1514,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = YES;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				CODE_SIGN_ENTITLEMENTS = "Moonlight XrOS.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = UHY653Z667;
@@ -1562,11 +1565,12 @@
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS-Sim",
 				);
-				MARKETING_VERSION = 11.0.11;
+				MARKETING_VERSION = 11.0.12;
 				OTHER_LDFLAGS = "-ld64";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-lingganua";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = xros;
 				SKIP_INSTALL = NO;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -1589,8 +1593,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = YES;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				CODE_SIGN_ENTITLEMENTS = "Moonlight XrOS.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				DEVELOPMENT_TEAM = UHY653Z667;
@@ -1639,11 +1644,12 @@
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS-Sim",
 				);
-				MARKETING_VERSION = 11.0.11;
+				MARKETING_VERSION = 11.0.12;
 				OTHER_LDFLAGS = "-ld64";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-lingganua";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = xros;
 				SKIP_INSTALL = NO;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
