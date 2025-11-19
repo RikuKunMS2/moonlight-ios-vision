@@ -33,9 +33,18 @@ struct UpdatesView: View {
 
                 Section(header: Text("Latest Updates")) { // Section for latest updates
                     VStack(alignment: .leading) { // Original VStack for text alignment
+                        Text("Version 11.0.12 (Nov 18, 2025)")
+                            .font(.headline)
+                        Text("- Added the Low Latency Streaming Entitlement (the awdl thing) to improve network performance on wifi channels that are not on ch149(us)/ch44(eu)/ch6(2.4ghz)")
+                            .font(.body)
+
+                    }
+                    .padding(.vertical) // Keep vertical padding
+                    .frame(maxWidth: .infinity, alignment: .leading) // Ensure VStack takes full width and aligns content to leading
+                    VStack(alignment: .leading) { // Original VStack for text alignment
                         Text("Version 11.0.11 (Oct 25, 2025)")
                             .font(.headline)
-                        Text("- Fixed the memory resumption bug (previously the app had no idea how to handle the Vision OS 26 resumption of app on memoery exit mode) if you have an issue with an empty window press and hold the crowm and capture buttons to force quit, but hopefully this isn't an issue anymore.")
+                        Text("- Fixed the memory resumption bug (previously the app had no idea how to handle the Vision OS 26 resumption of app on memory exit mode) if you have an issue with an empty window press and hold the crown and capture buttons to force quit, but hopefully this isn't an issue anymore.")
                             .font(.body)
                         Text("- Implemented fix for controller crashing from JFuellem (thank you so much) that changes a sync to an async (oops!)")
                             .font(.body)
