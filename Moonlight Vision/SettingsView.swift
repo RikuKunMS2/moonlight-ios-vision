@@ -123,7 +123,10 @@ struct SettingsView: View {
                 }
                 
                 if (settings.renderer == .realitykit) {
-                    Section(header: Text("RealityKit Renderer Settings (Experimental)"), footer: Text("The new RealityKit renderer is experemental and currently does not support keyboard or mouse, come at me on reddit u/tht7 if you care")) {
+                    Section(header: Text("RealityKit Renderer Settings (Experimental)"), footer: Text("The new RealityKit renderer is experemental and does not support tap to control mouse, but will support a physical mouse and keyboard")) {
+                        // Add this Toggle
+                                Toggle("Immersive Mode (Movable Screen)", isOn: $settings.realitykitImmersiveMode)
+                                    .onChange(of: settings.realitykitImmersiveMode) { _, _ in settings.save() }
                         Toggle("Animate screen curve", isOn: $settings.realitykitRendererAnimateOpening)
                             .onChange(of: settings.realitykitRendererAnimateOpening) { _, _ in settings.save() }
                         

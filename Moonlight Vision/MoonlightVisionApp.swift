@@ -28,28 +28,40 @@ struct MoonlightVisionApp: SwiftUI.App {
         }
         .handlesExternalEvents(matching: ["dummy"])
         
-        WindowGroup(id: "realitykitStreamingWindow", for: StreamConfiguration.self) { streamConfig in
-                RealityKitStreamView(streamConfig: streamConfig, needsHdr: appDelegate.mainViewModel.streamSettings.enableHdr)
-                .environmentObject(appDelegate.mainViewModel)
-                .onDisappear {
-                    streamConfig.wrappedValue = nil
+        // 1. Bounded Volumetric Window (Existing)
+                WindowGroup(id: "realitykitStreamingWindow", for: StreamConfiguration.self) { streamConfig in
+                     RealityKitStreamView(
+                         streamConfig: streamConfig,
+                         needsHdr: appDelegate.mainViewModel.streamSettings.enableHdr,
+                         isImmersive: false // Explicitly false
+                     )
+                     .environmentObject(appDelegate.mainViewModel)
+                     .onDisappear { streamConfig.wrappedValue = nil }
                 }
-                .onChange(of: appDelegate.mainViewModel) {
-                    AudioHelpers.fixAudioForSurroundForCurrentWindow()
-                }
-        }
-        .windowStyle(.volumetric)
-        .defaultSize(width: 2, height: 2, depth: 2, in: .meters)
+                .windowStyle(.volumetric)
+                .defaultSize(width: 2, height: 2, depth: 2, in: .meters)
 
-        WindowGroup(id: "classicStreamingWindow", for: StreamConfiguration.self) { streamConfig in
-            // MODIFIED: Pass the optional binding 'streamConfig' directly
-            UIKitStreamView(streamConfig: streamConfig)
-            .environmentObject(appDelegate.mainViewModel)
+                // 2. Unbounded Immersive Space (New)
+                ImmersiveSpace(id: "realitykitImmersiveSpace", for: StreamConfiguration.self) { streamConfig in
+                     RealityKitStreamView(
+                         streamConfig: streamConfig,
+                         needsHdr: appDelegate.mainViewModel.streamSettings.enableHdr,
+                         isImmersive: true // Explicitly true
+                     )
+                     .environmentObject(appDelegate.mainViewModel)
+                     .onDisappear { streamConfig.wrappedValue = nil }
+                }
+                .immersionStyle(selection: .constant(.mixed), in: .mixed) // Mixed allows passthrough
+
+                // 3. UIKit Window
+                WindowGroup(id: "classicStreamingWindow", for: StreamConfiguration.self) { streamConfig in
+                    UIKitStreamView(streamConfig: streamConfig)
+                    .environmentObject(appDelegate.mainViewModel)
+                }
+                .windowStyle(.plain)
+                .windowResizability(.contentSize)
+            }
         }
-        .windowStyle(.plain)
-        .windowResizability(.contentSize)
-    }
-}
 
 @main
 struct MainWrapper {

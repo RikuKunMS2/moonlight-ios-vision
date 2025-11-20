@@ -25,20 +25,39 @@ class DummyControllerDelegate: NSObject, ControllerSupportDelegate {
 struct RealityKitStreamView: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+    
     @Binding var streamConfig: StreamConfiguration?
     var needsHdr: Bool
+    var isImmersive: Bool
     
     var body: some View {
+        // We unwrap the binding here to pass a non-optional binding to the internal view
         if streamConfig != nil {
-            _RealityKitStreamView(streamConfig: Binding<StreamConfiguration>(
-                get: { streamConfig ?? StreamConfiguration() },
-                set: { streamConfig = $0 }
-            ), needsHdr: needsHdr) {
-                dismissWindow()
+            _RealityKitStreamView(
+                streamConfig: Binding<StreamConfiguration>(
+                    get: { streamConfig ?? StreamConfiguration() },
+                    set: { streamConfig = $0 }
+                ),
+                needsHdr: needsHdr,
+                isImmersive: isImmersive
+            ) {
+                // Close Action
+                if isImmersive {
+                    Task { await dismissImmersiveSpace() }
+                } else {
+                    dismissWindow()
+                }
                 streamConfig = nil
             }
         } else {
-            ProgressView().onAppear { dismissWindow() }
+            ProgressView().onAppear {
+                if isImmersive {
+                    Task { await dismissImmersiveSpace() }
+                } else {
+                    dismissWindow()
+                }
+            }
         }
     }
 }
@@ -46,11 +65,14 @@ struct RealityKitStreamView: View {
 struct _RealityKitStreamView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var viewModel: MainViewModel
 
     @Binding var streamConfig: StreamConfiguration
+    var needsHdr: Bool
+    var isImmersive: Bool
+    let closeAction: () -> Void
 
     // UI State
     @State private var showVirtualKeyboard = false
@@ -58,11 +80,24 @@ struct _RealityKitStreamView: View {
     @State var curveAnimationMultiplier: Float = 1
     @State var controllerSupport: ControllerSupport?
     
-    // Position & Limits State
+    // Interaction State (Immersive Only)
+    @State private var isInteractive: Bool = true // If false, gestures move the screen
+    
+    // Volumetric Position State
     @State var height: Float = 0
     @State private var depthOffset: Float = 0.0
     @State private var yLimits: ClosedRange<Float> = -0.5...0.5
     @State private var zLimits: ClosedRange<Float> = -0.5...0.5
+    
+    // Immersive Transform State
+    @State private var immersiveScale: Float = 1.8 // Default scale
+    @State private var immersivePosition: SIMD3<Float> = SIMD3<Float>(0, 1.5, -2.0) // Default: 1.5m up, 2m away
+    @State private var startDragPosition: SIMD3<Float>? = nil
+    
+    // --- NEW: Immersion (Black Out) State ---
+    @State private var immersionAmount: Float = 0.0
+    @State private var blackOutSphere: ModelEntity = ModelEntity()
+    // ----------------------------------------
     
     @State private var safeHDRSettings = ThreadSafeHDRSettings(
             params: HDRParams(boost: 2.0, contrast: 1.0, saturation: 1.0, brightness: 0.0)
@@ -76,7 +111,6 @@ struct _RealityKitStreamView: View {
     @State var texture: TextureResource
     @State var screen: ModelEntity = ModelEntity()
     
-    let closeAction: () -> Void
     @State var videoMode: VideoMode = .standard2D
     @State private var surfaceMaterial: ShaderGraphMaterial?
 
@@ -93,9 +127,11 @@ struct _RealityKitStreamView: View {
         }
     }
     
-    init(streamConfig: Binding<StreamConfiguration>, needsHdr: Bool, closeAction: @escaping () -> Void) {
+    init(streamConfig: Binding<StreamConfiguration>, needsHdr: Bool, isImmersive: Bool, closeAction: @escaping () -> Void) {
         self.closeAction = closeAction
         self._streamConfig = streamConfig
+        self.needsHdr = needsHdr
+        self.isImmersive = isImmersive
         self.controllerSupport = ControllerSupport(config: streamConfig.wrappedValue, delegate: DummyControllerDelegate())
         let bytesPerPixel = needsHdr ? 8 : 4
         let data = Data.init(count: bytesPerPixel * Int(streamConfig.wrappedValue.width) * Int(streamConfig.wrappedValue.height))
@@ -111,8 +147,8 @@ struct _RealityKitStreamView: View {
     var body: some View {
         GeometryReader3D { proxy in
             ZStack {
-                RealityView { content in
-                    // Initial setup
+                RealityView { content, attachments in
+                    // 1. Setup Screen
                     let mesh = try! _RealityKitStreamView.generateCurvedPlane(
                         width: MAX_WIDTH_METERS,
                         aspectRatio: aspectRatio,
@@ -120,7 +156,8 @@ struct _RealityKitStreamView: View {
                         curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier
                     )
                     
-                    let colBox = ShapeResource.generateBox(width: 2, height: 2 * aspectRatio, depth: 0.001)
+                    let colDepth: Float = isImmersive ? 0.1 : 0.001
+                    let colBox = ShapeResource.generateBox(width: 2, height: 2 * aspectRatio, depth: colDepth)
                         .offsetBy(translation: .init(x: 0, y: -0.43, z: 0))
                     
                     screen = ModelEntity(mesh: mesh, materials: [])
@@ -134,11 +171,39 @@ struct _RealityKitStreamView: View {
                     screen.components.set(InputTargetComponent())
                     content.add(screen)
                     
-                } update: { content in
+                    // 2. Setup "Black Out" Sphere (Immersive Only)
+                    if isImmersive {
+                        // Create a giant black sphere
+                        let sphereMesh = MeshResource.generateSphere(radius: 100) // 100m radius
+                        let blackMaterial = UnlitMaterial(color: .black)
+                        
+                        blackOutSphere = ModelEntity(mesh: sphereMesh, materials: [blackMaterial])
+                        // Invert scale on X to flip the sphere inside-out so we see the color from inside
+                        blackOutSphere.scale = SIMD3<Float>(-1, 1, 1)
+                        
+                        // Start invisible
+                        blackOutSphere.components.set(OpacityComponent(opacity: 0.0))
+                        
+                        content.add(blackOutSphere)
+                    }
+                    
+                    // 3. Attachments
+                    if let inputAttachment = attachments.entity(for: "input_capture") {
+                        screen.addChild(inputAttachment)
+                        inputAttachment.position = [0, 0, 0.001]
+                    }
+                    
+                    if isImmersive, let controls = attachments.entity(for: "controls") {
+                        screen.addChild(controls)
+                        let screenHeight = MAX_WIDTH_METERS * aspectRatio
+                        controls.position = [0, -(screenHeight / 2.0) - 0.25, 0.1]
+                    }
+                    
+                } update: { content, attachments in
                     let currentCurve = viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier
                     let totalAngle = MAX_CURVE_ANGLE * currentCurve.clamped(to: 0...1)
                     
-                    // 1. Generate Mesh
+                    // --- UPDATE MESH ---
                     let mesh = try! _RealityKitStreamView.generateCurvedPlane(
                         width: MAX_WIDTH_METERS,
                         aspectRatio: aspectRatio,
@@ -146,78 +211,109 @@ struct _RealityKitStreamView: View {
                         curveMagnitude: currentCurve
                     )
                     
-                    // 2. Calculate Z-Correction (Sagitta)
                     let radius = totalAngle < 0.001 ? Float.infinity : (MAX_WIDTH_METERS / totalAngle)
-                    // How deep is the curve physically?
                     let curveDepth = totalAngle < 0.001 ? 0 : radius * (1.0 - cos(totalAngle / 2.0))
-                    // Push back so edges are at 0
                     let zCorrection = -curveDepth
 
-                    // 3. Scale Calculation
-                    // Get volume dimensions
-                    let volSize = content.convert(proxy.frame(in: .local), from: .local, to: .scene).extents
-                    // We arbitrarily scale so the width fits comfortably (e.g. half the volume width)
-                    // Adjust this divider as per your design preference
-                    let scaleFactor = volSize.x / 2.0
-                    screen.transform.scale = .init(repeating: scaleFactor)
-                    
-                    // 4. Calculate LIMITS dynamically
-                    // This must be done asynchronously to avoid State-update loops during view render
-                    DispatchQueue.main.async {
-                        // Height: Total volume height / 2 minus Screen Half Height
-                        let screenHalfHeight = (MAX_WIDTH_METERS * aspectRatio * scaleFactor) / 2
-                        let volHalfHeight = volSize.y / 2
-                        let safePadding: Float = 0.05 // 5cm padding
+                    // --- APPLY TRANSFORMS ---
+                    if isImmersive {
+                        screen.scale = SIMD3<Float>(repeating: immersiveScale)
+                        screen.position = immersivePosition + SIMD3<Float>(0, 0, zCorrection)
                         
-                        let maxY = max(0, volHalfHeight - screenHalfHeight - safePadding)
-                        let newYLimits = -maxY...maxY
+                        // Update Black Out Sphere Opacity
+                        blackOutSphere.components.set(OpacityComponent(opacity: immersionAmount))
+                        // Keep the sphere centered on the user (0,0,0) so they don't walk out of it easily
+                        blackOutSphere.position = .zero
                         
-                        // Depth:
-                        // Front Limit: Volume Front - Safe Padding
-                        // Back Limit: Volume Back + Screen Depth + Safe Padding
-                        let volHalfDepth = volSize.z / 2
-                        let maxZ = volHalfDepth - safePadding
+                    } else {
+                        let volSize = content.convert(proxy.frame(in: .local), from: .local, to: .scene).extents
+                        let scaleFactor = volSize.x / 2.0
+                        screen.scale = SIMD3<Float>(repeating: scaleFactor)
                         
-                        // The "Back" of our object is at (offset + zCorrection).
-                        // But zCorrection is negative. So the physical back is at z - curveDepth * scale.
-                        let scaledCurveDepth = curveDepth * scaleFactor
-                        let minZ = -volHalfDepth + scaledCurveDepth + safePadding
+                        DispatchQueue.main.async {
+                            let screenHalfHeight = (MAX_WIDTH_METERS * aspectRatio * scaleFactor) / 2
+                            let volHalfHeight = volSize.y / 2
+                            let safePadding: Float = 0.05
+                            
+                            let maxY = max(0, volHalfHeight - screenHalfHeight - safePadding)
+                            let newYLimits = -maxY...maxY
+                            
+                            let volHalfDepth = volSize.z / 2
+                            let maxZ = volHalfDepth - safePadding
+                            let scaledCurveDepth = curveDepth * scaleFactor
+                            let minZ = -volHalfDepth + scaledCurveDepth + safePadding
+                            let safeMaxZ = max(minZ, maxZ)
+                            let newZLimits = minZ...safeMaxZ
+                            
+                            if self.yLimits != newYLimits { self.yLimits = newYLimits }
+                            if self.zLimits != newZLimits { self.zLimits = newZLimits }
+                        }
                         
-                        // Ensure range is valid
-                        let safeMaxZ = max(minZ, maxZ)
-                        let newZLimits = minZ...safeMaxZ
-                        
-                        // Only update if changed significantly to save cycles
-                        if self.yLimits != newYLimits { self.yLimits = newYLimits }
-                        if self.zLimits != newZLimits { self.zLimits = newZLimits }
-                        
-                        // Clamp current values if they are now out of bounds
-                        if self.height > newYLimits.upperBound { self.height = newYLimits.upperBound }
-                        if self.height < newYLimits.lowerBound { self.height = newYLimits.lowerBound }
-                        if self.depthOffset > newZLimits.upperBound { self.depthOffset = newZLimits.upperBound }
-                        if self.depthOffset < newZLimits.lowerBound { self.depthOffset = newZLimits.lowerBound }
+                        screen.position = SIMD3<Float>(0, height, depthOffset + zCorrection)
                     }
 
-                    // 5. Apply Transforms
-                    screen.transform.translation = SIMD3<Float>(0, height, depthOffset + zCorrection)
                     try! screen.model!.mesh.replace(with: mesh.contents)
+                    
+                    // --- UPDATE ATTACHMENTS ---
+                    if let inputAttachment = attachments.entity(for: "input_capture") {
+                        let attachmentWidthPoints: Float = 2000.0
+                        let physicalWidth: Float = MAX_WIDTH_METERS
+                        let requiredScale = physicalWidth / attachmentWidthPoints
+                        inputAttachment.scale = SIMD3<Float>(requiredScale, requiredScale, requiredScale)
+                        
+                        if isInteractive {
+                             if !inputAttachment.components.has(InputTargetComponent.self) {
+                                inputAttachment.components.set(InputTargetComponent())
+                             }
+                        } else {
+                             if inputAttachment.components.has(InputTargetComponent.self) {
+                                inputAttachment.components.remove(InputTargetComponent.self)
+                             }
+                        }
+                    }
+                } attachments: {
+                    Attachment(id: "input_capture") {
+                        if let support = controllerSupport {
+                            InputCaptureView(
+                                controllerSupport: support,
+                                showKeyboard: $showVirtualKeyboard,
+                                curvature: viewModel.streamSettings.realitykitRendererCurvature
+                            )
+                            .frame(width: 2000, height: 2000 * CGFloat(aspectRatio))
+                            .opacity(0.001)
+                        }
+                    }
+                    
+                    Attachment(id: "controls") {
+                        if isImmersive {
+                            controlsView
+                                .frame(width: 600)
+                                .glassBackgroundEffect()
+                        }
+                    }
                 }
                 .handlesGameControllerEvents(matching: .gamepad)
+                .gesture(
+                    DragGesture()
+                        .targetedToEntity(screen)
+                        .onChanged { value in
+                            guard isImmersive, !isInteractive else { return }
+                            if startDragPosition == nil { startDragPosition = immersivePosition }
+                            let translation = value.convert(value.translation3D, from: .local, to: .scene)
+                            immersivePosition = startDragPosition! + SIMD3<Float>(translation.x, translation.y, translation.z)
+                        }
+                        .onEnded { _ in startDragPosition = nil }
+                )
+                .gesture(
+                    MagnifyGesture()
+                        .targetedToEntity(screen)
+                        .onChanged { value in
+                            guard isImmersive, !isInteractive else { return }
+                            let newScale = immersiveScale * Float(value.magnification)
+                            immersiveScale = min(max(newScale, 0.05), 10.0)
+                        }
+                )
                 
-                // Input Capture
-                if let support = controllerSupport {
-                    InputCaptureView(
-                        controllerSupport: support,
-                        showKeyboard: $showVirtualKeyboard,
-                        curvature: viewModel.streamSettings.realitykitRendererCurvature
-                    )
-                    .aspectRatio(CGFloat(aspectRatio), contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .opacity(0.001)
-                    .allowsHitTesting(true)
-                }
-                
-                // Keyboard Hint
                 if showVirtualKeyboard {
                     VStack(spacing: 12) {
                         Image(systemName: "keyboard").font(.system(size: 40))
@@ -250,130 +346,47 @@ struct _RealityKitStreamView: View {
             }
             .padding().glassBackgroundEffect()
         }
-        .ornament(attachmentAnchor: .scene(.bottomTrailingFront), contentAlignment: .bottomLeading) {
-             StreamControls(
-                 horizontal: false,
-                 streamConfig: $streamConfig,
-                 isKeyboardActive: showVirtualKeyboard,
-                 closeAction: {
-                    viewModel.activelyStreaming = false
-                    self._streamMan?.stopStream()
-                    self.controllerSupport?.cleanup()
-                    openWindow(id: "mainView")
-                    self.closeAction()
-                 },
-                 toggleKeyboardAction: { showVirtualKeyboard.toggle() }
-             ) {
-                 HStack {
-                     Image(systemName: "sun.max.fill")
-                     Text("Boost")
-                     Slider(value: $viewModel.streamSettings.brightness, in: 1.0...5.0, step: 0.1).frame(width: 220)
-                 }
-                 .padding(.vertical, 5)
-                 
-                 HStack {
-                    Button("Flatten", systemImage: viewModel.streamSettings.realitykitRendererCurvature == 0 ? "light.panel" : "pano.fill") {
-                        if viewModel.streamSettings.realitykitRendererCurvature == 0 {
-                            viewModel.streamSettings.realitykitRendererCurvature = curveMagnitudeMemory
-                        } else {
-                            curveMagnitudeMemory = viewModel.streamSettings.realitykitRendererCurvature
-                            viewModel.streamSettings.realitykitRendererCurvature = 0
-                        }
-                    }
-                    Slider(value: $viewModel.streamSettings.realitykitRendererCurvature, in: 0 ... 1, step: 0.001)
-                        .frame(width: 220)
-                        .padding([.trailing])
-                }
-                 
-                // AUTO-CALCULATED Z-DEPTH SLIDER
-                HStack {
-                    Button("Reset Depth", systemImage: "arrow.up.and.down.and.arrow.left.and.right") { depthOffset = 0.0 }
-                    // Uses dynamic zLimits
-                    Slider(value: $depthOffset, in: zLimits)
-                        .frame(width: 220)
-                        .padding([.trailing])
-                }
-
-                HStack {
-                    Toggle(isOn: Binding(
-                        get: { videoMode == .sideBySide3D },
-                        set: { val in
-                            videoMode = val ? .sideBySide3D : .standard2D
-                            if videoMode == .sideBySide3D {
-                                screen.model?.materials = [surfaceMaterial!]
-                            } else {
-                                screen.model?.materials = [UnlitMaterial(texture: texture)]
-                            }
-                        }
-                    )) { Text("3D Mode") }.toggleStyle(.button)
-                }
-                
-                // AUTO-CALCULATED HEIGHT SLIDER
-                HStack {
-                    Button("Height", systemImage: "arrow.up.and.line.horizontal.and.arrow.down") {}
-                    // Uses dynamic yLimits
-                    Slider(value: $height, in: yLimits)
-                        .frame(width: 220)
-                        .padding([.trailing])
-                }
-                
-                Button("Main Button", systemImage: "gamecontroller.fill") { }
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            if let controller = self.controllerSupport?.getOscController() {
-                                self.controllerSupport?.setButtonFlag(controller, flags: 0x0400)
-                                self.controllerSupport?.updateFinished(controller)
-                            }
-                        }
-                        .onEnded { _ in
-                            if let controller = self.controllerSupport?.getOscController() {
-                                self.controllerSupport?.clearButtonFlag(controller, flags: 0x0400)
-                                self.controllerSupport?.updateFinished(controller)
-                            }
-                        }
-                )
-            }
-        }.onChange(of: viewModel.streamSettings.brightness) { _, newValue in
+        .modifier(VolumetricWindowControls(isImmersive: isImmersive, content: { controlsView }))
+        .onChange(of: viewModel.streamSettings.brightness) { _, newValue in
             safeHDRSettings.value = HDRParams(boost: newValue, contrast: 1.0, saturation: 1.0, brightness: 0.0)
         }
         .onAppear {
-            safeHDRSettings.value = HDRParams(boost: viewModel.streamSettings.brightness, contrast: 1.0, saturation: 1.0, brightness: 0.0)
-            if !viewModel.activelyStreaming {
-                openWindow(id: "mainView"); self.closeAction(); return
-            }
-            dismissWindow(id: "mainView"); dismissWindow(id: "dummy")
-            
-            self.curveAnimationMultiplier = viewModel.streamSettings.realitykitRendererAnimateOpening ? 0 : 1
-            
-            self._streamMan = StreamManager(
-                config: self.streamConfig,
-                rendererProvider: {
-                    DrawableVideoDecoder(
-                        texture: self.texture,
-                        callbacks: self.connectionCallbacks,
-                        aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height),
-                        useFramePacing: self.streamConfig.useFramePacing,
-                        enableHDR: self.viewModel.streamSettings.enableHdr,
-                        hdrSettingsProvider: { [safeHDRSettings] in return safeHDRSettings.value },
-                        callbackToRender: { texture, correctedResultion in
-                            DispatchQueue.main.async {
-                                if let correctedResultion = correctedResultion {
-                                    streamConfig.width = Int32(correctedResultion.0)
-                                    streamConfig.height = Int32(correctedResultion.1)
-                                }
-                                self.texture.replace(withDrawables: texture)
-                                self.controllerSupport!.connectionEstablished()
-                                if self.curveAnimationMultiplier == 0 { animateOpening() }
-                            }
-                        })
-                },
-                connectionCallbacks: self.connectionCallbacks
-            )
-            let operationQueue = OperationQueue()
-            operationQueue.addOperation(_streamMan!)
+             safeHDRSettings.value = HDRParams(boost: viewModel.streamSettings.brightness, contrast: 1.0, saturation: 1.0, brightness: 0.0)
+             if !viewModel.activelyStreaming {
+                 openWindow(id: "mainView"); self.closeAction(); return
+             }
+             dismissWindow(id: "mainView"); dismissWindow(id: "dummy")
+             
+             self.curveAnimationMultiplier = viewModel.streamSettings.realitykitRendererAnimateOpening ? 0 : 1
+             
+             self._streamMan = StreamManager(
+                 config: self.streamConfig,
+                 rendererProvider: {
+                     DrawableVideoDecoder(
+                         texture: self.texture,
+                         callbacks: self.connectionCallbacks,
+                         aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height),
+                         useFramePacing: self.streamConfig.useFramePacing,
+                         enableHDR: self.viewModel.streamSettings.enableHdr,
+                         hdrSettingsProvider: { [safeHDRSettings] in return safeHDRSettings.value },
+                         callbackToRender: { texture, correctedResultion in
+                             DispatchQueue.main.async {
+                                 if let correctedResultion = correctedResultion {
+                                     streamConfig.width = Int32(correctedResultion.0)
+                                     streamConfig.height = Int32(correctedResultion.1)
+                                 }
+                                 self.texture.replace(withDrawables: texture)
+                                 self.controllerSupport!.connectionEstablished()
+                                 if self.curveAnimationMultiplier == 0 { animateOpening() }
+                             }
+                         })
+                 },
+                 connectionCallbacks: self.connectionCallbacks
+             )
+             let operationQueue = OperationQueue()
+             operationQueue.addOperation(_streamMan!)
         }
-        .onChange(of: shouldClose) { _, val in if val { openWindow(id: "mainView"); dismissWindow() } }
+        .onChange(of: shouldClose) { _, val in if val { openWindow(id: "mainView"); self.closeAction() } }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
                 viewModel.activelyStreaming = false
@@ -388,7 +401,138 @@ struct _RealityKitStreamView: View {
         .volumeBaseplateVisibility(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
         .supportedVolumeViewpoints(.front)
     }
+    
+    @ViewBuilder
+    var controlsView: some View {
+        StreamControls(
+            horizontal: false,
+            streamConfig: $streamConfig,
+            isKeyboardActive: showVirtualKeyboard,
+            closeAction: {
+               viewModel.activelyStreaming = false
+               self._streamMan?.stopStream()
+               self.controllerSupport?.cleanup()
+               openWindow(id: "mainView")
+               self.closeAction()
+             },
+            toggleKeyboardAction: { showVirtualKeyboard.toggle() }
+        ) {
+            HStack {
+                Image(systemName: "sun.max.fill")
+                Text("Boost / Luminance")
+                Slider(value: $viewModel.streamSettings.brightness, in: 1.0...5.0, step: 0.1).frame(width: 220)
+            }
+            .padding(.vertical, 5)
+            
+            HStack {
+               Button("Flatten", systemImage: viewModel.streamSettings.realitykitRendererCurvature == 0 ? "light.panel" : "pano.fill") {
+                   if viewModel.streamSettings.realitykitRendererCurvature == 0 {
+                       viewModel.streamSettings.realitykitRendererCurvature = curveMagnitudeMemory
+                   } else {
+                       curveMagnitudeMemory = viewModel.streamSettings.realitykitRendererCurvature
+                       viewModel.streamSettings.realitykitRendererCurvature = 0
+                   }
+               }
+               Slider(value: $viewModel.streamSettings.realitykitRendererCurvature, in: 0 ... 1, step: 0.001)
+                   .frame(width: 220)
+                   .padding([.trailing])
+           }
 
+            if !isImmersive {
+                // --- VOLUMETRIC CONTROLS ---
+                HStack {
+                    Button("Reset Depth", systemImage: "arrow.up.and.down.and.arrow.left.and.right") { depthOffset = 0.0 }
+                    Slider(value: $depthOffset, in: zLimits)
+                        .frame(width: 220)
+                        .padding([.trailing])
+                }
+                HStack {
+                    Button("Height", systemImage: "arrow.up.and.line.horizontal.and.arrow.down") {}
+                    Slider(value: $height, in: yLimits)
+                        .frame(width: 220)
+                        .padding([.trailing])
+                }
+            } else {
+                // --- IMMERSIVE CONTROLS ---
+                Divider().padding(.vertical, 5)
+                Text("Spatial").font(.caption).foregroundStyle(.secondary)
+                
+                // BLACK OUT SLIDER
+                HStack {
+                    Image(systemName: immersionAmount > 0.5 ? "moon.fill" : "moon")
+                    Text("Black Sphere Opacity")
+                    Slider(value: $immersionAmount, in: 0.0...1.0)
+                        .frame(width: 220)
+                }
+                
+                HStack {
+                      Image(systemName: "arrow.up.left.and.arrow.down.right")
+                      Text("Size")
+                      Slider(value: $immersiveScale, in: 0.5...6.0)
+                        .frame(width: 220)
+                }
+                
+                HStack {
+                      Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                      Text("Distance")
+                      Slider(value: Binding(
+                        get: { immersivePosition.z },
+                        set: { immersivePosition.z = $0 }
+                      ), in: -10.0 ... -0.5)
+                        .frame(width: 220)
+                }
+                
+                HStack {
+                      Image(systemName: "arrow.up.and.down")
+                      Text("Height")
+                      Slider(value: Binding(
+                        get: { immersivePosition.y },
+                        set: { immersivePosition.y = $0 }
+                      ), in: 0.0 ... 5.0)
+                        .frame(width: 220)
+                }
+                
+                Toggle(isOn: $isInteractive) {
+                    Label(isInteractive ? "Screen Locked (Inputs Active)" : "Screen Unlocked (Movable Screen Active)",
+                          systemImage: isInteractive ? "lock.fill" : "lock.open.fill")
+                }
+                .toggleStyle(.button)
+                .padding(.top, 5)
+            }
+
+            HStack {
+                Toggle(isOn: Binding(
+                    get: { videoMode == .sideBySide3D },
+                    set: { val in
+                        videoMode = val ? .sideBySide3D : .standard2D
+                        if videoMode == .sideBySide3D {
+                           screen.model?.materials = [surfaceMaterial!]
+                       } else {
+                           screen.model?.materials = [UnlitMaterial(texture: texture)]
+                       }
+                    }
+                )) { Text("3D Mode") }.toggleStyle(.button)
+            }
+            
+            Button("Main Button", systemImage: "gamecontroller.fill") { }
+           .simultaneousGesture(
+               DragGesture(minimumDistance: 0)
+                   .onChanged { _ in
+                       if let controller = self.controllerSupport?.getOscController() {
+                           self.controllerSupport?.setButtonFlag(controller, flags: 0x0400)
+                           self.controllerSupport?.updateFinished(controller)
+                       }
+                   }
+                   .onEnded { _ in
+                       if let controller = self.controllerSupport?.getOscController() {
+                           self.controllerSupport?.clearButtonFlag(controller, flags: 0x0400)
+                           self.controllerSupport?.updateFinished(controller)
+                       }
+                   }
+           )
+        }
+    }
+    
     func animateOpening() {
         Task {
             self.animationTimer = Timer.scheduledTimer(withTimeInterval: 0.04, repeats: true) { _ in
@@ -403,7 +547,7 @@ struct _RealityKitStreamView: View {
             self.animationTimer?.fire()
         }
     }
-
+    
     static func generateCurvedPlane(
         width: Float, aspectRatio: Float, resolution: (UInt32, UInt32), curveMagnitude: Float
     ) throws -> MeshResource {
@@ -458,6 +602,24 @@ struct _RealityKitStreamView: View {
         descr.textureCoordinates = MeshBuffers.TextureCoordinates(textureCoordinates)
         descr.primitives = .triangles(indices)
         return try MeshResource.generate(from: [descr])
+    }
+}
+
+// Custom Modifier to conditionalize ornaments
+struct VolumetricWindowControls<ControlsContent: View>: ViewModifier {
+    var isImmersive: Bool
+    @ViewBuilder var content: () -> ControlsContent
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if !isImmersive {
+            content
+                .ornament(attachmentAnchor: .scene(.bottomTrailingFront), contentAlignment: .bottomLeading) {
+                    self.content()
+                }
+        } else {
+            content
+        }
     }
 }
 

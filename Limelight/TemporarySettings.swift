@@ -28,6 +28,7 @@ public class TemporarySettings: NSObject {
 
     @objc public var realitykitRendererAnimateOpening: Bool = false
     @objc public var realitykitRendererCurvature: Float = 0.0
+    @objc public var realitykitImmersiveMode: Bool = false
 
     @objc public var useFramePacing = false
     @objc public var multiController = false
@@ -133,6 +134,9 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererCurvature = settings.realitykitRendererCurvature?.floatValue ?? 0
         self.dimPassthrough = settings.dimPassthrough?.boolValue ?? false
         
+        // FIX: Load Immersive Mode from UserDefaults since CoreData isn't updated yet
+        self.realitykitImmersiveMode = UserDefaults.standard.bool(forKey: "realitykitImmersiveMode")
+        
         let storedBrightness = settings.brightness?.floatValue ?? 0.0
         if storedBrightness < 0.1 {
             self.brightness = 2.2
@@ -145,15 +149,18 @@ public class TemporarySettings: NSObject {
         
         // If we modified the values during the migration block above, save them back to Core Data now.
         if !UserDefaults.standard.bool(forKey: "hasSavedNewDefaults_v1") {
-             // Simple check to see if our in-memory values differ from what we loaded
-             if self.bitrate != loadedBitrate || self.height != loadedHeight {
-                 self.save()
-                 UserDefaults.standard.set(true, forKey: "hasSavedNewDefaults_v1")
-             }
+            // Simple check to see if our in-memory values differ from what we loaded
+            if self.bitrate != loadedBitrate || self.height != loadedHeight {
+                self.save()
+                UserDefaults.standard.set(true, forKey: "hasSavedNewDefaults_v1")
+            }
         }
     }
 
     @objc public func save() {
+        // FIX: Save Immersive Mode to UserDefaults
+        UserDefaults.standard.set(self.realitykitImmersiveMode, forKey: "realitykitImmersiveMode")
+
         // save settings to parent
         let dataManager = DataManager()
         dataManager.saveSettings(
@@ -176,6 +183,7 @@ public class TemporarySettings: NSObject {
                 statsOverlay: statsOverlay,
                 realitykitRendererAnimateOpening: realitykitRendererAnimateOpening,
                 realitykitRendererCurvature: NSNumber(value: realitykitRendererCurvature),
+                // Removed realitykitImmersiveMode from this call to fix the error
                 dimPassthrough: dimPassthrough,
                 brightness: brightness
         )
