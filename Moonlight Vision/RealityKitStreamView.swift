@@ -11,25 +11,22 @@ import RealityKit
 import SwiftUI
 import simd
 
-let COOL_NUMBER: Float = 2.79945612 // 3.8
 let MAX_WIDTH_METERS: Float = 2
+// Limited to ~75 degrees (1.3 rad) to prevent distortion
+let MAX_CURVE_ANGLE: Float = 1.3
 
 @objc
 class DummyControllerDelegate: NSObject, ControllerSupportDelegate {
     func gamepadPresenceChanged() {}
-
     func mousePresenceChanged() {}
-
     func streamExitRequested() {}
 }
 
 struct RealityKitStreamView: View {
     @Environment(\.dismissWindow) private var dismissWindow
-    @Environment(\.openWindow) private var openWindow // Keep this
+    @Environment(\.openWindow) private var openWindow
     @Binding var streamConfig: StreamConfiguration?
     var needsHdr: Bool
-    
-    // @EnvironmentObject private var viewModel: MainViewModel // Not needed here
     
     var body: some View {
         if streamConfig != nil {
@@ -37,12 +34,6 @@ struct RealityKitStreamView: View {
                 get: { streamConfig ?? StreamConfiguration() },
                 set: { streamConfig = $0 }
             ), needsHdr: needsHdr) {
-                
-                // This is the ORIGINAL closeAction passed down.
-                // It's used when the view disappears for other reasons (like backgrounding)
-                // OR if the disconnect fails and we need to force close.
-                
-                // We keep the original logic here for safety/cleanup.
                 dismissWindow()
                 streamConfig = nil
             }
@@ -61,24 +52,37 @@ struct _RealityKitStreamView: View {
 
     @Binding var streamConfig: StreamConfiguration
 
-    @State private var showVirtualKeyboard = false // <-- New State
+    // UI State
+    @State private var showVirtualKeyboard = false
     @State var curveMagnitudeMemory: Float = 0
     @State var curveAnimationMultiplier: Float = 1
     @State var controllerSupport: ControllerSupport?
+    
+    // Position & Limits State
     @State var height: Float = 0
+    @State private var depthOffset: Float = 0.0
+    @State private var yLimits: ClosedRange<Float> = -0.5...0.5
+    @State private var zLimits: ClosedRange<Float> = -0.5...0.5
     
     @State private var safeHDRSettings = ThreadSafeHDRSettings(
             params: HDRParams(boost: 2.0, contrast: 1.0, saturation: 1.0, brightness: 0.0)
         )
     
-    @State private var depthOffset: Float = 1.0
-    
     @State var shouldClose: Bool = false
+    @State var animationTimer: Timer?
+    @State var _streamMan: StreamManager?
+    @ObservedObject var connectionCallbacks: ObservableConnectionManager = .init()
 
+    @State var texture: TextureResource
+    @State var screen: ModelEntity = ModelEntity()
+    
+    let closeAction: () -> Void
+    @State var videoMode: VideoMode = .standard2D
+    @State private var surfaceMaterial: ShaderGraphMaterial?
 
     var isSBSVideo: Bool {
         let ratio = Float(streamConfig.width) / Float(streamConfig.height)
-        return abs(ratio - (32.0 / 9.0)) < 0.01 
+        return abs(ratio - (32.0 / 9.0)) < 0.01
     }
 
     var aspectRatio: Float {
@@ -89,201 +93,185 @@ struct _RealityKitStreamView: View {
         }
     }
     
-
-    @State var animationTimer: Timer?
-
-    @State var _streamMan: StreamManager?
-    @ObservedObject var connectionCallbacks: ObservableConnectionManager = .init()
-
-    @State var enlarge = false
-
-    @State var texture: TextureResource
-    @State var screen: ModelEntity = ModelEntity()
-    
-    let closeAction: () -> Void
-
-    @State var videoMode: VideoMode = .standard2D
-
-    @State private var surfaceMaterial: ShaderGraphMaterial?
-
     init(streamConfig: Binding<StreamConfiguration>, needsHdr: Bool, closeAction: @escaping () -> Void) {
         self.closeAction = closeAction
         self._streamConfig = streamConfig
         self.controllerSupport = ControllerSupport(config: streamConfig.wrappedValue, delegate: DummyControllerDelegate())
-        let bytesPerPixel = needsHdr ? 8 : 4  // HDR is 64-bit (8 bytes), SDR is 32-bit (4 bytes)
-        let data = Data.init(count: bytesPerPixel * Int(streamConfig.wrappedValue.width) * Int(streamConfig.wrappedValue.height)) // Dummy data
+        let bytesPerPixel = needsHdr ? 8 : 4
+        let data = Data.init(count: bytesPerPixel * Int(streamConfig.wrappedValue.width) * Int(streamConfig.wrappedValue.height))
         self.texture = try! TextureResource(
             dimensions: .dimensions(width: Int(streamConfig.wrappedValue.width), height: Int(streamConfig.wrappedValue.height)),
-            format: .raw(pixelFormat: needsHdr ? .rgba16Float : .bgra8Unorm_srgb), // 16Float is critical for HDR
+            format: .raw(pixelFormat: needsHdr ? .rgba16Float : .bgra8Unorm_srgb),
             contents: .init(
-                mipmapLevels: [
-                    .mip(data: data, bytesPerRow: bytesPerPixel * Int(streamConfig.wrappedValue.width)),
-                ]
+                mipmapLevels: [ .mip(data: data, bytesPerRow: bytesPerPixel * Int(streamConfig.wrappedValue.width)) ]
             )
         )
     }
 
     var body: some View {
         GeometryReader3D { proxy in
-            ZStack { // <--- Use ZStack to layer views
+            ZStack {
                 RealityView { content in
-                    let mesh = try! _RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (100,100), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
-                    let colBox = ShapeResource.generateBox(width: 2, height: 2 * aspectRatio, depth: 0.001).offsetBy(translation: .init(x: 0, y: -0.43, z: 1))
-                    screen = ModelEntity(mesh: mesh, materials: [])
+                    // Initial setup
+                    let mesh = try! _RealityKitStreamView.generateCurvedPlane(
+                        width: MAX_WIDTH_METERS,
+                        aspectRatio: aspectRatio,
+                        resolution: (100,100),
+                        curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier
+                    )
                     
-                    // --- FIX START: Don't load material here! ---
-                    // Just assign the texture for now. If material loads later, we swap it.
+                    let colBox = ShapeResource.generateBox(width: 2, height: 2 * aspectRatio, depth: 0.001)
+                        .offsetBy(translation: .init(x: 0, y: -0.43, z: 0))
+                    
+                    screen = ModelEntity(mesh: mesh, materials: [])
                     if let material = surfaceMaterial {
                         screen.model?.materials = [material]
                     } else {
-                        // Fallback while loading (prevents black screen delay)
-                        screen.model?.materials = [UnlitMaterial(texture: self.texture)]
-                    }
-                    // --- FIX END ---
-                    
-                    // Initialize material if needed
-                    if surfaceMaterial == nil {
-                        surfaceMaterial = try! await ShaderGraphMaterial(
-                            named: "/Root/SBSMaterial",
-                            from: "SBSMaterial.usda"
-                        )
-                        
-                        try! surfaceMaterial!.setParameter(
-                            name: "texture",
-                            value: .textureResource(self.texture)
-                        )
-                    }
-                    
-                    if videoMode == .sideBySide3D {
-                        screen.model?.materials = [surfaceMaterial!]
-                    } else {
                         screen.model?.materials = [UnlitMaterial(texture: self.texture)]
                     }
                     
-                    screen.collision = CollisionComponent(shapes: [
-                        colBox
-                    ], mode: .colliding)
+                    screen.collision = CollisionComponent(shapes: [colBox], mode: .colliding)
                     screen.components.set(InputTargetComponent())
                     content.add(screen)
+                    
                 } update: { content in
-                    let mesh = try! _RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (100,100), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
-                    let size = content.convert(proxy.frame(in: .local), from: .local, to: .scene)
-                    screen.transform.scale = .init(repeating: size.extents.x / 2)
-                    screen.transform.translation = SIMD3<Float>(0, height, depthOffset)
+                    let currentCurve = viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier
+                    let totalAngle = MAX_CURVE_ANGLE * currentCurve.clamped(to: 0...1)
+                    
+                    // 1. Generate Mesh
+                    let mesh = try! _RealityKitStreamView.generateCurvedPlane(
+                        width: MAX_WIDTH_METERS,
+                        aspectRatio: aspectRatio,
+                        resolution: (100,100),
+                        curveMagnitude: currentCurve
+                    )
+                    
+                    // 2. Calculate Z-Correction (Sagitta)
+                    let radius = totalAngle < 0.001 ? Float.infinity : (MAX_WIDTH_METERS / totalAngle)
+                    // How deep is the curve physically?
+                    let curveDepth = totalAngle < 0.001 ? 0 : radius * (1.0 - cos(totalAngle / 2.0))
+                    // Push back so edges are at 0
+                    let zCorrection = -curveDepth
+
+                    // 3. Scale Calculation
+                    // Get volume dimensions
+                    let volSize = content.convert(proxy.frame(in: .local), from: .local, to: .scene).extents
+                    // We arbitrarily scale so the width fits comfortably (e.g. half the volume width)
+                    // Adjust this divider as per your design preference
+                    let scaleFactor = volSize.x / 2.0
+                    screen.transform.scale = .init(repeating: scaleFactor)
+                    
+                    // 4. Calculate LIMITS dynamically
+                    // This must be done asynchronously to avoid State-update loops during view render
+                    DispatchQueue.main.async {
+                        // Height: Total volume height / 2 minus Screen Half Height
+                        let screenHalfHeight = (MAX_WIDTH_METERS * aspectRatio * scaleFactor) / 2
+                        let volHalfHeight = volSize.y / 2
+                        let safePadding: Float = 0.05 // 5cm padding
+                        
+                        let maxY = max(0, volHalfHeight - screenHalfHeight - safePadding)
+                        let newYLimits = -maxY...maxY
+                        
+                        // Depth:
+                        // Front Limit: Volume Front - Safe Padding
+                        // Back Limit: Volume Back + Screen Depth + Safe Padding
+                        let volHalfDepth = volSize.z / 2
+                        let maxZ = volHalfDepth - safePadding
+                        
+                        // The "Back" of our object is at (offset + zCorrection).
+                        // But zCorrection is negative. So the physical back is at z - curveDepth * scale.
+                        let scaledCurveDepth = curveDepth * scaleFactor
+                        let minZ = -volHalfDepth + scaledCurveDepth + safePadding
+                        
+                        // Ensure range is valid
+                        let safeMaxZ = max(minZ, maxZ)
+                        let newZLimits = minZ...safeMaxZ
+                        
+                        // Only update if changed significantly to save cycles
+                        if self.yLimits != newYLimits { self.yLimits = newYLimits }
+                        if self.zLimits != newZLimits { self.zLimits = newZLimits }
+                        
+                        // Clamp current values if they are now out of bounds
+                        if self.height > newYLimits.upperBound { self.height = newYLimits.upperBound }
+                        if self.height < newYLimits.lowerBound { self.height = newYLimits.lowerBound }
+                        if self.depthOffset > newZLimits.upperBound { self.depthOffset = newZLimits.upperBound }
+                        if self.depthOffset < newZLimits.lowerBound { self.depthOffset = newZLimits.lowerBound }
+                    }
+
+                    // 5. Apply Transforms
+                    screen.transform.translation = SIMD3<Float>(0, height, depthOffset + zCorrection)
                     try! screen.model!.mesh.replace(with: mesh.contents)
                 }
                 .handlesGameControllerEvents(matching: .gamepad)
-                // Note: .handlesGameControllerEvents handles GAMEPADS via SwiftUI,
-                // but InputCaptureView handles MOUSE/KEYBOARD via UIKit/GameController framework.
                 
-                // 2. The Invisible Input Capture Layer
-                // Only add this if we have a valid controllerSupport object
+                // Input Capture
                 if let support = controllerSupport {
-                                   InputCaptureView(
-                                       controllerSupport: support,
-                                       showKeyboard: $showVirtualKeyboard,
-                                       // Pass current curvature for mouse correction
-                                       curvature: viewModel.streamSettings.realitykitRendererCurvature
-                                   )
-                                   // Critical: Force the invisible view to match the video aspect ratio.
-                                   // This ensures x=0 is the left edge of the video, not the window.
-                                   .aspectRatio(CGFloat(aspectRatio), contentMode: .fit)
-                                   
-                                   // Allow it to fill the available space within that aspect ratio
-                                   .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                   
-                                   .opacity(0.001)
-                                   .allowsHitTesting(true)
-                               }
-                // 3. KEYBOARD HINT OVERLAY (Added)
-                                if showVirtualKeyboard {
-                                    VStack(spacing: 12) {
-                                        Image(systemName: "keyboard")
-                                            .font(.system(size: 40))
-                                        Text("Keyboard Active")
-                                            .font(.headline)
-                                        Text("Tap anywhere on the video to open the keyboard")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .padding(20)
-                                    .background(.regularMaterial) // Glassy background
-                                    .cornerRadius(16)
-                                    .allowsHitTesting(false) // Critical: Taps must pass through to InputCaptureView
-                                    .opacity(0.8)
-                                }
-            } // End ZStack
+                    InputCaptureView(
+                        controllerSupport: support,
+                        showKeyboard: $showVirtualKeyboard,
+                        curvature: viewModel.streamSettings.realitykitRendererCurvature
+                    )
+                    .aspectRatio(CGFloat(aspectRatio), contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .opacity(0.001)
+                    .allowsHitTesting(true)
+                }
+                
+                // Keyboard Hint
+                if showVirtualKeyboard {
+                    VStack(spacing: 12) {
+                        Image(systemName: "keyboard").font(.system(size: 40))
+                        Text("Keyboard Active").font(.headline)
+                        Text("Tap video to type").font(.caption).foregroundStyle(.secondary)
+                    }
+                    .padding(20)
+                    .background(.regularMaterial)
+                    .cornerRadius(16)
+                    .allowsHitTesting(false)
+                    .opacity(0.8)
+                }
+            }
         }
         .task {
-            // Load material in background without blocking Main Thread or Stream Start
             if surfaceMaterial == nil {
                 do {
-                    var material = try await ShaderGraphMaterial(
-                        named: "/Root/SBSMaterial",
-                        from: "SBSMaterial.usda"
-                    )
-                    // Set the texture parameter immediately
-                    try material.setParameter(
-                        name: "texture",
-                        value: .textureResource(self.texture)
-                    )
-                    // Assign to state (triggers View update)
+                    var material = try await ShaderGraphMaterial(named: "/Root/SBSMaterial", from: "SBSMaterial.usda")
+                    try material.setParameter(name: "texture", value: .textureResource(self.texture))
                     self.surfaceMaterial = material
-                } catch {
-                    print("Failed to load SBS Material: \(error)")
-                }
+                } catch { print("Material Error: \(error)") }
             }
         }
         .ornament(visibility: connectionCallbacks.showAlert ? .visible :  .hidden , attachmentAnchor: .scene(.bottomFront), contentAlignment: .bottom) {
             VStack(alignment: .center) {
                 Image(systemName: "exclamationmark.triangle")
-                Text("Stream error")
-                    .font(.title)
+                Text("Stream error").font(.title)
                 Text(connectionCallbacks.errorMessage ?? "Unknown error")
-                Button("Close") {
-                    shouldClose.toggle()
-                    dismissWindow()
-                }
+                Button("Close") { shouldClose.toggle(); dismissWindow() }
             }
-            .padding()
-            .glassBackgroundEffect()
+            .padding().glassBackgroundEffect()
         }
         .ornament(attachmentAnchor: .scene(.bottomTrailingFront), contentAlignment: .bottomLeading) {
-                     StreamControls(
-                        horizontal: false,
-                        streamConfig: $streamConfig,
-                        isKeyboardActive: showVirtualKeyboard, // <-- Pass State
-                        closeAction: {
-                                // This is the action for the HOME BUTTON inside StreamControls
-                                
-                                // 1. Tell the app we are no longer streaming
-                                viewModel.activelyStreaming = false
-                                
-                                // 2. Stop the stream manager and cleanup controllers
-                                self._streamMan?.stopStream()
-                                self.controllerSupport?.cleanup()
-                                
-                                openWindow(id: "mainView")
-                                
-                                self.closeAction()
-                            },
-                            toggleKeyboardAction: {
-                                showVirtualKeyboard.toggle()
-                            }
-                        ) {
-                            HStack {
-                                Image(systemName: "sun.max.fill")
-                                Text("Luminance Boost") // Changed label
-                                
-                                // Change the Binding and the Range.
-                                // We are repurposing the 'brightness' variable in viewModel to store Boost value for now
-                                // to save you from editing CoreData again immediately.
-                                // Range: 1.0 (Normal) to 5.0 (Very Bright)
-                                Slider(value: $viewModel.streamSettings.brightness, in: 1.0...5.0, step: 0.1)
-                                    .frame(width: 300)
-                            }
-                            .padding(.vertical, 5)
-                            HStack {
+             StreamControls(
+                 horizontal: false,
+                 streamConfig: $streamConfig,
+                 isKeyboardActive: showVirtualKeyboard,
+                 closeAction: {
+                    viewModel.activelyStreaming = false
+                    self._streamMan?.stopStream()
+                    self.controllerSupport?.cleanup()
+                    openWindow(id: "mainView")
+                    self.closeAction()
+                 },
+                 toggleKeyboardAction: { showVirtualKeyboard.toggle() }
+             ) {
+                 HStack {
+                     Image(systemName: "sun.max.fill")
+                     Text("Boost")
+                     Slider(value: $viewModel.streamSettings.brightness, in: 1.0...5.0, step: 0.1).frame(width: 220)
+                 }
+                 .padding(.vertical, 5)
+                 
+                 HStack {
                     Button("Flatten", systemImage: viewModel.streamSettings.realitykitRendererCurvature == 0 ? "light.panel" : "pano.fill") {
                         if viewModel.streamSettings.realitykitRendererCurvature == 0 {
                             viewModel.streamSettings.realitykitRendererCurvature = curveMagnitudeMemory
@@ -293,57 +281,44 @@ struct _RealityKitStreamView: View {
                         }
                     }
                     Slider(value: $viewModel.streamSettings.realitykitRendererCurvature, in: 0 ... 1, step: 0.001)
-                        .frame(width: 300)
+                        .frame(width: 220)
                         .padding([.trailing])
-                        .hoverEffect { effect, isActive, proxy in
-                            effect.clipShape(.capsule.size(
-                                width: isActive ? proxy.size.width : proxy.size.height,
-                                height: proxy.size.height,
-                                anchor: .leading
-                            ))
-                            //                            effect.scaleEffect(x: isActive ? 1: 0.5, y: 1, anchor: .leading)
-                        }
                 }
+                 
+                // AUTO-CALCULATED Z-DEPTH SLIDER
                 HStack {
-                    Button("arrow.left.and.line.horizontal.and.arrow.right", systemImage: "arrow.left.and.line.horizontal.and.right.down") {                         // Optional: Action for the button, e.g., reset depth
-                         depthOffset = -1.0 // Reset to default example
-                    }
-                    .accessibilityLabel("Adjust Depth") // Accessibility
-                    Slider(value: $depthOffset, in: -1.5 ... 2.5, step: 0.01) // Adjust range as needed
-                        .frame(width: 300)
+                    Button("Reset Depth", systemImage: "arrow.up.and.down.and.arrow.left.and.right") { depthOffset = 0.0 }
+                    // Uses dynamic zLimits
+                    Slider(value: $depthOffset, in: zLimits)
+                        .frame(width: 220)
                         .padding([.trailing])
-                        // ... (hover effect if desired)
                 }
 
                 HStack {
-                    Button("3D Mode", systemImage: videoMode == .standard2D ? "rectangle" : "rectangle.split.2x1") {
-                        videoMode = videoMode == .standard2D ? .sideBySide3D : .standard2D
-                        if videoMode == .sideBySide3D {
-                            screen.model?.materials = [surfaceMaterial!]
-                        } else {
-                            screen.model?.materials = [UnlitMaterial(texture: texture)]
+                    Toggle(isOn: Binding(
+                        get: { videoMode == .sideBySide3D },
+                        set: { val in
+                            videoMode = val ? .sideBySide3D : .standard2D
+                            if videoMode == .sideBySide3D {
+                                screen.model?.materials = [surfaceMaterial!]
+                            } else {
+                                screen.model?.materials = [UnlitMaterial(texture: texture)]
+                            }
                         }
-                    }
+                    )) { Text("3D Mode") }.toggleStyle(.button)
                 }
+                
+                // AUTO-CALCULATED HEIGHT SLIDER
                 HStack {
-                    Button("arrow.up.and.line.horizontal.and.arrow.down", systemImage: "arrow.up.and.line.horizontal.and.arrow.down") {
-                        // Do nothing, just display this button like a neat littel label
-                    }
-                    Slider(value: $height, in: -2 ... 1, step: 0.001)
-                        .frame(width: 300)
+                    Button("Height", systemImage: "arrow.up.and.line.horizontal.and.arrow.down") {}
+                    // Uses dynamic yLimits
+                    Slider(value: $height, in: yLimits)
+                        .frame(width: 220)
                         .padding([.trailing])
-                        .hoverEffect { effect, isActive, proxy in
-                            effect.clipShape(.capsule.size(
-                                width: isActive ? proxy.size.width : proxy.size.height,
-                                height: proxy.size.height,
-                                anchor: .leading
-                            ))
-                            //                            effect.scaleEffect(x: isActive ? 1: 0.5, y: 1, anchor: .leading)
-                        }
                 }
-                Button("Main Button", systemImage: "gamecontroller.fill") {
-//                    self.controllerSupport?.updateTriggers(<#T##controller: Controller!##Controller!#>, left: <#T##UInt8#>, right: <#T##UInt8#>)
-                }.simultaneousGesture(
+                
+                Button("Main Button", systemImage: "gamecontroller.fill") { }
+                .simultaneousGesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { _ in
                             if let controller = self.controllerSupport?.getOscController() {
@@ -360,109 +335,52 @@ struct _RealityKitStreamView: View {
                 )
             }
         }.onChange(of: viewModel.streamSettings.brightness) { _, newValue in
-            // Push updates to the thread-safe container immediately
-            safeHDRSettings.value = HDRParams(
-                boost: newValue, // Maps slider to Boost (Gain)
-                contrast: 1.0,
-                saturation: 1.0,
-                brightness: 0.0  // Force offset to 0 to keep blacks pure
-            )
+            safeHDRSettings.value = HDRParams(boost: newValue, contrast: 1.0, saturation: 1.0, brightness: 0.0)
         }
         .onAppear {
-                    
-            safeHDRSettings.value = HDRParams(
-                    boost: viewModel.streamSettings.brightness, // Using brightness slider for boost
-                    contrast: 1.0,
-                    saturation: 1.0,
-                    brightness: 0.0
-                )
+            safeHDRSettings.value = HDRParams(boost: viewModel.streamSettings.brightness, contrast: 1.0, saturation: 1.0, brightness: 0.0)
+            if !viewModel.activelyStreaming {
+                openWindow(id: "mainView"); self.closeAction(); return
+            }
+            dismissWindow(id: "mainView"); dismissWindow(id: "dummy")
             
-                    // --- START FIX ---
-                            // Check if the ViewModel thinks a stream is active.
-                            // If the app was restarted or resumed from sleep, `activelyStreaming` will be false.
-                            if !viewModel.activelyStreaming {
-                                print("_RealityKitStreamView: Detected appearance without active stream state. Closing stream window and opening main view.")
-                                
-                                // 1. Explicitly open the main window.
-                                openWindow(id: "mainView")
-                                
-                                // 2. Call the close action to dismiss this window and nil the config.
-                                self.closeAction()
-                                
-                                // 3. Stop processing the rest of onAppear.
-                                return
+            self.curveAnimationMultiplier = viewModel.streamSettings.realitykitRendererAnimateOpening ? 0 : 1
+            
+            self._streamMan = StreamManager(
+                config: self.streamConfig,
+                rendererProvider: {
+                    DrawableVideoDecoder(
+                        texture: self.texture,
+                        callbacks: self.connectionCallbacks,
+                        aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height),
+                        useFramePacing: self.streamConfig.useFramePacing,
+                        enableHDR: self.viewModel.streamSettings.enableHdr,
+                        hdrSettingsProvider: { [safeHDRSettings] in return safeHDRSettings.value },
+                        callbackToRender: { texture, correctedResultion in
+                            DispatchQueue.main.async {
+                                if let correctedResultion = correctedResultion {
+                                    streamConfig.width = Int32(correctedResultion.0)
+                                    streamConfig.height = Int32(correctedResultion.1)
+                                }
+                                self.texture.replace(withDrawables: texture)
+                                self.controllerSupport!.connectionEstablished()
+                                if self.curveAnimationMultiplier == 0 { animateOpening() }
                             }
-                            // --- END FIX ---
-                    
-                    dismissWindow(id: "mainView")
-                    dismissWindow(id: "dummy")
-        //            dismissWindow(id: "realitykitStreamingWindow")
-                    self.curveAnimationMultiplier = viewModel.streamSettings.realitykitRendererAnimateOpening ? 0 : 1
-                    self._streamMan = StreamManager(
-                        config: self.streamConfig,
-                        rendererProvider: {
-                            DrawableVideoDecoder(
-                                            texture: self.texture,
-                                            callbacks: self.connectionCallbacks,
-                                            aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height),
-                                            useFramePacing: self.streamConfig.useFramePacing,
-                                            enableHDR: self.viewModel.streamSettings.enableHdr,
-                                            
-                                            // --- FIX: Use the thread-safe container ---
-                                            // This closure is now fast and non-blocking.
-                                            hdrSettingsProvider: { [safeHDRSettings] in
-                                                return safeHDRSettings.value
-                                            },
-                                            // ------------------------------------------
-                                                        
-                                                        callbackToRender: { texture, correctedResultion in
-                                                        DispatchQueue.main.async {
-                                                            if let correctedResultion = correctedResultion {
-                                                                streamConfig.width = Int32(correctedResultion.0)
-                                                                streamConfig.height = Int32(correctedResultion.1)
-                                                            }
-                                                            self.texture.replace(withDrawables: texture)
-                                                            
-                                                            // --- REMOVE THIS LINE ---
-                                                            // screen.model!.materials = [UnlitMaterial(texture: self.texture)] // <-- THIS LINE CAUSES THE BLACK SCREEN
-                                                            // ---
-                                                            
-                                                            self.controllerSupport!.connectionEstablished()
-                                                            if self.curveAnimationMultiplier == 0 { animateOpening() }
-                                                        }
-                                                    })
-                                                },
-                                                connectionCallbacks: self.connectionCallbacks
-                                            )
-                    let operationQueue = OperationQueue()
+                        })
+                },
+                connectionCallbacks: self.connectionCallbacks
+            )
+            let operationQueue = OperationQueue()
             operationQueue.addOperation(_streamMan!)
         }
-        .onChange(of: shouldClose) { _, shouldClose in
-            if shouldClose {
-                openWindow(id: "mainView")
-                dismissWindow()
-            }
-        }
+        .onChange(of: shouldClose) { _, val in if val { openWindow(id: "mainView"); dismissWindow() } }
         .onChange(of: scenePhase) { _, phase in
-            switch phase {
-            case .active:
-                // print("active")
-                break
-            case .inactive:
-                print("inactive")
-                break
-            case .background:
-                print("background")
+            if phase == .background {
                 viewModel.activelyStreaming = false
                 _streamMan?.stopStream()
-                _streamMan = nil
                 controllerSupport?.cleanup()
-//                streamConfig = nil
                 if !shouldClose { openWindow(id: "mainView") }
                 self.closeAction()
-//                dismissWindow()
-            @unknown default: break
-                // print("unknown default")
             }
         }
         .persistentSystemOverlays(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
@@ -473,17 +391,12 @@ struct _RealityKitStreamView: View {
 
     func animateOpening() {
         Task {
-            self.animationTimer = Timer.scheduledTimer(withTimeInterval: 0.04,
-                                                       repeats: true)
-            { _ in
+            self.animationTimer = Timer.scheduledTimer(withTimeInterval: 0.04, repeats: true) { _ in
                 Task { @MainActor in
                     if self.curveAnimationMultiplier < 1 {
                         self.curveAnimationMultiplier = min(self.curveAnimationMultiplier + 0.01, 1)
                     } else {
-                        if self.animationTimer != nil {
-                            self.animationTimer?.invalidate()
-                            self.animationTimer = nil
-                        }
+                        self.animationTimer?.invalidate(); self.animationTimer = nil
                     }
                 }
             }
@@ -492,115 +405,60 @@ struct _RealityKitStreamView: View {
     }
 
     static func generateCurvedPlane(
-        width: Float, // Chord width
-        aspectRatio: Float,
-        resulotion: (UInt32, UInt32),
-        curveMagnitude: Float // Value from 0 (flat) to 1 (max curve)
+        width: Float, aspectRatio: Float, resolution: (UInt32, UInt32), curveMagnitude: Float
     ) throws -> MeshResource {
-
-        var descr = MeshDescriptor(name: "curved_plane_inward")
+        var descr = MeshDescriptor(name: "curved_plane_smart")
         let height = width * aspectRatio
-        let vertexCount = Int(resulotion.0 * resulotion.1)
-        // Correct calculation for number of triangles and indices
-        let numQuadsX = resulotion.0 - 1
-        let numQuadsY = resulotion.1 - 1
-        let triangleCount = Int(numQuadsX * numQuadsY * 2)
-        let indexCount = triangleCount * 3
-
+        let vertexCount = Int(resolution.0 * resolution.1)
+        let triangleCount = Int((resolution.0 - 1) * (resolution.1 - 1) * 2)
+        
         var positions: [SIMD3<Float>] = .init(repeating: .zero, count: vertexCount)
         var textureCoordinates: [SIMD2<Float>] = .init(repeating: .zero, count: vertexCount)
-        var indices: [UInt32] = .init(repeating: 0, count: indexCount)
+        var indices: [UInt32] = .init(repeating: 0, count: triangleCount * 3)
 
-        // --- Angle and Radius Calculation ---
-        let maxCurveAngle: Float = (5.5 * .pi / 6.0) // Max curve: 120 degrees. Adjust as needed.
-        let currentAngle = maxCurveAngle * curveMagnitude.clamped(to: 0...1)
+        let totalAngle = MAX_CURVE_ANGLE * curveMagnitude.clamped(to: 0...1)
+        let isFlat = totalAngle < 0.0001
+        let radius: Float = isFlat ? .infinity : (width / totalAngle)
 
-        let radius: Float
-        let halfAngle = currentAngle / 2.0
+        var vertexIndex = 0
+        var indicesIndex = 0
 
-        if abs(halfAngle) < 0.0001 {
-            radius = .infinity // Flat case
-        } else {
-            radius = width / (2.0 * sin(halfAngle))
-        }
-        // --- End Calculation ---
-
-        var vertexIndex: Int = 0
-        var indicesIndex: Int = 0
-
-        for y_v in 0 ..< resulotion.1 {
-            // v_geo goes 0 for the first row (y_v=0) to 1 for the last row
-            let v_geo = Float(y_v) / Float(resulotion.1 - 1)
-
-            // Y position: higher Y for lower v_geo (top of screen)
+        for y_v in 0 ..< resolution.1 {
+            let v_geo = Float(y_v) / Float(resolution.1 - 1)
             let yPosition = (0.5 - v_geo) * height
-
-            // Texture V coordinate: Flipped - V=1 at the top, V=0 at the bottom
             let v_tex = 1.0 - v_geo
 
-            for x_v in 0 ..< resulotion.0 {
-                // u goes 0 (left) to 1 (right)
-                let u = Float(x_v) / Float(resulotion.0 - 1)
-
+            for x_v in 0 ..< resolution.0 {
+                let u = Float(x_v) / Float(resolution.0 - 1)
                 let xPosition: Float
                 let zPosition: Float
 
-                if radius.isFinite && radius > 0 && currentAngle > 0.0001 {
-                    // Curved Plane Case
-                    let theta = (u - 0.5) * currentAngle // Angle from center: -halfAngle to +halfAngle
-
-                    // X position on the circular arc
+                if !isFlat {
+                    let theta = (u - 0.5) * totalAngle
                     xPosition = radius * sin(theta)
-
-                    // Z position: Make center positive Z (further away), edges Z=0
-                    zPosition = radius * (cos(halfAngle) - cos(theta))
-
+                    zPosition = radius - (radius * cos(theta))
                 } else {
-                    // Flat Plane Case
                     xPosition = (u - 0.5) * width
                     zPosition = 0.0
                 }
 
-                // Assign vertex position (Y is up, +Z is away from viewer)
                 positions[vertexIndex] = [xPosition, yPosition, zPosition]
+                textureCoordinates[vertexIndex] = [u, v_tex]
 
-                // Assign texture coordinate (U=horizontal, V=vertical, V=0 is bottom)
-                textureCoordinates[vertexIndex] = [u, v_tex] // Use the flipped v_tex
-
-                // Add indices for the quad ending SE of this vertex
-                if x_v < numQuadsX && y_v < numQuadsY {
+                if x_v < (resolution.0 - 1) && y_v < (resolution.1 - 1) {
                     let current = UInt32(vertexIndex)
-                    let nextRow = current + resulotion.0
-
-                    let topLeft = current
-                    let topRight = topLeft + 1
-                    let bottomLeft = nextRow
-                    let bottomRight = bottomLeft + 1
-
-                    // Triangle 1: Top-Left, Bottom-Left, Bottom-Right
-                    indices[indicesIndex + 0] = topLeft
-                    indices[indicesIndex + 1] = bottomLeft
-                    indices[indicesIndex + 2] = bottomRight
-
-                    // Triangle 2: Top-Left, Bottom-Right, Top-Right
-                    indices[indicesIndex + 3] = topLeft
-                    indices[indicesIndex + 4] = bottomRight
-                    indices[indicesIndex + 5] = topRight
-
+                    let nextRow = current + resolution.0
+                    indices[indicesIndex...] = [current, nextRow, nextRow+1, current, nextRow+1, current+1]
                     indicesIndex += 6
                 }
                 vertexIndex += 1
             }
         }
-
         descr.positions = MeshBuffer(positions)
         descr.textureCoordinates = MeshBuffers.TextureCoordinates(textureCoordinates)
         descr.primitives = .triangles(indices)
-
         return try MeshResource.generate(from: [descr])
     }
-
-
 }
 
 extension Comparable {
@@ -612,26 +470,9 @@ extension Comparable {
 class ThreadSafeHDRSettings: @unchecked Sendable {
     private var params: HDRParams
     private let lock = NSLock()
-    
-    init(params: HDRParams) {
-        self.params = params
-    }
-
+    init(params: HDRParams) { self.params = params }
     var value: HDRParams {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return params
-        }
-        set {
-            lock.lock()
-            defer { lock.unlock() }
-            params = newValue
-        }
+        get { lock.lock(); defer { lock.unlock() }; return params }
+        set { lock.lock(); defer { lock.unlock() }; params = newValue }
     }
 }
-// #Preview {
-////    NativeStreamView()
-//    NativeStreamView()
-//}
-
