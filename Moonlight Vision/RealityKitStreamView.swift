@@ -418,7 +418,6 @@ struct _RealityKitStreamView: View {
             safeHDRSettings.value = HDRParams(boost: newValue, contrast: 1.0, saturation: 1.0, brightness: 0.0)
         }
         .onAppear {
-<<<<<<< HEAD
             safeHDRSettings.value = HDRParams(
                 boost: viewModel.streamSettings.brightness, // Using brightness slider for boost
                 contrast: 1.0,
@@ -428,65 +427,6 @@ struct _RealityKitStreamView: View {
             
             guard handleAppearanceValidation() else { return }
             startStreamIfNeeded()
-                                            // ------------------------------------------
-                                                        
-                                                        callbackToRender: { texture, correctedResultion in
-                                                        DispatchQueue.main.async {
-                                                            if let correctedResultion = correctedResultion {
-                                                                streamConfig.width = Int32(correctedResultion.0)
-                                                                streamConfig.height = Int32(correctedResultion.1)
-                                                            }
-                                                            self.texture.replace(withDrawables: texture)
-                                                            
-                                                            // --- REMOVE THIS LINE ---
-                                                            // screen.model!.materials = [UnlitMaterial(texture: self.texture)] // <-- THIS LINE CAUSES THE BLACK SCREEN
-                                                            // ---
-                                                            
-                                                            self.controllerSupport!.connectionEstablished()
-                                                            if self.curveAnimationMultiplier == 0 { animateOpening() }
-                                                        }
-                                                    })
-                                                },
-                                                connectionCallbacks: self.connectionCallbacks
-                                            )
-                    let operationQueue = OperationQueue()
-=======
-            safeHDRSettings.value = HDRParams(boost: viewModel.streamSettings.brightness, contrast: 1.0, saturation: 1.0, brightness: 0.0)
-            if !viewModel.activelyStreaming {
-                openWindow(id: "mainView"); self.closeAction(); return
-            }
-            dismissWindow(id: "mainView"); dismissWindow(id: "dummy")
-            
-            self.curveAnimationMultiplier = viewModel.streamSettings.realitykitRendererAnimateOpening ? 0 : 1
-            
-            self._streamMan = StreamManager(
-                config: self.streamConfig,
-                rendererProvider: {
-                    DrawableVideoDecoder(
-                        texture: self.texture,
-                        callbacks: self.connectionCallbacks,
-                        aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height),
-                        useFramePacing: self.streamConfig.useFramePacing,
-                        enableHDR: self.viewModel.streamSettings.enableHdr,
-                        hdrSettingsProvider: { [safeHDRSettings] in return safeHDRSettings.value },
-                        callbackToRender: { texture, correctedResultion in
-                            DispatchQueue.main.async {
-                                if let correctedResultion = correctedResultion {
-                                    streamConfig.width = Int32(correctedResultion.0)
-                                    streamConfig.height = Int32(correctedResultion.1)
-                                }
-                                self.texture.replace(withDrawables: texture)
-                                self.controllerSupport!.connectionEstablished()
-                                if self.curveAnimationMultiplier == 0 { animateOpening() }
-                            }
-                        })
-                },
-                connectionCallbacks: self.connectionCallbacks
-            )
-            let operationQueue = OperationQueue()
->>>>>>> ef39f71 (11.0.14 B Fixed Curvature and Position Sliders)
-            operationQueue.addOperation(_streamMan!)
->>>>>>> 02760e8 (11.0.13 Hdr Luminance and Color Transform Fixes)
         }
         .onChange(of: shouldClose) { _, shouldClose in
             if shouldClose {
