@@ -138,7 +138,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             __strong typeof(weakSelf) strongSelf = weakSelf;
             if (!strongSelf) return;
 
-            Log(LOG_I, @"Mouse disconnected!");
+            //Log(LOG_I, @"Mouse disconnected!");
 
             GCMouse* mouse = note.object;
             [strongSelf unregisterMouseCallbacks:mouse];
@@ -1312,8 +1312,8 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     _gcEventInteraction = [[GCEventInteraction alloc] init];
     _gcEventInteraction.handledEventTypes = GCUIEventTypeGamepad;
     
-    Log(LOG_I, @"Number of supported controllers connected: %d", [ControllerSupport getGamepadCount]);
-    Log(LOG_I, @"Multi-controller: %d", _multiController);
+    //Log(LOG_I, @"Number of supported controllers connected: %d", [ControllerSupport getGamepadCount]);
+    //Log(LOG_I, @"Multi-controller: %d", _multiController);
     
     _gcEventInteraction = [[GCEventInteraction alloc] init];
     _gcEventInteraction.handledEventTypes = GCUIEventTypeGamepad;
@@ -1418,7 +1418,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             [self->_delegate mousePresenceChanged];
         }];
         _mouseDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            Log(LOG_I, @"Mouse disconnected!");
+            //Log(LOG_I, @"Mouse disconnected!");
             
             GCMouse* mouse = note.object;
             
@@ -1432,13 +1432,13 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             [self->_delegate mousePresenceChanged];
         }];
         _keyboardConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            Log(LOG_I, @"Keyboard connected!");
+            //Log(LOG_I, @"Keyboard connected!");
             
             // Re-evaluate the on-screen control mode
             [self updateAutoOnScreenControlMode];
         }];
         _keyboardDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            Log(LOG_I, @"Keyboard disconnected!");
+            //Log(LOG_I, @"Keyboard disconnected!");
 
             // Re-evaluate the on-screen control mode
             [self updateAutoOnScreenControlMode];

@@ -35,10 +35,29 @@ struct UpdatesView: View {
 
                 Section(header: Text(viewModel.localized(english: "Latest Updates", chinese: "最新更新"))) { // Section for latest updates
                     VStack(alignment: .leading) { // Original VStack for text alignment
-                        Text("Version 11.0.12 (Nov 18, 2025)")
-                            .font(.headline)
-                        Text("- Added the Low Latency Streaming Entitlement (the awdl thing) to improve network performance on wifi channels that are not on ch149(us)/ch44(eu)/ch6(2.4ghz)")
+                        Text("Version 11.0.14 (Nov 19, 2025)")
+                                                    .font(.headline)
+                        Text("- Redid the complicated math for a better curved screen so that its not distored or strectched, I don't really know when I messed that up I thought it was fine but then it was weird so I fixed it.")
                             .font(.body)
+                        Text("- Attempted to make the volume position controls less jank, they should automatically set their own limits to stop accidently clipping the stream view.")
+                            .font(.body)
+                        Text("- Fixed the color space transform for HDR which should lead to more accurate colors.")
+                                                    .font(.body)
+                                                Text("- Added a luminance value slider to help calibrate the image between different battery levels, enviorments and uOled Displays (each avp is tuned kind of differently and your battery being low actually makes the HDR worse so charge your device please)")
+                                                    .font(.body)
+                                                Text("- Added a keyboard button to bring up a virtual keyboard, its kind of jank though, you have to in ui kit mode touch the screen to pop it up, in reality kit mode the keyboard should automatically come up.")
+                                                    .font(.body)
+                                                Text("- Added an invisible layer in front of the uikit volume that captures and sends mouse and keyboard to the reality kit stream. It might be slightly off and have the same eye tracking moving the cursor jank that uikit has but at least it's there. The touch pinch to click doesn't work due to me having issues with that implentation i'm working on it I promise.")
+                                                    .font(.body)
+
+                    }
+                    .padding(.vertical) // Keep vertical padding
+                    .frame(maxWidth: .infinity, alignment: .leading) // Ensure VStack takes full width and aligns content to leading
+                    VStack(alignment: .leading) { // Original VStack for text alignment
+                        Text("Version 11.0.12 (Nov 18, 2025)")
+                                                    .font(.headline)
+                                                Text("- Added the Low Latency Streaming Entitlement (the awdl thing) to improve network performance on wifi channels that are not on ch149(us)/ch44(eu)/ch6(2.4ghz)")
+                                                    .font(.body)
 
                     }
                     .padding(.vertical) // Keep vertical padding
