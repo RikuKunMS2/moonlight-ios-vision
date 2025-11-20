@@ -26,5 +26,6 @@ typedef void (^noargCallbackType)(void);
 
 -(void)updatePreferredDisplayMode:(BOOL)streamActive;
 - (void)stopStream;
+- (void)toggleKeyboard; // <-- ADD THIS
 
 @end

@@ -83,6 +83,7 @@ struct _RealityKitStreamView: View {
 
     @Binding var streamConfig: StreamConfiguration
 
+    @State private var showVirtualKeyboard = false // <-- New State
     @State var curveMagnitudeMemory: Float = 0
     @State var curveAnimationMultiplier: Float = 1
     @State var controllerSupport: ControllerSupport?
@@ -150,20 +151,21 @@ struct _RealityKitStreamView: View {
         if viewModel.activelyStreaming {
             let cornerRadius = CGFloat(viewModel.streamSettings.windowCornerRadius)
             GeometryReader3D { proxy in
+                ZStack { // <--- Use ZStack to layer views
                 RealityView { content in
                     let mesh = try! _RealityKitStreamView.generateCurvedPlane(width: MAX_WIDTH_METERS, aspectRatio: aspectRatio, resulotion: (100,100), curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier)
                     let colBox = ShapeResource.generateBox(width: 2, height: 2 * aspectRatio, depth: 0.001).offsetBy(translation: .init(x: 0, y: -0.43, z: 1))
                     screen = ModelEntity(mesh: mesh, materials: [])
-
+                    
                     // --- FIX START: Don't load material here! ---
-                                    // Just assign the texture for now. If material loads later, we swap it.
-                                    if let material = surfaceMaterial {
-                                        screen.model?.materials = [material]
-                                    } else {
-                                        // Fallback while loading (prevents black screen delay)
-                                        screen.model?.materials = [UnlitMaterial(texture: self.texture)]
-                                    }
-                                    // --- FIX END ---
+                    // Just assign the texture for now. If material loads later, we swap it.
+                    if let material = surfaceMaterial {
+                        screen.model?.materials = [material]
+                    } else {
+                        // Fallback while loading (prevents black screen delay)
+                        screen.model?.materials = [UnlitMaterial(texture: self.texture)]
+                    }
+                    // --- FIX END ---
                     
                     // Initialize material if needed
                     if surfaceMaterial == nil {
@@ -171,19 +173,19 @@ struct _RealityKitStreamView: View {
                             named: "/Root/SBSMaterial",
                             from: "SBSMaterial.usda"
                         )
-
+                        
                         try! surfaceMaterial!.setParameter(
                             name: "texture",
                             value: .textureResource(self.texture)
                         )
                     }
-
+                    
                     if videoMode == .sideBySide3D {
                         screen.model?.materials = [surfaceMaterial!]
                     } else {
                         screen.model?.materials = [UnlitMaterial(texture: self.texture)]
                     }
-
+                    
                     screen.collision = CollisionComponent(shapes: [
                         colBox
                     ], mode: .colliding)
@@ -197,6 +199,73 @@ struct _RealityKitStreamView: View {
                     try! screen.model!.mesh.replace(with: mesh.contents)
                 }
                 .handlesGameControllerEvents(matching: .gamepad)
+                // Note: .handlesGameControllerEvents handles GAMEPADS via SwiftUI,
+                // but InputCaptureView handles MOUSE/KEYBOARD via UIKit/GameController framework.
+                
+                // 2. The Invisible Input Capture Layer
+                // Only add this if we have a valid controllerSupport object
+                if let support = controllerSupport {
+                                   InputCaptureView(
+                                       controllerSupport: support,
+                                       showKeyboard: $showVirtualKeyboard,
+                                       // Pass current curvature for mouse correction
+                                       curvature: viewModel.streamSettings.realitykitRendererCurvature
+                                   )
+                                   // Critical: Force the invisible view to match the video aspect ratio.
+                                   // This ensures x=0 is the left edge of the video, not the window.
+                                   .aspectRatio(CGFloat(aspectRatio), contentMode: .fit)
+                                   
+                                   // Allow it to fill the available space within that aspect ratio
+                                   .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                   
+                                   .opacity(0.001)
+                                   .allowsHitTesting(true)
+                               }
+                // 3. KEYBOARD HINT OVERLAY (Added)
+                                if showVirtualKeyboard {
+                                    VStack(spacing: 12) {
+                                        Image(systemName: "keyboard")
+                                            .font(.system(size: 40))
+                                        Text("Keyboard Active")
+                                            .font(.headline)
+                                        Text("Tap anywhere on the video to open the keyboard")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .padding(20)
+                                    .background(.regularMaterial) // Glassy background
+                                    .cornerRadius(16)
+                                    .allowsHitTesting(false) // Critical: Taps must pass through to InputCaptureView
+                                    .opacity(0.8)
+                                }
+                } // End ZStack
+            }
+        } else {
+            // Stream stopped overlay
+            VStack(spacing: 20) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.largeTitle)
+                Text(viewModel.localized(english: "Stream stopped", chinese: "串流已停止"))
+                    .font(.title2)
+                Text(viewModel.localized(english: "Please close this window before starting a new stream from the main menu.", chinese: "请在窗口横条上点击关闭按钮，之后即可在主菜单重新启动串流。"))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                
+                Button {
+                    // Clear saved config to prevent auto-resume
+                    viewModel.savedStreamConfigForResume = nil
+                    openWindow(id: "mainView")
+                    dismissWindow()
+                    closeAction()
+                } label: {
+                    Label(viewModel.localized(english: "Open Main Menu", chinese: "打开主菜单"), systemImage: "house.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.horizontal)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.thinMaterial)
         }
         .task {
             // Load material in background without blocking Main Thread or Stream Start
@@ -232,15 +301,17 @@ struct _RealityKitStreamView: View {
             .glassBackgroundEffect()
         }
         .ornament(attachmentAnchor: .scene(.bottomTrailingFront), contentAlignment: .bottomLeading) {
-            // --- START FIX ---
-                        // Provide the CORRECT closeAction to StreamControls
-                        StreamControls(
-                            horizontal: false,
-                            streamConfig: $streamConfig,
-                            closeAction: {
-                                handleUserRequestedClose()
-                            }
-                        ) {
+            StreamControls(
+                horizontal: false,
+                streamConfig: $streamConfig,
+                isKeyboardActive: showVirtualKeyboard, // <-- Pass State
+                closeAction: {
+                    handleUserRequestedClose()
+                },
+                toggleKeyboardAction: {
+                    showVirtualKeyboard.toggle()
+                }
+            ) {
                             if needsHdr || viewModel.streamSettings.enableHdr {
                                 HStack {
                                     Image(systemName: "sun.max.fill")

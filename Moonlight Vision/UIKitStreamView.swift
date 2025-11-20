@@ -35,8 +35,14 @@ struct UIKitStreamView: View {
                         StreamControls(
                             horizontal: true,
                             streamConfig: configBinding,
+                            isKeyboardActive: false,
                             closeAction: {
                                 handleHomeButtonClose()
+                            },
+                            toggleKeyboardAction: {
+                                if let streamVC = _UIKitStreamView.controllerReference.object {
+                                    streamVC.toggleKeyboard()
+                                }
                             }
                         ) {
                             _UIKitStreamViewWindowButton(
@@ -44,7 +50,6 @@ struct UIKitStreamView: View {
                                 controllerReference: _UIKitStreamView.controllerReference
                             )
                         }
-                    }
                     .onAppear {
                         hasPerformedTeardown = false
                         dismissWindow(id: "mainView")
