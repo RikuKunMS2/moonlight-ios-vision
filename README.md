@@ -12,139 +12,102 @@ Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-doc
 
 The Vision OS Version is not available in the App Store, to download the latest stable-ish build please install it via Testflight
 
-
 [![Moonlight XrOS](https://i.imgur.com/DHhfmmK.png)](https://testflight.apple.com/join/poWcaME5) 
 
 ## Features
 
-* Curved Screen Support (Reality Kit Mode)
-    ** To actiavte change the Renderer in settings to Reality Kit (note mouse and keyboard not supported in this mode at the moment)
+* **Curved Screen Support (Reality Kit Mode)**:
+    * To activate, change the Renderer in settings to Reality Kit.
+    * *Update:* distortion math has been redone for better accuracy.
 
 ![Curved Screen Support](https://preview.redd.it/moonlight-xros-1-year-anniversary-update-curved-screen-v0-xyro5aozeyge1.jpg?width=2254&format=pjpg&auto=webp&s=df631301423de93f161111df41543154e8fd5b04)
 
-* SBS 3d support (in Reality Kit Mode only, it is one of the side buttons)
+* **Immersive View Resizing**: Change stream view to any size; use the lock and unlock feature to reposition easily.
+* **SBS 3D Support**: Available in Reality Kit Mode (toggle button in side bar).
+* **HDR Support**: Includes a luminance value slider to calibrate for battery levels and environment.
+* **AV1 Support**: Now supported in Reality Kit mode (Note: untested on M5).
 
-## ChangeLog (Version 11.0.3)
+## ChangeLog (Version 11.0.14 - Nov 19, 2025)
 
-* I wanted to give special thanks to [tht7](https://www.reddit.com/user/tht7), ALVR for Vision Pro's [shinyquagsire23](https://github.com/shinyquagsire23), Giovanni Petrantoni (sinkingsugar) from [Formabble](https://formabble.com/) and [dereklucas](https://derekplucas.com) for their contributions to Moonlight XrOS"
-* Reality Kit HDR Support is now in beta, it mostly works but YMMV on color accuracy. More options to control HDR will likely be added later. (sinkingsugar)
-* SBS Support added to Reality Kit Mode (it is a new button in the reality kit volume side bar) (dereklucas)
-* support for AppIntents! (Shortcut support) that allow users to directly launch into the StreamView if you've already paired (by accessing saved apps directly without opening the mainview). You should now be able to apps like 'Steam Big Picture' directly to their home screen (tht7)
-* Fixed error messages so that app won't crash on connection or disconnection issues (tht7)
-* Many optimizations for opening streams so it is now so much faster to connect to a server (tht7)
-* Fixed issues with double volumes opening on slow connections (tht7)
-* UI Optimizations (default to selecting to computer for example) (tht7)
-* Perfomrance optimizations (shinyquagsire23)
-* Edge shimmering on reality kit view should be resolved (shinyquagsire23)
+* **AV1 Support:** AV1 is now supported in Reality Kit mode.
+* **Bitrate:** Added support for higher bitrate configurations (untested—performance depends on network and M2/M5 limits).
+* **Immersive View:** Added option to setup an immersive view and change stream view to any size (use lock/unlock to reposition).
+* **Settings Fix:** Fixed an issue where settings weren't saving on window dismissal/force quit.
+* **Curved Screen:** Redid the math for curved screens to eliminate distortion and stretching.
+* **Volume Controls:** Reduced jank in volume position controls; they now set limits to avoid clipping the stream view.
+* **HDR:** * Fixed color space transform for more accurate colors.
+    * Added a **Luminance Value Slider** to help calibrate the image for different battery levels and environments.
+* **Input:** * Added a **Virtual Keyboard Button**. In UIKit mode, touch screen to pop up. In Reality Kit mode, it should appear automatically.
+    * Added an invisible layer in front of the UIKit volume to capture mouse/keyboard for Reality Kit (Work in progress).
+
+### Previous Updates Highlights
+* **v11.0.12:** Added Low Latency Streaming Entitlement (AWDL) to improve network performance on non-standard WiFi channels.
+* **v11.0.11:** Fixed memory resumption bugs, controller crashes, and added a HOME button to help recover the connection menu.
+* **v11.0.6:** Major network discovery overhaul to reduce crashes.
 
 ## Noted Bugs
 
-* Sometimes selecting a differing computer host doesn't load the app data, you may have to go back to the settings tab and back to refresh it.
-* HDR is noteably broken on UiKit, Colors might not be perfect on Reality Kit, we are looking into adding some additional options to help adjust this
-* Deleting a PC causes a crash when PC scanning is on (or an app scan is trying to refresh), after deleting a computer (for example if you need to repair after installing Apollo or Sunshine) just force quit and re-open and you will be fine
-* Even though you've already paired a computer, you may see the same computer host again with .local in the name if you turn on scanning
-* The app can get really slow if you have multiple hosts saved that aren't online (as it is trying to refresh to see available apps)
-* Moonlight XrOS does not know when a computer is ONLINE, only that it's been saved and paired or it hasn't been paired yet
-* Controller Vibration isn't working, we are looking into this
-* According to user reports, PS4 touch pad does not work
+* **Empty Spinning Volume on Resume:** Sometimes resuming a volume causes a weird empty object screen. If this happens, force quit the app (Hold Crown + Capture buttons). Also sometimes the main menu doesn't come back up, I think this has to do with a race condtiion between app backgrounding/closing before the flag can update that it was closed or something, a fix for this should be coming soon but its hard because we don't know exactly what's causing this issue
+* **HDR:** Doesn't work super well on UIKit. Colors might not be perfect on Reality Kit (use the new Luminance slider to adjust).
+* **Computer Status:** Moonlight XrOS does not strictly know when a computer is ONLINE, only that it has been saved/paired.
+* **Controller Vibration:** Currently not working; under investigation.
+* **PS4 Touch Pad:** Does not work (SDL issue).
+* **General Jank:** Deleting a PC while scanning *should* be fixed, but if issues persist, force quit and relaunch. Eye position mouse moving is weird that's an OS level thing I don't think I can fix how the cursor pointer snaps when you let go of your mouse / lift your finger off the trackpad
 
 ## FAQ
-* Uikit mode in moonlight supports keyboard and mouse, specifically it works very well with the Magic Trackpad. Mice with the Vision Pro can be a little hit or miss but as long as you Bluetooth it and make sure you've enabled the mouse in Vision Pro settings it should work, there are some settings in there you should double check:
-    * GENERAL -> KEYBOARD and TRACKPAD -> Enable Two Finger Secondary Click or for Magic Mouse enable Secondary Click (Set to Right)
-* Why does my cursor snap to where I'm looking - This is an OS level thing, but greatly improved since Vision OS 2.0
-* How do I activate Curved Screens?
-    * In settings, change the renderer to Reality Kit Mode then connect to your host
-* How do I Pair?
-    * You can add a computer with the + button, or you can try to scan for hosts using the scan for hosts text in the computers list. 
-    *If you have trouble with load times, try deleting hosts that are not online
-* How do I use SBS?
-    * In reality kit mode, use the rectangle button toggle above the height adjust
-* How do I use Ultrawide Mode?
-    * In settings set the resolution to 5120x1440, then set up [Apollo](https://github.com/ClassicOldSong/Apollo) or a virtual display driver / dumy plug and set the same settings on windows. In UIKit you can then use the aspect ratio button to fix the black bars, it should just be automatic on Reality Kit Mode. If you already connected with the wrong settings, you have to STOP the stream by long pressing the 'Virtual Display App' and start the stream again to apply the new settings.
-* Why is my connection so choppy?
-    * AWDL (apple wireless direct) is a special feature on apple devices that enable features like AirDrop and Handoff. Unforutenatly this can cause stutters at high bit rates, you can try turning off AirDrop and Continuity features, but it is best to use a 5ghz router with it set to use wifi Ch 149 
-* How do I use a wired connection?
-    * You can use a developer strap hooked up to a mac with ethernet and then some additional ifconfig commands
-    * Alternatively you can do something with a [Rapsberry Pi](https://x.com/ShinyQuagsire/status/1766286564408394186)
-    * I am not providing instrucitons for either but more information can be found [here](https://github.com/alvr-org/alvr-visionos/issues/106#issuecomment-2270249685) 
-* Recomended Settings?
-    * Resolution: 4k
-    * Aspect Ratio: 16:9
-    * Framerate: 60
-    * Bitrate: 50mbps
-    * Renderer: Reality Kit (unless you need mouse + keyboard use UiKit)
-    * Ui Kit Settings: Touch Mode Touchscreen
-    * Ui Kit Settings: On-Screen Controls Off
+* **UIKit vs Reality Kit?**
+    * Use **UIKit** if you need reliable Mouse + Keyboard support.
+    * Use **Reality Kit** for Curved Screens, 3D SBS, and AR features. (Note: Mouse/Keyboard in Reality Kit is experimental).
+* **How do I activate Curved Screens?**
+    * In settings, change the renderer to Reality Kit Mode then connect to your host.
+* **How do I Pair?**
+    * Use the `+` button, or toggle the "Scan for Hosts" text in the computers list.
+    * *Tip:* If you have performance issues, try not to leave scanning on constantly.
+* **How do I use SBS?**
+    * In Reality Kit mode, use the rectangle button toggle above the height adjust.
+* **How do I use Ultrawide Mode?**
+    * In settings set the resolution to 5120x1440, then set up [Apollo](https://github.com/ClassicOldSong/Apollo) or a virtual display driver on Windows.
+	* also like, make sure in apollo after pairing your client has full permissions, otherwise you'll get a launch issue
+    * In UIKit: Use the aspect ratio button to fix black bars.
+    * In Reality Kit: Should be automatic.
+* **Why is my connection choppy?**
+    * it has the new entitlement to kill awdl but if you're doing something like... i dunno say air dropping in the background or maybe using hand off instead of directly connecting your mouse and keyboard you may have issues, so use ch 149 5ghz in us 
+* **Recommended Settings:**
+    * **Resolution:** 4K
+    * **Aspect Ratio:** 16:9
+    * **Framerate:** 60fps (120fps is tested)
+    * **Bitrate:** 50mbps (Higher is supported now but untested)
+    * **Renderer:** Reality Kit
 
 ## Feature Requests / Planned Features:
-* Check Ko-Fi for updates
+* Microphone Support.
+* 7.1 Audio + Ability to toggle immersive audio.
+* Updates to SDL3 (to fix PS4 touchpad issues).
 
 # Donations
-* Some people expressed intrest in donations so:
-* I set up a ko-fi for donations!
+* Some people expressed interest in donations so I set up a ko-fi:
 https://ko-fi.com/lumanaire
 
 Thanks again for your support :)
-
 
 # Building From Source
 
 ## Requirements
-* XCode 16.2
-* Tested on Vision OS 2.2, 2.3 and 2.4 Betas
+* Latest XCode 
+* Tested on Vision OS 26.2 Beta
   
 ## Build Instructions
 * Install the latest version of Xcode
 * Run `git clone -b vision-testflight --recursive https://github.com/RikuKunMS2/moonlight-ios-vision.git`
-  *  If you've already cloned the repo without `--recursive`, run `git submodule update --init --recursive`
-  *  If you are building someone else's fork replace the part after the -b and the user name in the github link.
-* Open Moonlight.xcodeproj in Xcode (it would download by default to your user folder on MacOS)
+  * If you've already cloned the repo without `--recursive`, run `git submodule update --init --recursive`
+  * If you are building someone else's fork replace the part after the -b and the user name in the github link.
+* Open Moonlight.xcodeproj in Xcode
 * To run on a real device, you will need to locally modify the signing options and add your device:
-    * Go to the top menu bar, then in 'Window' open Devices and Simulators
+    * Go to 'Window' -> Devices and Simulators
     * Add your Vision Pro
-    * In the project select to the folder icon in the sidebar to browser files
     * Click on "Moonlight" at the top of the left sidebar
     * Under "Targets", select "Moonlight Vision"
     * Click on the "Signing & Capabilities" tab
-    * In the "Team" dropdown, select your name. If your name doesn't appear, you may need to sign into Xcode with your Apple account.
-    * Change the "Bundle Identifier" to something different (unique). You can add your name or some random letters to make it unique.
-    * Select your Vision Pro (not the simlator or 'any device' but the one your registered earlier) in the top bar as a target and click the Play button to run. It will start the build and install it to your headset
-    * If you didn't pay for a developer account you will have to re-install it using x-code every 7 days.
-
-## FAQ
-* Uikit mode in moonlight supports keyboard and mouse, specifically it works very well with the Magic Trackpad. Mice with the Vision Pro can be a little hit or miss but as long as you Bluetooth it and make sure you've enabled the mouse in Vision Pro settings it should work, there are some settings in there you should double check:
-    * GENERAL -> KEYBOARD and TRACKPAD -> Enable Two Finger Secondary Click or for Magic Mouse enable Secondary Click (Set to Right)
-* Why does my cursor snap to where I'm looking - This is an OS level thing, but greatly improved since Vision OS 2.0
-* How do I activate Curved Screens?
-    * In settings, change the renderer to Reality Kit Mode then connect to your host
-* How do I Pair?
-    * You can add a computer with the + button, or you can try to scan for hosts using the scan for hosts text in the computers list. 
-    *If you have trouble with load times, try deleting hosts that are not online
-* How do I use SBS?
-    * In reality kit mode, use the rectangle button toggle above the height adjust
-* How do I use Ultrawide Mode?
-    * In settings set the resolution to 5120x1440, then set up [Apollo](https://github.com/ClassicOldSong/Apollo) or a virtual display driver / dumy plug and set the same settings on windows. In UIKit you can then use the aspect ratio button to fix the black bars, it should just be automatic on Reality Kit Mode. If you already connected with the wrong settings, you have to STOP the stream by long pressing the 'Virtual Display App' and start the stream again to apply the new settings.
-* Why is my connection so choppy?
-    * AWDL (apple wireless direct) is a special feature on apple devices that enable features like AirDrop and Handoff. Unforutenatly this can cause stutters at high bit rates, you can try turning off AirDrop and Continuity features, but it is best to use a 5ghz router with it set to use wifi Ch 149 
-* How do I use a wired connection?
-    * You can use a developer strap hooked up to a mac with ethernet and then some additional ifconfig commands
-    * Alternatively you can do something with a [Rapsberry Pi](https://x.com/ShinyQuagsire/status/1766286564408394186)
-    * I am not providing instrucitons for either but more information can be found [here](https://github.com/alvr-org/alvr-visionos/issues/106#issuecomment-2270249685) 
-* Recomended Settings?
-    * Resolution: 4k
-    * Aspect Ratio: 16:9
-    * Framerate: 60
-    * Bitrate: 50mbps
-    * Renderer: Reality Kit (unless you need mouse + keyboard use UiKit)
-    * Ui Kit Settings: Touch Mode Touchscreen
-    * Ui Kit Settings: On-Screen Controls Off
-
-## Feature Requests / Planned Features:
-* Check Ko-Fi for updates
-
-# Donations
-* Some people expressed intrest in donations so:
-* I set up a ko-fi for donations!
-https://ko-fi.com/lumanaire
-
-Thanks again for your support :)
+    * Select your Team (Sign into Apple account if needed)
+    * Change the "Bundle Identifier" to something unique.
+    * Select your registered Vision Pro in the target bar and click Play.
