@@ -35,6 +35,9 @@ struct UpdatesView: View {
                     VStack(alignment: .leading) { // Original VStack for text alignment
                         Text("Version 11.0.14 (Nov 19, 2025)")
                                                     .font(.headline)
+                        Text("- So we were saving settings on dismisal of the window, so if you like force quit or did something weird with window management it wouldn't save your preferences in the settings menu. This is now fixed, also I fixed some of the stupid defaults like no one wants on screen controls right?")
+                            .font(.body)
+
                         Text("- Redid the complicated math for a better curved screen so that its not distored or strectched, I don't really know when I messed that up I thought it was fine but then it was weird so I fixed it.")
                             .font(.body)
                         Text("- Attempted to make the volume position controls less jank, they should automatically set their own limits to stop accidently clipping the stream view.")

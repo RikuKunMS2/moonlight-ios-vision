@@ -1,4 +1,10 @@
 //
+//  TemporarySettings.swift
+//  Moonlight Vision
+//
+//  Created by Alex Haugland on 1/22/24.
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
+//
 
 import Foundation
 import Observation
@@ -37,11 +43,12 @@ public class TemporarySettings: NSObject {
 
     @objc public var parent: MoonlightSettings?
 
+    // This init is used for SwiftUI Previews only
     override public init() {
-        self.bitrate = 50000
-        self.framerate = 0
-        self.height = 0
-        self.width = 0
+        self.bitrate = 30000
+        self.framerate = 60
+        self.height = 1440
+        self.width = 2560
         self.audioConfig = 0
         self.uniqueId = ""
         self.onscreenControls = OnScreenControlsLevel.off
@@ -49,10 +56,11 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererAnimateOpening = false
         self.realitykitRendererCurvature = 0.0
         self.dimPassthrough = false
-        self.brightness = 2.2
+        self.brightness = 0.0
         super.init()
     }
 
+    // This init is used by the App when loading from the Database
     @objc public init(fromSettings settings: MoonlightSettings) {
         #if TARGET_OS_TV
         let settingsBundle = NSBundle.main.path(forResource: "Settings", ofType: "bundle")
@@ -60,13 +68,54 @@ public class TemporarySettings: NSObject {
         // TODO: Finish the tvos part
         #else
 
-        self.bitrate = settings.bitrate?.int32Value ?? 0
-        self.framerate = settings.framerate?.int32Value ?? 0
-        self.height = settings.height?.int32Value ?? 0
-        self.width = settings.width?.int32Value ?? 0
+        // 1. Load raw values from the Database
+        let loadedBitrate = settings.bitrate?.int32Value ?? 0
+        let loadedHeight = settings.height?.int32Value ?? 0
+        let loadedWidth = settings.width?.int32Value ?? 0
+        let loadedFps = settings.framerate?.int32Value ?? 0
+        let loadedOsc = settings.onscreenControls?.intValue ?? 0
+        
+        // Initialize self with loaded values first
+        self.bitrate = loadedBitrate
+        self.framerate = loadedFps
+        self.height = loadedHeight
+        self.width = loadedWidth
+        self.onscreenControls = OnScreenControlsLevel(rawValue: loadedOsc) ?? OnScreenControlsLevel.off
+
+        // 2. ONE-TIME MIGRATION CHECK
+        let migrationKey = "hasMigratedToNewDefaults_v1"
+        let hasMigrated = UserDefaults.standard.bool(forKey: migrationKey)
+
+        if !hasMigrated {
+            // Check for the specific "Old Factory Default" signature.
+            // This ensures we don't overwrite a user who intentionally set 720p.
+            // Old Defaults: 10Mbps, 720p (1280x720), Auto OSC (1), 60fps
+            
+            let isOldDefaultBitrate = (loadedBitrate == 10000)
+            // Check 720p OR 1080p just in case the model defaults vary slightly
+            let isOldDefaultRes = (loadedHeight == 720 || loadedHeight == 1080)
+            let isOldDefaultOsc = (loadedOsc == 1) // 1 = Auto
+            let isOldDefaultFps = (loadedFps == 60)
+
+            // ONLY override if ALL conditions match
+            if isOldDefaultBitrate && isOldDefaultRes && isOldDefaultOsc && isOldDefaultFps {
+                print("Detected fresh install or default settings. Applying new Vision defaults.")
+                
+                self.bitrate = 30000
+                self.height = 1440
+                self.width = 2560
+                self.onscreenControls = .off
+                
+                // We will save this at the end of init
+            }
+            
+            // Mark migration as done so we never check/override again
+            UserDefaults.standard.set(true, forKey: migrationKey)
+        }
+
+        // Load remaining settings normally
         self.audioConfig = settings.audioConfig?.int32Value ?? 0
         self.preferredCodec = PreferredCodec(rawValue: Int(settings.preferredCodec)) ?? PreferredCodec.auto
-        self.onscreenControls = OnScreenControlsLevel(rawValue: settings.onscreenControls?.intValue ?? 0) ?? OnScreenControlsLevel.off
         self.renderer = if let ren = settings.renderer?.uint8Value { Renderer(rawValue: UInt8(ren)) ?? .classic } else { .classic }
         self.uniqueId = settings.uniqueId ?? ""
 
@@ -83,47 +132,53 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererAnimateOpening = settings.realitykitRendererAnimateOpening == 1
         self.realitykitRendererCurvature = settings.realitykitRendererCurvature?.floatValue ?? 0
         self.dimPassthrough = settings.dimPassthrough?.boolValue ?? false
+        
         let storedBrightness = settings.brightness?.floatValue ?? 0.0
-                
-                // Since we switched from Offset (default 0.0) to Boost (default 2.2),
-                // we need to catch "0.0" values from previous runs and upgrade them.
-                // Boost should never really be below 0.1.
-                if storedBrightness < 0.1 {
-                    self.brightness = 2.2 // Reset to default if we find an old "0.0" value
-                } else {
-                    self.brightness = storedBrightness
-                }
+        if storedBrightness < 0.1 {
+            self.brightness = 2.2
+        } else {
+            self.brightness = storedBrightness
+        }
         #endif
 
         super.init()
+        
+        // If we modified the values during the migration block above, save them back to Core Data now.
+        if !UserDefaults.standard.bool(forKey: "hasSavedNewDefaults_v1") {
+             // Simple check to see if our in-memory values differ from what we loaded
+             if self.bitrate != loadedBitrate || self.height != loadedHeight {
+                 self.save()
+                 UserDefaults.standard.set(true, forKey: "hasSavedNewDefaults_v1")
+             }
+        }
     }
 
     @objc public func save() {
         // save settings to parent
         let dataManager = DataManager()
         dataManager.saveSettings(
-                    withBitrate: Int(bitrate),
-                    framerate: Int(framerate),
-                    height: Int(height),
-                    width: Int(width),
-                    audioConfig: Int(audioConfig),
-                    onscreenControls: Int(onscreenControls.rawValue),
-                    optimizeGames: optimizeGames,
-                    multiController: multiController,
-                    swapABXYButtons: swapABXYButtons,
-                    audioOnPC: playAudioOnPC,
-                    preferredCodec: UInt32(preferredCodec.rawValue),
-                    renderer: renderer.rawValue,
-                    useFramePacing: useFramePacing,
-                    enableHdr: enableHdr,
-                    btMouseSupport: btMouseSupport,
-                    absoluteTouchMode: absoluteTouchMode,
-                    statsOverlay: statsOverlay,
-                    realitykitRendererAnimateOpening: realitykitRendererAnimateOpening,
-                    realitykitRendererCurvature: NSNumber(value: realitykitRendererCurvature),
-                    dimPassthrough: dimPassthrough,
-                    brightness: brightness // <--- ADD THIS ARGUMENT
-                )
+                withBitrate: Int(bitrate),
+                framerate: Int(framerate),
+                height: Int(height),
+                width: Int(width),
+                audioConfig: Int(audioConfig),
+                onscreenControls: Int(onscreenControls.rawValue),
+                optimizeGames: optimizeGames,
+                multiController: multiController,
+                swapABXYButtons: swapABXYButtons,
+                audioOnPC: playAudioOnPC,
+                preferredCodec: UInt32(preferredCodec.rawValue),
+                renderer: renderer.rawValue,
+                useFramePacing: useFramePacing,
+                enableHdr: enableHdr,
+                btMouseSupport: btMouseSupport,
+                absoluteTouchMode: absoluteTouchMode,
+                statsOverlay: statsOverlay,
+                realitykitRendererAnimateOpening: realitykitRendererAnimateOpening,
+                realitykitRendererCurvature: NSNumber(value: realitykitRendererCurvature),
+                dimPassthrough: dimPassthrough,
+                brightness: brightness
+        )
     }
 }
 

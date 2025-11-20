@@ -6,7 +6,6 @@
 //  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
 
-
 import SwiftUI
 
 struct SettingsView: View {
@@ -30,6 +29,10 @@ struct SettingsView: View {
                             }
                             .labelsHidden()
                             .pickerStyle(.inline)
+                            // Save immediately when resolution changes
+                            .onChange(of: settings.resolution) { _, _ in
+                                settings.save()
+                            }
                         }
                         .ornament(attachmentAnchor: .scene(.bottom)) {
                             HStack {
@@ -42,11 +45,13 @@ struct SettingsView: View {
                             .fixedSize(horizontal: true, vertical: false)
                             .padding()
                             .glassBackgroundEffect()
-                            .onChange(of: settings.resolution) { _ in
+                            .onChange(of: settings.resolution) { _, _ in
                                 isCustomAspectRatio = !Self.resolutionTable.contains(settings.resolution)
                                 if isCustomAspectRatio {
                                     selectedAspectRatio = nil
                                 }
+                                // Save custom resolution changes immediately
+                                settings.save()
                             }
                         }
                         .navigationTitle("Resolution")
@@ -84,7 +89,6 @@ struct SettingsView: View {
                                     Task { @MainActor in
                                         updateResolutionForAspectRatio(newAspectRatio)
                                     }
-                                    isCustomAspectRatio = false
                                 }
                             }
                         }
@@ -96,27 +100,36 @@ struct SettingsView: View {
                             Text(settings.resolution.aspectRatio.casualDescription)
                         }
                     }
+                    
                     Picker("Framerate", selection: $settings.framerate) {
                         ForEach(Self.framerateTable, id: \.self) { framerate in
                             Text("\(framerate)")
                         }
                     }
+                    .onChange(of: settings.framerate) { _, _ in settings.save() }
+                    
                     Picker("Bitrate", selection: $settings.bitrate) {
                         ForEach(Self.bitrateTable, id: \.self) { bitrate in
                             Text("\(bitrate / 1000)Mbps")
                         }
                     }
+                    .onChange(of: settings.bitrate) { _, _ in settings.save() }
                     
                     Picker("Renderer", selection: $settings.renderer) {
                         Text("UIKit (classic)").tag(Renderer.classic)
                         Text("RealityKit (native)").tag(Renderer.realitykit)
                     }
+                    .onChange(of: settings.renderer) { _, _ in settings.save() }
                 }
+                
                 if (settings.renderer == .realitykit) {
                     Section(header: Text("RealityKit Renderer Settings (Experimental)"), footer: Text("The new RealityKit renderer is experemental and currently does not support keyboard or mouse, come at me on reddit u/tht7 if you care")) {
                         Toggle("Animate screen curve", isOn: $settings.realitykitRendererAnimateOpening)
+                            .onChange(of: settings.realitykitRendererAnimateOpening) { _, _ in settings.save() }
+                        
                         Text("Screen curvature")
                         Slider(value: $settings.realitykitRendererCurvature, in: (0...1), step: 0.001)
+                            .onChange(of: settings.realitykitRendererCurvature) { _, _ in settings.save() }
                     }
                 } else {
                     Section(header: Text("UIKit (Classic) Renderer Settings")) {
@@ -124,35 +137,58 @@ struct SettingsView: View {
                             Text("Touchpad").tag(false)
                             Text("Touchscreen").tag(true)
                         }
+                        .onChange(of: settings.absoluteTouchMode) { _, _ in settings.save() }
+                        
                         Picker("On-Screen Controls", selection: $settings.onscreenControls) {
                             Text("Off").tag(OnScreenControlsLevel.off)
                             Text("Auto").tag(OnScreenControlsLevel.auto)
                             Text("Simple").tag(OnScreenControlsLevel.simple)
                             Text("Full").tag(OnScreenControlsLevel.full)
                         }
+                        .onChange(of: settings.onscreenControls) { _, _ in settings.save() }
+                        
                         Toggle("Citrix X1 Mouse Support", isOn: $settings.btMouseSupport)
+                            .onChange(of: settings.btMouseSupport) { _, _ in settings.save() }
+                        
                         Toggle("Statistics Overlay", isOn: $settings.statsOverlay)
+                            .onChange(of: settings.statsOverlay) { _, _ in settings.save() }
                     }
                 }
+                
                 Toggle("Optimize Game Settings", isOn: $settings.optimizeGames)
+                    .onChange(of: settings.optimizeGames) { _, _ in settings.save() }
+                
                 Picker("Multi-Controller Mode", selection: $settings.multiController) {
                     Text("Single").tag(false)
                     Text("Auto").tag(true)
                 }
+                .onChange(of: settings.multiController) { _, _ in settings.save() }
+                
                 Toggle("Swap A/B and X/Y Buttons", isOn: $settings.swapABXYButtons)
+                    .onChange(of: settings.swapABXYButtons) { _, _ in settings.save() }
+                
                 Toggle("Play Audio on PC", isOn: $settings.playAudioOnPC)
+                    .onChange(of: settings.playAudioOnPC) { _, _ in settings.save() }
+                
                 Picker("Preferred Codec", selection: $settings.preferredCodec) {
                     Text("H.264").tag(PreferredCodec.h264)
                     Text("HEVC").tag(PreferredCodec.hevc)
                     Text("AV1").tag(PreferredCodec.av1)
                     Text("Auto").tag(PreferredCodec.auto)
                 }
+                .onChange(of: settings.preferredCodec) { _, _ in settings.save() }
+                
                 Toggle("Enable HDR", isOn: $settings.enableHdr)
+                    .onChange(of: settings.enableHdr) { _, _ in settings.save() }
+                
                 Picker("Frame Pacing", selection: $settings.useFramePacing) {
                     Text("Lowest Latency").tag(false)
                     Text("Smoothest Video").tag(true)
                 }
+                .onChange(of: settings.useFramePacing) { _, _ in settings.save() }
+                
                 Toggle("Automatically dim passthrough and hide window controls", isOn: $settings.dimPassthrough)
+                    .onChange(of: settings.dimPassthrough) { _, _ in settings.save() }
             }
             .navigationTitle("Settings")
             .onDisappear {
@@ -179,6 +215,9 @@ struct SettingsView: View {
             settings.resolution = Resolution(width: (currentHeight * newAspectRatio.width) / newAspectRatio.height, height: currentHeight)
         }
         isCustomAspectRatio = false
+        
+        // Save immediately after calculating the new resolution
+        settings.save()
     }
 }
 
