@@ -27,6 +27,7 @@ struct UIKitStreamView: View {
                         streamConfig: configBinding,
                         // This action just disconnects the stream
                         // and opens the main menu.
+                        isKeyboardActive: false, 
                         closeAction: {
                             // 1. Tell the app we are no longer streaming.
                             viewModel.activelyStreaming = false
@@ -40,7 +41,12 @@ struct UIKitStreamView: View {
                             }
                             
                             // 4. We DO NOT set streamConfig = nil.
-                        }
+                        },
+                        toggleKeyboardAction: {
+                                                    if let streamVC = _UIKitStreamView.controllerReference.object {
+                                                        streamVC.toggleKeyboard()
+                                                    }
+                                                }
                     ) {
                         _UIKitStreamViewWindowButton(streamConfig: configBinding, controllerReference: _UIKitStreamView.controllerReference)
                     }

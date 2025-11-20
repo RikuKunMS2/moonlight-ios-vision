@@ -780,4 +780,9 @@
 }
 #endif
 
+- (void)toggleKeyboard {
+    [_streamView toggleKeyboard];
+}
+
+
 @end

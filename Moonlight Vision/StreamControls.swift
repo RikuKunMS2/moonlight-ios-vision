@@ -10,13 +10,31 @@ import SwiftUI
 
 struct StreamControls<Additions: View>: View {
     @EnvironmentObject private var viewModel: MainViewModel
-    @Environment(\.openWindow) private var openWindow // <-- ADDED
+    @Environment(\.openWindow) private var openWindow
     
     let horizontal: Bool
     @Binding var streamConfig: StreamConfiguration
-    let closeAction: () -> Void // <-- ADDED: The new action parameter
+    
+    let isKeyboardActive: Bool // <-- ADD THIS STATE
+    let closeAction: () -> Void
+    let toggleKeyboardAction: (() -> Void)? // <-- ADD THIS
 
     @ViewBuilder var additions: () -> Additions
+    
+    // Updated Initializer
+     init(horizontal: Bool,
+          streamConfig: Binding<StreamConfiguration>,
+          isKeyboardActive: Bool = false, // Default false
+          closeAction: @escaping () -> Void,
+          toggleKeyboardAction: (() -> Void)? = nil,
+          @ViewBuilder additions: @escaping () -> Additions) {
+         self.horizontal = horizontal
+         self._streamConfig = streamConfig
+         self.isKeyboardActive = isKeyboardActive
+         self.closeAction = closeAction
+         self.toggleKeyboardAction = toggleKeyboardAction
+         self.additions = additions
+     }
 
     var body: some View {
         Group {
@@ -33,22 +51,30 @@ struct StreamControls<Additions: View>: View {
         .padding()
         .hoverEffect { effect, isActive, _ in
             effect.opacity(isActive ? 1 : 0.3)
-            //.scaleEffect(isActive ? 1: 0.9)
         }
     }
 
     var controls: some View {
         Group {
-            // --- START ADDITION ---
             Button("Home", systemImage: "house.fill") {
-               // openWindow(id: "mainView")
-                closeAction() // Call the provided close action
+                closeAction()
             }
-            // --- END ADDITION ---
             
             Button("Toggle Dimming", systemImage: viewModel.streamSettings.dimPassthrough ? "moon.fill" : "moon") {
                 viewModel.streamSettings.dimPassthrough.toggle()
             }
+            
+            // --- UPDATED KEYBOARD BUTTON ---
+            if let toggleAction = toggleKeyboardAction {
+                Button(action: toggleAction) {
+                    // Change icon and style based on state
+                    Label("Keyboard", systemImage: isKeyboardActive ? "keyboard.fill" : "keyboard")
+                }
+                .background(isKeyboardActive ? Color.white.opacity(0.2) : Color.clear) // Visual Highlight
+                .clipShape(Circle())
+            }
+            // -------------------------------
+
             HStack {
                 Button("Volume", systemImage: viewModel.vol == 0 || viewModel.mute ? "speaker.slash.fill" : "speaker.fill" ) {
                     viewModel.mute.toggle()
@@ -63,9 +89,7 @@ struct StreamControls<Additions: View>: View {
                     height: proxy.size.height,
                     anchor: .leading
                 ))
-                //effect.scaleEffect(x: isActive ? 1: 0.5, y: 1, anchor: .leading)
             }
-             // .help("Adjust window to stream aspect ratio") // Accessibility hint
             additions()
         }
     }

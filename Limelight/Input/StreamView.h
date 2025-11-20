@@ -35,6 +35,9 @@ enum X1MouseButton : uint8_t;
 - (void) showOnScreenControls;
 - (OnScreenControlsLevel) getCurrentOscState;
 
+- (void) toggleKeyboard;
+
+
 #if !TARGET_OS_TV
 - (void) updateCursorLocation:(CGPoint)location isMouse:(BOOL)isMouse;
 #endif
