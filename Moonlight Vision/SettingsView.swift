@@ -123,7 +123,9 @@ struct SettingsView: View {
                 }
                 
                 if (settings.renderer == .realitykit) {
-                    Section(header: Text(viewModel.localized(english: "RealityKit Renderer Settings (Experimental)", chinese: "RealityKit 渲染器设置（实验性）")), footer: Text(viewModel.localized(english: "The new RealityKit renderer is experemental and currently does not support keyboard or mouse, come at me on reddit u/tht7 if you care", chinese: "新的 RealityKit 渲染器是实验性的，目前不支持键盘或鼠标，如有问题请在 Reddit 上联系 u/tht7"))) {
+                    Section(header: Text(viewModel.localized(english: "RealityKit Renderer Settings (Experimental)", chinese: "RealityKit 渲染器设置（实验性）")), footer: Text(viewModel.localized(english: "The new RealityKit renderer is experemental and does not support tap to control mouse, but will support a physical mouse and keyboard", chinese: "新的 RealityKit 渲染器是实验性的，不支持点击控制鼠标，但支持物理鼠标和键盘"))) {
+                        Toggle(viewModel.localized(english: "Immersive Mode (Movable Screen)", chinese: "沉浸模式（可移动屏幕）"), isOn: $settings.realitykitImmersiveMode)
+                            .onChange(of: settings.realitykitImmersiveMode) { _, _ in settings.save() }
                         Toggle(viewModel.localized(english: "Animate screen curve", chinese: "屏幕曲线动画"), isOn: $settings.realitykitRendererAnimateOpening)
                             .onChange(of: settings.realitykitRendererAnimateOpening) { _, _ in settings.save() }
                         

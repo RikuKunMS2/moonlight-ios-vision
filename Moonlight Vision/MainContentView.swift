@@ -236,6 +236,36 @@ struct MainContentView: View {
 
 }
 
+// MARK: - Stream Routing Logic
+
+// 1. Define the types of destinations we can launch
+enum StreamDestination {
+    case window(id: String)
+    case immersiveSpace(id: String)
+}
+
+extension MainViewModel {
+    
+    /// Determines the correct Window ID or ImmersiveSpace ID based on current settings
+    func getStreamDestination() -> StreamDestination {
+        switch streamSettings.renderer {
+        case .classic:
+            // UIKit renderer always uses a standard window
+            return .window(id: "classicStreamingWindow")
+            
+        case .realitykit:
+            // RealityKit renderer checks the new Immersive Mode toggle
+            if streamSettings.realitykitImmersiveMode {
+                // Unbounded space (allows moving screen anywhere)
+                return .immersiveSpace(id: "realitykitImmersiveSpace")
+            } else {
+                // Bounded volume (standard 3D window)
+                return .window(id: "realitykitStreamingWindow")
+            }
+        }
+    }
+}
+
 #Preview {
     MainContentView().environmentObject(MainViewModel())
 }

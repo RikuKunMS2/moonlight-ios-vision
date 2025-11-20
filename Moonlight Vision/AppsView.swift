@@ -1,5 +1,5 @@
 //
-//  AppView.swift
+//  AppsView.swift
 //  Moonlight Vision
 //
 //  Created by Alex Haugland on 1/27/24.
@@ -14,7 +14,7 @@ struct AppsView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.pushWindow) private var pushWindow
     @Environment(\.dismissWindow) private var dismissWindow
-    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+    @Environment(\.openImmersiveSpace) private var openImmersiveSpace // Required for Immersive Mode
     
     @State private var nowLoading: String?
     
@@ -111,12 +111,24 @@ struct AppsView: View {
     @MainActor
     private func startStream(for app: TemporaryApp) async {
         guard let config = viewModel.stream(app: app) else { return }
-        if viewModel.streamSettings.renderer == .realitykit {
-            openWindow(id: viewModel.streamSettings.renderer.windowId, value: config)
-            dismissWindow(id: "mainView")
+        let settings = viewModel.streamSettings
+        
+        if settings.renderer == .realitykit {
+            // Check if user wants Immersive Mode (Full Space) or Volumetric Window
+            if settings.realitykitImmersiveMode {
+                // Immersive Space requires an async Task
+                await openImmersiveSpace(id: "realitykitImmersiveSpace", value: config)
+                dismissWindow(id: "mainView")
+                // Note: Immersive space doesn't automatically dismiss main view,
+                // so we do it manually here.
+            } else {
+                // Standard Volumetric Window
+                openWindow(id: "realitykitStreamingWindow", value: config)
+                dismissWindow(id: "mainView")
+            }
         } else {
-            openWindow(id: "classicStreamingWindow", value: config)
-            dismissWindow(id: "mainView")
+            // Classic UIKit Renderer
+            pushWindow(id: "classicStreamingWindow", value: config)
         }
     }
 }
