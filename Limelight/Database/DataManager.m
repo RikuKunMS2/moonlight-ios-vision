@@ -71,7 +71,8 @@
                     statsOverlay:(BOOL)statsOverlay
 realitykitRendererAnimateOpening:(BOOL)realitykitRendererAnimateOpening
      realitykitRendererCurvature:(NSNumber*)realitykitRendererCurvature
-                  dimPassthrough:(BOOL)dimPassthrough {
+                  dimPassthrough:(BOOL)dimPassthrough
+                      brightness:(float)brightness {  // <--- ADD THIS LINE HERE{
     [_managedObjectContext performBlockAndWait:^{
         MoonlightSettings* settingsToSave = [self retrieveSettings];
         settingsToSave.framerate = [NSNumber numberWithInteger:framerate];
@@ -94,6 +95,7 @@ realitykitRendererAnimateOpening:(BOOL)realitykitRendererAnimateOpening
         settingsToSave.realitykitRendererAnimateOpening = [NSNumber numberWithBool: realitykitRendererAnimateOpening];
         settingsToSave.realitykitRendererCurvature = realitykitRendererCurvature;
         settingsToSave.dimPassthrough = [NSNumber numberWithBool: dimPassthrough];
+        settingsToSave.brightness = [NSNumber numberWithFloat:brightness];
         [self saveData];
     }];
 }

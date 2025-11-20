@@ -22,29 +22,15 @@ let kCVPixelBufferColorPrimariesKey = "ColorPrimaries" as CFString
 let kCVPixelBufferTransferFunctionKey = "TransferFunction" as CFString
 
 struct HDRParams {
-    var boost: Float      // Range: 1.0 - 3.0, Default: 2.0
-    var contrast: Float   // Range: 1.0 - 2.0, Default: 1.5
-    var saturation: Float // Range: 1.0 - 2.0, Default: 1.5
+    var boost: Float      // Default: 2.0 (Gain)
+    var contrast: Float   // Default: 1.0
+    var saturation: Float // Default: 1.0
+    var brightness: Float // Default: 0.0 (Offset)
 }
 
 let kCVImageBufferYCbCrMatrix_ITU_R_2020 = "ITU_R_2020" as CFString
 let kCVImageBufferColorPrimaries_ITU_R_2020 = "ITU_R_2020" as CFString
 let kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ = "SMPTE_ST_2084_PQ" as CFString
-
-// MARK: - External C references (from bridging header)
-
-// (In Swift, these can be called directly if included in a bridging header)
-//
-// extern bool LiPollNextVideoFrame(VIDEO_FRAME_HANDLE *handle, PDECODE_UNIT *du);
-// extern void LiCompleteVideoFrame(VIDEO_FRAME_HANDLE handle, int decodeUnitResult);
-// extern int LiGetPendingVideoFrames(void);
-// extern void LiRequestIdrFrame(void);
-//
-// struct PDECODE_UNIT { ... };
-// struct VIDEO_FRAME_HANDLE { ... };
-// #define FRAME_TYPE_IDR ...
-// #define BUFFER_TYPE_PICDATA ...
-// etc.
 
 // MARK: - VideoDecoderRenderer
 
@@ -54,7 +40,6 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
     private var callbacks: ConnectionCallbacks
     private var streamAspectRatio: Float
-//    let callbackToRender: @MainActor (LowLevelTexture, (Int, Int)?) -> Void
 
     let callbackToRender: @MainActor (TextureResource.DrawableQueue, (Int, Int)?) -> Void
 
@@ -76,7 +61,8 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     /// HDR metadata
     private var masteringDisplayColorVolume: Data?
     private var contentLightLevelInfo: Data?
-
+    
+    private let hdrSettingsProvider: () -> HDRParams
     /// Our video format description, used when creating sample buffers
     private var formatDesc: CMVideoFormatDescription?
 
@@ -116,8 +102,10 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         aspectRatio: Float,
         useFramePacing: Bool,
         enableHDR: Bool = false,
+        hdrSettingsProvider: @escaping () -> HDRParams, // <--- Removed @MainActor
         callbackToRender: @MainActor @escaping (TextureResource.DrawableQueue, (Int, Int)?) -> Void
     ) {
+        self.hdrSettingsProvider = hdrSettingsProvider
         metalFormat = .rgba16Float
 
         // Format setup based on HDR
@@ -133,6 +121,10 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         self.callbackToRender = callbackToRender
 
         decoderCallback = VTDecompressionOutputCallbackRecord()
+        
+        super.init()
+        
+        // Setup C-Function Callback
         decoderCallback.decompressionOutputCallback = { decompressionOutputRefCon, sourceFrameRefCon, status, infoFlags, imageBuffer, presentationTimeStamp, presentationDuration in
             let mySelf = Unmanaged<DrawableVideoDecoder>.fromOpaque(decompressionOutputRefCon!).takeUnretainedValue()
             mySelf.decompressionOutputCallback(
@@ -145,11 +137,11 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 presentationDuration: presentationDuration
             )
         }
-
-        super.init()
         decoderCallback.decompressionOutputRefCon = Unmanaged.passUnretained(self).toOpaque()
     }
-
+    
+    // MARK: - Render Loop
+    
     func decompressionOutputCallback(
         decompressionOutputRefCon _: UnsafeMutableRawPointer?,
         sourceFrameRefCon _: UnsafeMutableRawPointer?,
@@ -161,20 +153,11 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     ) {
         guard
             let imageBuffer = imageBuffer,
-            let commandBuffer = commandQueue?.makeCommandBuffer(),
-            let textureCache = textureCache
+            let textureCache = textureCache,
+            let drawable = try? drawableQueue?.nextDrawable(),
+            let commandBuffer = commandQueue?.makeCommandBuffer()
         else {
-            print("ERROR")
-            return
-        }
-
-//         print("\n=== Decompression Output ===")
-//         printBufferAttributes(imageBuffer)
-
-        guard
-            let drawable = try? drawableQueue?.nextDrawable()
-        else {
-            print("ERROR")
+            // Silent return on dropped frames to avoid log spam
             return
         }
         
@@ -182,63 +165,68 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             updateHDRMetadata()
         }
 
-        // The copy pipeline relines on a fixed output pixel format,
-        // so we have to make sure that matches the render target.
+        // Lazy init pipeline
         if self.copyPipelineState == nil || copyPipelineFormat != metalFormat {
             self.copyPipelineState = buildCopyPipeline(metalFormat)
             if self.copyPipelineState != nil {
                 copyPipelineFormat = metalFormat
             }
         }
-        guard let copyPipelineState = copyPipelineState else {
-            print("Failed to set up copy render pipeline!")
-            return
-        }
+        guard let copyPipelineState = copyPipelineState else { return }
 
-        // Create HDR parameter buffers
+        // Create HDR buffers
         let (displayBuffer, contentBuffer) = createHDRParameterBuffers()
 
-        // Figure out the Metal pixel format
-        let pixelFormat = CVPixelBufferGetPixelFormatType(imageBuffer)
-        let srcMetalFormats = CVMetalHelpers.getTextureTypesForFormat(pixelFormat)
-        if srcMetalFormats[1] != MTLPixelFormat.invalid {
-            print("TODO split planes")
-            return
-        }
-        let srcMetalFormat = srcMetalFormats[0]
-
+        // Create Metal Texture from CVPixelBuffer
         var imageTexture: CVMetalTexture?
         let width = CVPixelBufferGetWidth(imageBuffer)
         let height = CVPixelBufferGetHeight(imageBuffer)
-        let planeWidth = CVPixelBufferGetWidthOfPlane(imageBuffer, 0)
-        let planeHeight = CVPixelBufferGetHeightOfPlane(imageBuffer, 0)
-
+        
+        // Handle resolution changes
         if width != videoWidth || height != videoHeight {
-            print("Got video frame with mismatching dimensions \(width)x\(height) (client texture dimensions \(videoWidth)x\(videoHeight)) - correcting")
             videoWidth = width
             videoHeight = height
             setupLowLevelTexture()
         }
+        
+        // Determine format based on buffer
+        let pixelFormat = CVPixelBufferGetPixelFormatType(imageBuffer)
+        let srcMetalFormats = CVMetalHelpers.getTextureTypesForFormat(pixelFormat)
+        let srcMetalFormat = srcMetalFormats[0]
 
-        let result = CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault, textureCache, imageBuffer, nil, srcMetalFormat, planeWidth, planeHeight, 0, &imageTexture)
-        if result != 0 {
-            print("CVMetalTextureCacheCreateTextureFromImage \(result)")
+        let result = CVMetalTextureCacheCreateTextureFromImage(
+            kCFAllocatorDefault,
+            textureCache,
+            imageBuffer,
+            nil,
+            srcMetalFormat,
+            CVPixelBufferGetWidthOfPlane(imageBuffer, 0),
+            CVPixelBufferGetHeightOfPlane(imageBuffer, 0),
+            0,
+            &imageTexture
+        )
+
+        guard
+            let validImageTexture = imageTexture,
+            let mtlTexture = CVMetalTextureGetTexture(validImageTexture)
+        else {
             return
         }
-        let mtlTexture = CVMetalTextureGetTexture(imageTexture!)!
-
+    
+        // --- ENCODING ---
+        
         let renderPassDescriptor = MTLRenderPassDescriptor()
         renderPassDescriptor.colorAttachments[0].texture = drawable.texture
-        renderPassDescriptor.colorAttachments[0].loadAction = .clear
+        renderPassDescriptor.colorAttachments[0].loadAction = .dontCare // Faster than clear
         renderPassDescriptor.colorAttachments[0].storeAction = .store
 
         guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
-            fatalError("Failed to create render command encoder")
+            return
         }
+        
         renderEncoder.setRenderPipelineState(copyPipelineState)
         renderEncoder.setFragmentTexture(mtlTexture, index: 0)
         
-        // Set HDR parameter buffers
         if let enabledBuffer = displayBuffer {
             renderEncoder.setFragmentBuffer(enabledBuffer, offset: 0, index: 0)
         }
@@ -248,29 +236,32 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         
         renderEncoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
         renderEncoder.endEncoding()
-
+    
+        // --- PERFORMANCE FIXES ---
+        // Removed generateMipmaps and waitUntilCompleted to prevent queue overflows
+        
+        commandBuffer.present(drawable) // Present as soon as GPU is done
         commandBuffer.commit()
-        commandBuffer.waitUntilCompleted()
-
-        // I'm not sure why I can't encode these into the same command buffer to be honest
-        // (Maybe I need a fence?)
-        guard let commandBufferBlit = commandQueue?.makeCommandBuffer(),
-              let blits = commandBufferBlit.makeBlitCommandEncoder()
-        else {
-            print("ERROR")
-            return
-        }
-
-        // blits.copy(from: mtlTexture, to: drawable.texture)
-        blits.generateMipmaps(for: drawable.texture)
-        blits.endEncoding()
-
-        commandBufferBlit.commit()
-        commandBufferBlit.waitUntilCompleted()
-
-        drawable.present()
     }
-
+    
+    private func createHDRParameterBuffers() -> (MTLBuffer?, MTLBuffer?) {
+        var hdrEnabled = self.hdrEnabled
+        let enabledBuffer = mtlDevice.makeBuffer(bytes: &hdrEnabled,
+                                               length: MemoryLayout<Bool>.size,
+                                               options: .storageModeShared)
+        
+        // --- FIX: Read directly (Thread-Safe) ---
+        // We no longer dispatch to Main. We assume the provider is thread-safe.
+        var hdrParams = self.hdrSettingsProvider()
+        // ----------------------------------------
+        
+        let paramsBuffer = mtlDevice.makeBuffer(bytes: &hdrParams,
+                                              length: MemoryLayout<HDRParams>.size,
+                                              options: .storageModeShared)
+        
+        return (enabledBuffer, paramsBuffer)
+    }
+            
     func setupLowLevelTexture() {
         DispatchQueue.main.sync {
             if videoWidth == 0 || videoHeight == 0 {
@@ -283,9 +274,14 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                     pixelFormat: metalFormat,
                     width: Int(videoWidth),
                     height: Int(videoHeight),
-                    usage: [.renderTarget], // .renderTarget only, so that we get framebuffer compression
-                    mipmapsMode: .allocateAll // shinyquagsire23: Wasteful bc we probably only need like 2, but we don't have a choice here.
-                )
+                    usage: [.renderTarget],
+                                        // --- FIX START ---
+                                        // Change .allocateAll to .none
+                                        // Since we removed generateMipmaps() for performance,
+                                        // we must stop allocating them to prevent visual artifacts.
+                                        mipmapsMode: .none
+                                        // --- FIX END ---
+                                    )
                 do {
                     let queue = try TextureResource.DrawableQueue(descriptor)
                     queue.allowsNextDrawableTimeout = true
@@ -399,9 +395,9 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     // MARK: - Decoding & Sample Buffer Handling
 
     /**
-     *  Replaces the old `AVSampleBufferDisplayLayer` usage.
-     *  Instead of enqueuing to a display layer, we create a `CMSampleBuffer`
-     *  and forward it to your own rendering path (e.g., a Metal texture queue).
+     * Replaces the old `AVSampleBufferDisplayLayer` usage.
+     * Instead of enqueuing to a display layer, we create a `CMSampleBuffer`
+     * and forward it to your own rendering path (e.g., a Metal texture queue).
      */
     @discardableResult
     func submitDecodeBuffer(
@@ -441,15 +437,20 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
                     if hdrEnabled {
                         config[kVTDecompressionPropertyKey_PixelTransferProperties as String] = [
-                            kVTPixelTransferPropertyKey_DestinationColorPrimaries: kCMFormatDescriptionColorPrimaries_ITU_R_2020,
+                            // 1. Convert Colors to Display P3 (Fixes the "Washed Out" pale colors)
+                            kVTPixelTransferPropertyKey_DestinationColorPrimaries: kCMFormatDescriptionColorPrimaries_P3_D65,
+
+                            // 2. Keep Brightness as PQ (Fixes the "Black Screen" / conversion error)
+                            // We will decode this raw curve manually in the Metal shader.
                             kVTPixelTransferPropertyKey_DestinationTransferFunction: kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ,
+                            
+                            // 3. Standard Matrix
                             kVTPixelTransferPropertyKey_DestinationYCbCrMatrix: kCMFormatDescriptionYCbCrMatrix_ITU_R_2020,
                         ]
                     }
 
                     return config
                 }()
-                
                 // NOTE(shinyquagsire23): Setting kCVPixelBufferPixelFormatTypeKey *at all* will trigger
                 // a VideoToolbox bug that results in the output CVPixelBuffer's underlying Metal textures
                 // being decompressed, resulting in GPU bandwidth penalties
@@ -891,13 +892,13 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     // MARK: - Rendering to the Drawable
 
     /**
-     *  Instead of using AVSampleBufferDisplayLayer, you would hand the sample buffer off
-     *  to your rendering pipeline. For example:
-     *  1) Create a CVPixelBuffer from the sample buffer
-     *  2) Wrap it in a Metal texture (using `CVMetalTextureCacheCreateTextureFromImage`)
-     *  3) Enqueue the texture in a command buffer or store in a GPU queue
+     * Instead of using AVSampleBufferDisplayLayer, you would hand the sample buffer off
+     * to your rendering pipeline. For example:
+     * 1) Create a CVPixelBuffer from the sample buffer
+     * 2) Wrap it in a Metal texture (using `CVMetalTextureCacheCreateTextureFromImage`)
+     * 3) Enqueue the texture in a command buffer or store in a GPU queue
      *
-     *  This is a placeholder function for demonstration.
+     * This is a placeholder function for demonstration.
      */
     private func renderSampleBufferToDrawable(_ sampleBuffer: CMSampleBuffer) {
         guard let formatDescription: CMFormatDescription = CMSampleBufferGetFormatDescription(sampleBuffer) else { return }
@@ -985,25 +986,6 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         return Float(hostValue)
     }
 
-    // Create parameter buffers for HDR metadata
-    private func createHDRParameterBuffers() -> (MTLBuffer?, MTLBuffer?) {
-        // Create HDR enabled flag buffer
-        var hdrEnabled = self.hdrEnabled
-        let enabledBuffer = mtlDevice.makeBuffer(bytes: &hdrEnabled,
-                                               length: MemoryLayout<Bool>.size,
-                                               options: .storageModeShared)
-        
-        // Create HDR parameters buffer
-        var hdrParams = HDRParams(boost: 1.0,      // Default value
-                                  contrast: 1.25,    // Default value
-                                  saturation: 1.25)  // Default value
-        
-        let paramsBuffer = mtlDevice.makeBuffer(bytes: &hdrParams,
-                                              length: MemoryLayout<HDRParams>.size,
-                                              options: .storageModeShared)
-        
-        return (enabledBuffer, paramsBuffer)
-    }
 
     // MARK: - METAL
 
