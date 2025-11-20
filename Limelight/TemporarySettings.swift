@@ -33,6 +33,7 @@ public class TemporarySettings: NSObject {
     @objc public var absoluteTouchMode = false
     @objc public var statsOverlay = false
     @objc public var dimPassthrough = true
+    @objc public var brightness: Float = 0.0
 
     @objc public var parent: MoonlightSettings?
 
@@ -48,6 +49,7 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererAnimateOpening = false
         self.realitykitRendererCurvature = 0.0
         self.dimPassthrough = false
+        self.brightness = 2.2
         super.init()
     }
 
@@ -81,6 +83,16 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererAnimateOpening = settings.realitykitRendererAnimateOpening == 1
         self.realitykitRendererCurvature = settings.realitykitRendererCurvature?.floatValue ?? 0
         self.dimPassthrough = settings.dimPassthrough?.boolValue ?? false
+        let storedBrightness = settings.brightness?.floatValue ?? 0.0
+                
+                // Since we switched from Offset (default 0.0) to Boost (default 2.2),
+                // we need to catch "0.0" values from previous runs and upgrade them.
+                // Boost should never really be below 0.1.
+                if storedBrightness < 0.1 {
+                    self.brightness = 2.2 // Reset to default if we find an old "0.0" value
+                } else {
+                    self.brightness = storedBrightness
+                }
         #endif
 
         super.init()
@@ -89,7 +101,29 @@ public class TemporarySettings: NSObject {
     @objc public func save() {
         // save settings to parent
         let dataManager = DataManager()
-        dataManager.saveSettings(withBitrate: Int(bitrate), framerate: Int(framerate), height: Int(height), width: Int(width), audioConfig: Int(audioConfig), onscreenControls: Int(onscreenControls.rawValue), optimizeGames: optimizeGames, multiController: multiController, swapABXYButtons: swapABXYButtons, audioOnPC: playAudioOnPC, preferredCodec: UInt32(preferredCodec.rawValue), renderer: renderer.rawValue, useFramePacing: useFramePacing, enableHdr: enableHdr, btMouseSupport: btMouseSupport, absoluteTouchMode: absoluteTouchMode, statsOverlay: statsOverlay, realitykitRendererAnimateOpening: realitykitRendererAnimateOpening, realitykitRendererCurvature: NSNumber(value: realitykitRendererCurvature), dimPassthrough: dimPassthrough)
+        dataManager.saveSettings(
+                    withBitrate: Int(bitrate),
+                    framerate: Int(framerate),
+                    height: Int(height),
+                    width: Int(width),
+                    audioConfig: Int(audioConfig),
+                    onscreenControls: Int(onscreenControls.rawValue),
+                    optimizeGames: optimizeGames,
+                    multiController: multiController,
+                    swapABXYButtons: swapABXYButtons,
+                    audioOnPC: playAudioOnPC,
+                    preferredCodec: UInt32(preferredCodec.rawValue),
+                    renderer: renderer.rawValue,
+                    useFramePacing: useFramePacing,
+                    enableHdr: enableHdr,
+                    btMouseSupport: btMouseSupport,
+                    absoluteTouchMode: absoluteTouchMode,
+                    statsOverlay: statsOverlay,
+                    realitykitRendererAnimateOpening: realitykitRendererAnimateOpening,
+                    realitykitRendererCurvature: NSNumber(value: realitykitRendererCurvature),
+                    dimPassthrough: dimPassthrough,
+                    brightness: brightness // <--- ADD THIS ARGUMENT
+                )
     }
 }
 

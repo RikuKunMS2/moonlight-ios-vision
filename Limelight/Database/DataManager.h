@@ -33,8 +33,8 @@
                     statsOverlay:(BOOL)statsOverlay
 realitykitRendererAnimateOpening:(BOOL)realitykitRendererAnimateOpening
      realitykitRendererCurvature:(NSNumber*)realitykitRendererCurvature
-                  dimPassthrough:(BOOL)dimPassthrough;
-
+                  dimPassthrough:(BOOL)dimPassthrough
+                        brightness:(float)brightness; // <--- ADD THIS
 - (NSArray<TemporaryHost*>*) getHosts;
 - (void) updateHost:(TemporaryHost*)host;
 - (void) updateAppsForExistingHost:(TemporaryHost *)host;

@@ -66,6 +66,10 @@ struct _RealityKitStreamView: View {
     @State var controllerSupport: ControllerSupport?
     @State var height: Float = 0
     
+    @State private var safeHDRSettings = ThreadSafeHDRSettings(
+            params: HDRParams(boost: 2.0, contrast: 1.0, saturation: 1.0, brightness: 0.0)
+        )
+    
     @State private var depthOffset: Float = 1.0
     
     @State var shouldClose: Bool = false
@@ -109,7 +113,7 @@ struct _RealityKitStreamView: View {
         let data = Data.init(count: bytesPerPixel * Int(streamConfig.wrappedValue.width) * Int(streamConfig.wrappedValue.height)) // Dummy data
         self.texture = try! TextureResource(
             dimensions: .dimensions(width: Int(streamConfig.wrappedValue.width), height: Int(streamConfig.wrappedValue.height)),
-            format: .raw(pixelFormat: needsHdr ? .rgba16Float : .bgra8Unorm_srgb), // Doesn't matter, dummy data
+            format: .raw(pixelFormat: needsHdr ? .rgba16Float : .bgra8Unorm_srgb), // 16Float is critical for HDR
             contents: .init(
                 mipmapLevels: [
                     .mip(data: data, bytesPerRow: bytesPerPixel * Int(streamConfig.wrappedValue.width)),
@@ -125,6 +129,16 @@ struct _RealityKitStreamView: View {
                     let colBox = ShapeResource.generateBox(width: 2, height: 2 * aspectRatio, depth: 0.001).offsetBy(translation: .init(x: 0, y: -0.43, z: 1))
                     screen = ModelEntity(mesh: mesh, materials: [])
 
+                    // --- FIX START: Don't load material here! ---
+                                    // Just assign the texture for now. If material loads later, we swap it.
+                                    if let material = surfaceMaterial {
+                                        screen.model?.materials = [material]
+                                    } else {
+                                        // Fallback while loading (prevents black screen delay)
+                                        screen.model?.materials = [UnlitMaterial(texture: self.texture)]
+                                    }
+                                    // --- FIX END ---
+                    
                     // Initialize material if needed
                     if surfaceMaterial == nil {
                         surfaceMaterial = try! await ShaderGraphMaterial(
@@ -157,6 +171,26 @@ struct _RealityKitStreamView: View {
                     try! screen.model!.mesh.replace(with: mesh.contents)
                 }
                 .handlesGameControllerEvents(matching: .gamepad)
+        }
+        .task {
+            // Load material in background without blocking Main Thread or Stream Start
+            if surfaceMaterial == nil {
+                do {
+                    var material = try await ShaderGraphMaterial(
+                        named: "/Root/SBSMaterial",
+                        from: "SBSMaterial.usda"
+                    )
+                    // Set the texture parameter immediately
+                    try material.setParameter(
+                        name: "texture",
+                        value: .textureResource(self.texture)
+                    )
+                    // Assign to state (triggers View update)
+                    self.surfaceMaterial = material
+                } catch {
+                    print("Failed to load SBS Material: \(error)")
+                }
+            }
         }
         .ornament(visibility: connectionCallbacks.showAlert ? .visible :  .hidden , attachmentAnchor: .scene(.bottomFront), contentAlignment: .bottom) {
             VStack(alignment: .center) {
@@ -193,7 +227,19 @@ struct _RealityKitStreamView: View {
                                 self.closeAction()
                             }
                         ) {
-                HStack {
+                            HStack {
+                                Image(systemName: "sun.max.fill")
+                                Text("Luminance Boost") // Changed label
+                                
+                                // Change the Binding and the Range.
+                                // We are repurposing the 'brightness' variable in viewModel to store Boost value for now
+                                // to save you from editing CoreData again immediately.
+                                // Range: 1.0 (Normal) to 5.0 (Very Bright)
+                                Slider(value: $viewModel.streamSettings.brightness, in: 1.0...5.0, step: 0.1)
+                                    .frame(width: 300)
+                            }
+                            .padding(.vertical, 5)
+                            HStack {
                     Button("Flatten", systemImage: viewModel.streamSettings.realitykitRendererCurvature == 0 ? "light.panel" : "pano.fill") {
                         if viewModel.streamSettings.realitykitRendererCurvature == 0 {
                             viewModel.streamSettings.realitykitRendererCurvature = curveMagnitudeMemory
@@ -269,9 +315,24 @@ struct _RealityKitStreamView: View {
                         }
                 )
             }
+        }.onChange(of: viewModel.streamSettings.brightness) { _, newValue in
+            // Push updates to the thread-safe container immediately
+            safeHDRSettings.value = HDRParams(
+                boost: newValue, // Maps slider to Boost (Gain)
+                contrast: 1.0,
+                saturation: 1.0,
+                brightness: 0.0  // Force offset to 0 to keep blacks pure
+            )
         }
         .onAppear {
                     
+            safeHDRSettings.value = HDRParams(
+                    boost: viewModel.streamSettings.brightness, // Using brightness slider for boost
+                    contrast: 1.0,
+                    saturation: 1.0,
+                    brightness: 0.0
+                )
+            
                     // --- START FIX ---
                             // Check if the ViewModel thinks a stream is active.
                             // If the app was restarted or resumed from sleep, `activelyStreaming` will be false.
@@ -296,25 +357,39 @@ struct _RealityKitStreamView: View {
                     self._streamMan = StreamManager(
                         config: self.streamConfig,
                         rendererProvider: {
-                            DrawableVideoDecoder(texture: self.texture, callbacks: self.connectionCallbacks, aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height), useFramePacing: self.streamConfig.useFramePacing, enableHDR: self.viewModel.streamSettings.enableHdr) { texture, correctedResultion in
-                                DispatchQueue.main.async {
-                                    if let correctedResultion = correctedResultion {
-                                        streamConfig.width = Int32(correctedResultion.0)
-                                        streamConfig.height = Int32(correctedResultion.1)
-                                    }
-                                    self.texture.replace(withDrawables: texture)
-                                    
-                                    // --- REMOVE THIS LINE ---
-                                    // screen.model!.materials = [UnlitMaterial(texture: self.texture)] // <-- THIS LINE CAUSES THE BLACK SCREEN
-                                    // ---
-                                    
-                                    self.controllerSupport!.connectionEstablished()
-                                    if self.curveAnimationMultiplier == 0 { animateOpening() }
-                                }
-                            }
-                        },
-                        connectionCallbacks: self.connectionCallbacks
-                    )
+                            DrawableVideoDecoder(
+                                            texture: self.texture,
+                                            callbacks: self.connectionCallbacks,
+                                            aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height),
+                                            useFramePacing: self.streamConfig.useFramePacing,
+                                            enableHDR: self.viewModel.streamSettings.enableHdr,
+                                            
+                                            // --- FIX: Use the thread-safe container ---
+                                            // This closure is now fast and non-blocking.
+                                            hdrSettingsProvider: { [safeHDRSettings] in
+                                                return safeHDRSettings.value
+                                            },
+                                            // ------------------------------------------
+                                                        
+                                                        callbackToRender: { texture, correctedResultion in
+                                                        DispatchQueue.main.async {
+                                                            if let correctedResultion = correctedResultion {
+                                                                streamConfig.width = Int32(correctedResultion.0)
+                                                                streamConfig.height = Int32(correctedResultion.1)
+                                                            }
+                                                            self.texture.replace(withDrawables: texture)
+                                                            
+                                                            // --- REMOVE THIS LINE ---
+                                                            // screen.model!.materials = [UnlitMaterial(texture: self.texture)] // <-- THIS LINE CAUSES THE BLACK SCREEN
+                                                            // ---
+                                                            
+                                                            self.controllerSupport!.connectionEstablished()
+                                                            if self.curveAnimationMultiplier == 0 { animateOpening() }
+                                                        }
+                                                    })
+                                                },
+                                                connectionCallbacks: self.connectionCallbacks
+                                            )
                     let operationQueue = OperationQueue()
             operationQueue.addOperation(_streamMan!)
         }
@@ -490,7 +565,27 @@ extension Comparable {
     }
 }
 
+class ThreadSafeHDRSettings: @unchecked Sendable {
+    private var params: HDRParams
+    private let lock = NSLock()
+    
+    init(params: HDRParams) {
+        self.params = params
+    }
 
+    var value: HDRParams {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return params
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            params = newValue
+        }
+    }
+}
 // #Preview {
 ////    NativeStreamView()
 //    NativeStreamView()
