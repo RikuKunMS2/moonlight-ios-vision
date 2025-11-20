@@ -48,6 +48,11 @@ static const int bitrateTable[] = {
     100000,
     120000,
     150000,
+        200000, // Added 200 Mbps
+        300000, // Added 300 Mbps
+        400000, // Added 400 Mbps
+        500000, // Added 500 Mbps
+        600000, // Added 600 Mbps
 };
 
 const int RESOLUTION_TABLE_SIZE = 7;
@@ -524,6 +529,11 @@ BOOL isCustomResolution(CGSize res) {
 
 - (void) saveSettings {
     DataManager* dataMan = [[DataManager alloc] init];
+    
+    // 1. Use getSettings (Public) instead of retrieveSettings (Private)
+    // This returns a TemporarySettings* object.
+    TemporarySettings* currentSettings = [dataMan getSettings];
+    
     NSInteger framerate = [self getChosenFrameRate];
     NSInteger height = [self getChosenStreamHeight];
     NSInteger width = [self getChosenStreamWidth];
@@ -538,6 +548,10 @@ BOOL isCustomResolution(CGSize res) {
     BOOL absoluteTouchMode = [self.touchModeSelector selectedSegmentIndex] == 1;
     BOOL statsOverlay = [self.statsOverlaySelector selectedSegmentIndex] == 1;
     BOOL enableHdr = [self.hdrSelector selectedSegmentIndex] == 1;
+
+    // 2. Update the call to match the new DataManager signature.
+    // Note: We must box 'curvature' (@(...)) because DataManager expects an NSNumber*,
+    // but TemporarySettings likely exposes it as a primitive float/double.
     [dataMan saveSettingsWithBitrate:_bitrate
                            framerate:framerate
                               height:height
@@ -549,11 +563,16 @@ BOOL isCustomResolution(CGSize res) {
                      swapABXYButtons:swapABXYButtons
                            audioOnPC:audioOnPC
                       preferredCodec:preferredCodec
+                            renderer:(uint8_t)currentSettings.renderer
                       useFramePacing:useFramePacing
                            enableHdr:enableHdr
                       btMouseSupport:btMouseSupport
                    absoluteTouchMode:absoluteTouchMode
-                        statsOverlay:statsOverlay];
+                        statsOverlay:statsOverlay
+    realitykitRendererAnimateOpening:currentSettings.realitykitRendererAnimateOpening
+         realitykitRendererCurvature:@(currentSettings.realitykitRendererCurvature)
+                      dimPassthrough:currentSettings.dimPassthrough
+                          brightness:currentSettings.brightness];
 }
 
 - (void)didReceiveMemoryWarning {

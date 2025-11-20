@@ -35,6 +35,10 @@ struct UpdatesView: View {
                     VStack(alignment: .leading) { // Original VStack for text alignment
                         Text("Version 11.0.14 (Nov 19, 2025)")
                                                     .font(.headline)
+                        Text("- AV1 is now supported in reality kit mode, apparently I wrote the code but never bothered to finish it because it wasn't supported at the time and av1 was just returning nil oops. I don't have an m5 version to test so if its still broken please ping me")
+                            .font(.body)
+                        Text("- Added support for higher bitrate configurations, this is not tested, you may have issues depending on your network configuration and I don't know what the limits of m2/m5 when it comes to processing higher bitrates")
+                            .font(.body)
                         Text("- Added an option to reality kit mode that allows for an immersive view to be setup and change stream view to any size, use the lock and unlock to reposition easily")
                             .font(.body)
                         Text("- So we were saving settings on dismisal of the window, so if you like force quit or did something weird with window management it wouldn't save your preferences in the settings menu. This is now fixed, also I fixed some of the stupid defaults like no one wants on screen controls right?")

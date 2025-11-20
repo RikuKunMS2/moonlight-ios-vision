@@ -323,7 +323,10 @@ extension SettingsView {
 
     static let framerateTable: [Int32] = [30, 60, 90, 120]
 
-    static let bitrateTable: [Int32] = [5000, 10000, 30000, 50000, 75000, 100000, 120000, 200000]
+    static let bitrateTable: [Int32] = [
+            5000, 10000, 30000, 50000, 75000, 100000, 120000, 150000,
+            200000, 300000, 400000, 500000, 600000
+        ]
 }
 
 // Functions to help with aspect ratio calculation
