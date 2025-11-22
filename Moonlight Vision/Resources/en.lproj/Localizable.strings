@@ -134,3 +134,24 @@
 "stream_settings" = "Stream Settings";
 "remember_stream_settings" = "Remember stream settings";
 
+// Apps View
+"unknown" = "Unknown";
+"running" = "Running";
+"stop" = "Stop";
+"active_stream" = "Active Stream";
+"go_back_to_window" = "Go back to window";
+"force_quit" = "Force quit";
+"active_stream_message" = "A stream is already running. Please return to that window or terminate it before starting a new one.";
+"close_previous_window" = "Please close the previous window";
+"close_previous_window_message" = "The previous classic window is still open. Please close it before starting another stream.";
+"close_realitykit_window" = "Please close the RealityKit window";
+"close_realitykit_window_message" = "The RealityKit window is still open. Close it before launching another stream.";
+"got_it" = "Got it";
+
+// Updates View
+"latest_updates" = "Latest Updates";
+"noted_bugs" = "Noted Bugs";
+"feature_requests" = "Feature Requests";
+"more_information" = "More Information";
+"official_website" = "Official Website:";
+

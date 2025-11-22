@@ -11,43 +11,7 @@ import Observation
 import AppIntents
 import SwiftUI
 
-private let audioSessionModeDefaultsKey = "audioSessionModePreference"
-private let windowCornerRadiusDefaultsKey = "windowCornerRadiusPreference"
 private let appLanguageDefaultsKey = "appLanguagePreference"
-
-@objc public enum AudioSessionMode: Int, CaseIterable, Sendable, Hashable {
-    case exclusive = 0
-    case mixed
-    case exclusiveWhenMicActive
-
-    public var displayName: LocalizedStringKey {
-        switch self {
-        case .exclusive:
-            return "Microphone Exclusive"
-        case .mixed:
-            return "Allow Mixing with Other Audio"
-        case .exclusiveWhenMicActive:
-            return "Exclusive Only When Microphone Active"
-        }
-    }
-    
-    public func localizedDisplayName(for language: AppLanguage) -> String {
-        switch (self, language) {
-        case (.exclusive, .english):
-            return "Microphone Exclusive"
-        case (.exclusive, .chinese):
-            return "麦克风独占"
-        case (.mixed, .english):
-            return "Allow Mixing with Other Audio"
-        case (.mixed, .chinese):
-            return "允许与其他音频混音"
-        case (.exclusiveWhenMicActive, .english):
-            return "Exclusive Only When Microphone Active"
-        case (.exclusiveWhenMicActive, .chinese):
-            return "仅麦克风开启时独占"
-        }
-    }
-}
 
 @objc public enum AppLanguage: Int, CaseIterable, Sendable, Hashable {
     case english = 0
@@ -87,9 +51,6 @@ public class TemporarySettings: NSObject {
     @objc public var multiController = false
     @objc public var swapABXYButtons = false
     @objc public var playAudioOnPC = false
-    @objc public var audioSessionMode: AudioSessionMode = .exclusive
-    @objc public var windowCornerRadius: Double = 0.0
-    @objc public var appLanguageRaw: Int = AppLanguage.english.rawValue
     @objc public var optimizeGames = false
     @objc public var enableHdr = false
     @objc public var btMouseSupport = false
@@ -97,6 +58,9 @@ public class TemporarySettings: NSObject {
     @objc public var statsOverlay = false
     @objc public var dimPassthrough = true
     @objc public var brightness: Float = 0.0
+    @objc public var appLanguageRaw: Int = AppLanguage.english.rawValue
+    @objc public var autoResumeStreamOnReopen = false // Default: close window returns to host
+    @objc public var rememberStreamSettings = true // Default: remember stream settings (RealityKit settings and UIKit window size)
 
     @objc public var parent: MoonlightSettings?
 
@@ -113,20 +77,12 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererAnimateOpening = false
         self.realitykitRendererCurvature = 0.0
         self.dimPassthrough = false
-<<<<<<< HEAD
-        self.windowCornerRadius = (UserDefaults.standard.object(forKey: windowCornerRadiusDefaultsKey) as? Double) ?? 0.0
-        if let storedMode = UserDefaults.standard.object(forKey: audioSessionModeDefaultsKey) as? Int,
-           let mode = AudioSessionMode(rawValue: storedMode) {
-            self.audioSessionMode = mode
-        } else {
-            self.audioSessionMode = .exclusive
-        }
+        self.brightness = 0.0
         if let storedLang = UserDefaults.standard.object(forKey: appLanguageDefaultsKey) as? Int {
             self.appLanguageRaw = storedLang
         } else {
             self.appLanguageRaw = AppLanguage.english.rawValue
         }
-        self.brightness = 2.2
         super.init()
     }
 
@@ -202,33 +158,24 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererAnimateOpening = settings.realitykitRendererAnimateOpening == 1
         self.realitykitRendererCurvature = settings.realitykitRendererCurvature?.floatValue ?? 0
         self.dimPassthrough = settings.dimPassthrough?.boolValue ?? false
-<<<<<<< HEAD
-<<<<<<< HEAD
-        self.windowCornerRadius = (UserDefaults.standard.object(forKey: windowCornerRadiusDefaultsKey) as? Double) ?? 0.0
-        if let storedMode = UserDefaults.standard.object(forKey: audioSessionModeDefaultsKey) as? Int,
-           let mode = AudioSessionMode(rawValue: storedMode) {
-            self.audioSessionMode = mode
+        
+        // FIX: Load Immersive Mode from UserDefaults since CoreData isn't updated yet
+        self.realitykitImmersiveMode = UserDefaults.standard.bool(forKey: "realitykitImmersiveMode")
+        
+        let storedBrightness = settings.brightness?.floatValue ?? 0.0
+        if storedBrightness < 0.1 {
+            self.brightness = 2.2
         } else {
-            self.audioSessionMode = .exclusive
+            self.brightness = storedBrightness
         }
+        
         if let storedLang = UserDefaults.standard.object(forKey: appLanguageDefaultsKey) as? Int {
             self.appLanguageRaw = storedLang
         } else {
             self.appLanguageRaw = AppLanguage.english.rawValue
         }
-        
-        // FIX: Load Immersive Mode from UserDefaults since CoreData isn't updated yet
-        self.realitykitImmersiveMode = UserDefaults.standard.bool(forKey: "realitykitImmersiveMode")
-        let storedBrightness = settings.brightness?.floatValue ?? 0.0
-                
-        // Since we switched from Offset (default 0.0) to Boost (default 2.2),
-        // we need to catch "0.0" values from previous runs and upgrade them.
-        // Boost should never really be below 0.1.
-        if storedBrightness < 0.1 {
-            self.brightness = 2.2 // Reset to default if we find an old "0.0" value
-        } else {
-            self.brightness = storedBrightness
-        }
+        self.autoResumeStreamOnReopen = UserDefaults.standard.bool(forKey: "autoResumeStreamOnReopen")
+        self.rememberStreamSettings = UserDefaults.standard.object(forKey: "rememberStreamSettings") as? Bool ?? true
         #endif
 
         super.init()
@@ -246,35 +193,35 @@ public class TemporarySettings: NSObject {
     @objc public func save() {
         // FIX: Save Immersive Mode to UserDefaults
         UserDefaults.standard.set(self.realitykitImmersiveMode, forKey: "realitykitImmersiveMode")
+        UserDefaults.standard.set(self.autoResumeStreamOnReopen, forKey: "autoResumeStreamOnReopen")
+        UserDefaults.standard.set(self.rememberStreamSettings, forKey: "rememberStreamSettings")
 
         // save settings to parent
         let dataManager = DataManager()
         dataManager.saveSettings(
-<<<<<<< HEAD
-            withBitrate: Int(bitrate),
-            framerate: Int(framerate),
-            height: Int(height),
-            width: Int(width),
-            audioConfig: Int(audioConfig),
-            onscreenControls: Int(onscreenControls.rawValue),
-            optimizeGames: optimizeGames,
-            multiController: multiController,
-            swapABXYButtons: swapABXYButtons,
-            audioOnPC: playAudioOnPC,
-            preferredCodec: UInt32(preferredCodec.rawValue),
-            renderer: renderer.rawValue,
-            useFramePacing: useFramePacing,
-            enableHdr: enableHdr,
-            btMouseSupport: btMouseSupport,
-            absoluteTouchMode: absoluteTouchMode,
-            statsOverlay: statsOverlay,
-            realitykitRendererAnimateOpening: realitykitRendererAnimateOpening,
-            realitykitRendererCurvature: NSNumber(value: realitykitRendererCurvature),
-            dimPassthrough: dimPassthrough,
-            brightness: brightness
+                withBitrate: Int(bitrate),
+                framerate: Int(framerate),
+                height: Int(height),
+                width: Int(width),
+                audioConfig: Int(audioConfig),
+                onscreenControls: Int(onscreenControls.rawValue),
+                optimizeGames: optimizeGames,
+                multiController: multiController,
+                swapABXYButtons: swapABXYButtons,
+                audioOnPC: playAudioOnPC,
+                preferredCodec: UInt32(preferredCodec.rawValue),
+                renderer: renderer.rawValue,
+                useFramePacing: useFramePacing,
+                enableHdr: enableHdr,
+                btMouseSupport: btMouseSupport,
+                absoluteTouchMode: absoluteTouchMode,
+                statsOverlay: statsOverlay,
+                realitykitRendererAnimateOpening: realitykitRendererAnimateOpening,
+                realitykitRendererCurvature: NSNumber(value: realitykitRendererCurvature),
+                // Removed realitykitImmersiveMode from this call to fix the error
+                dimPassthrough: dimPassthrough,
+                brightness: brightness
         )
-        UserDefaults.standard.set(audioSessionMode.rawValue, forKey: audioSessionModeDefaultsKey)
-        UserDefaults.standard.set(windowCornerRadius, forKey: windowCornerRadiusDefaultsKey)
         UserDefaults.standard.set(appLanguageRaw, forKey: appLanguageDefaultsKey)
     }
 }
@@ -287,15 +234,6 @@ extension TemporarySettings {
         set {
             appLanguageRaw = newValue.rawValue
         }
-    }
-}
-                realitykitRendererAnimateOpening: realitykitRendererAnimateOpening,
-                realitykitRendererCurvature: NSNumber(value: realitykitRendererCurvature),
-                // Removed realitykitImmersiveMode from this call to fix the error
-                dimPassthrough: dimPassthrough,
-                brightness: brightness
-        )
->>>>>>> a5177f0 (11.0.14 C Fixed defaults on init)
     }
 }
 

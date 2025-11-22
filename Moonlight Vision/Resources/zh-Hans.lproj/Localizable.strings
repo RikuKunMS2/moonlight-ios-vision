@@ -134,3 +134,24 @@
 "stream_settings" = "串流设置";
 "remember_stream_settings" = "记住串流设置";
 
+// Apps View
+"unknown" = "未知";
+"running" = "运行中";
+"stop" = "停止";
+"active_stream" = "已有串流窗口";
+"go_back_to_window" = "回到窗口";
+"force_quit" = "强制结束";
+"active_stream_message" = "检测到已有串流窗口在运行。请选择回到该窗口或强制结束后重新启动。";
+"close_previous_window" = "请先关闭旧窗口";
+"close_previous_window_message" = "上一次串流已停止，但窗口仍保持打开。请在原窗口横条上点击关闭按钮后再重试。";
+"close_realitykit_window" = "请先关闭 RealityKit 窗口";
+"close_realitykit_window_message" = "RealityKit 窗口仍保持打开。请关闭后再尝试启动新的串流。";
+"got_it" = "知道了";
+
+// Updates View
+"latest_updates" = "最新更新";
+"noted_bugs" = "已知问题";
+"feature_requests" = "功能请求";
+"more_information" = "更多信息";
+"official_website" = "官方网站：";
+

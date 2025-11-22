@@ -32,7 +32,6 @@ struct RealityKitStreamView: View {
     var isImmersive: Bool
     
     var body: some View {
-        let cornerRadius = CGFloat(MainViewModel.shared.streamSettings.windowCornerRadius)
         // We unwrap the binding here to pass a non-optional binding to the internal view
         if streamConfig != nil {
             _RealityKitStreamView(
@@ -41,7 +40,6 @@ struct RealityKitStreamView: View {
                     set: { streamConfig = $0 }
                 ),
                 needsHdr: needsHdr,
-                isImmersive: isImmersive
                 isImmersive: isImmersive
             ) {
                 // Close Action
@@ -58,7 +56,6 @@ struct RealityKitStreamView: View {
                     Task { await dismissImmersiveSpace() }
                 } else {
                     dismissWindow()
->>>>>>> 11169f0 (11.0.14 D Immersive Mode Added)
                 }
             }
         }
@@ -107,8 +104,8 @@ struct _RealityKitStreamView: View {
         )
     
     @State var shouldClose: Bool = false
-    @State private var needsResume = false
-    @State private var didPerformFullClose = false
+    @State var hasPerformedTeardown = false
+    @State var needsResume = false
     @State var animationTimer: Timer?
     @State var _streamMan: StreamManager?
     @ObservedObject var connectionCallbacks: ObservableConnectionManager = .init()
@@ -150,12 +147,12 @@ struct _RealityKitStreamView: View {
     }
 
     var body: some View {
-        if viewModel.activelyStreaming {
-            let cornerRadius = CGFloat(viewModel.streamSettings.windowCornerRadius)
-            GeometryReader3D { proxy in
-                ZStack {
-                    RealityView { content, attachments in
-                        // 1. Setup Screen
+        Group {
+            if viewModel.activelyStreaming {
+                GeometryReader3D { proxy in
+                    ZStack {
+                        RealityView { content, attachments in
+                    // 1. Setup Screen
                     let mesh = try! _RealityKitStreamView.generateCurvedPlane(
                         width: MAX_WIDTH_METERS,
                         aspectRatio: aspectRatio,
@@ -309,7 +306,12 @@ struct _RealityKitStreamView: View {
                             let translation = value.convert(value.translation3D, from: .local, to: .scene)
                             immersivePosition = startDragPosition! + SIMD3<Float>(translation.x, translation.y, translation.z)
                         }
-                        .onEnded { _ in startDragPosition = nil }
+                        .onEnded { _ in 
+                            startDragPosition = nil
+                            if viewModel.streamSettings.rememberStreamSettings {
+                                saveRealityKitSettings()
+                            }
+                        }
                 )
                 .gesture(
                     MagnifyGesture()
@@ -319,18 +321,18 @@ struct _RealityKitStreamView: View {
                             let newScale = immersiveScale * Float(value.magnification)
                             immersiveScale = min(max(newScale, 0.05), 10.0)
                         }
+                        .onEnded { _ in
+                            if viewModel.streamSettings.rememberStreamSettings {
+                                saveRealityKitSettings()
+                            }
+                        }
                 )
                 
-                // Keyboard Hint Overlay
                 if showVirtualKeyboard {
                     VStack(spacing: 12) {
-                        Image(systemName: "keyboard")
-                            .font(.system(size: 40))
-                        Text(viewModel.localized(english: "Keyboard Active", chinese: "键盘已激活"))
-                            .font(.headline)
-                        Text(viewModel.localized(english: "Tap anywhere on the video to open the keyboard", chinese: "点击视频任意位置打开键盘"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "keyboard").font(.system(size: 40))
+                        Text(viewModel.localized("keyboard_active")).font(.headline)
+                        Text(viewModel.localized("tap_video_to_type")).font(.caption).foregroundStyle(.secondary)
                     }
                     .padding(20)
                     .background(.regularMaterial)
@@ -338,34 +340,39 @@ struct _RealityKitStreamView: View {
                     .allowsHitTesting(false)
                     .opacity(0.8)
                 }
-                } // End ZStack
-            }
-        } else {
-            // Stream stopped overlay
-            VStack(spacing: 20) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.largeTitle)
-                Text(viewModel.localized(english: "Stream stopped", chinese: "串流已停止"))
-                    .font(.title2)
-                Text(viewModel.localized(english: "Please close this window before starting a new stream from the main menu.", chinese: "请在窗口横条上点击关闭按钮，之后即可在主菜单重新启动串流。"))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                
-                Button {
-                    // Clear saved config to prevent auto-resume
-                    viewModel.savedStreamConfigForResume = nil
-                    openWindow(id: "mainView")
-                    dismissWindow()
-                    closeAction()
-                } label: {
-                    Label(viewModel.localized(english: "Open Main Menu", chinese: "打开主菜单"), systemImage: "house.fill")
-                        .frame(maxWidth: .infinity)
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-                .padding(.horizontal)
+            } else {
+                // Stream stopped overlay
+                VStack(spacing: 20) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.largeTitle)
+                    Text(viewModel.localized("stream_stopped"))
+                        .font(.title2)
+                    Text(viewModel.localized("stream_stopped_message"))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    Button {
+                        // Clear saved config to prevent auto-resume
+                        viewModel.savedStreamConfigForResume = nil
+                        openWindow(id: "mainView")
+                        if isImmersive {
+                            Task { await dismissImmersiveSpace() }
+                        } else {
+                            dismissWindow()
+                        }
+                        closeAction()
+                    } label: {
+                        Label(viewModel.localized("open_main_menu"), systemImage: "house.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .padding(.horizontal)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.thinMaterial)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.thinMaterial)
         }
         .task {
             if surfaceMaterial == nil {
@@ -379,153 +386,120 @@ struct _RealityKitStreamView: View {
         .ornament(visibility: connectionCallbacks.showAlert ? .visible :  .hidden , attachmentAnchor: .scene(.bottomFront), contentAlignment: .bottom) {
             VStack(alignment: .center) {
                 Image(systemName: "exclamationmark.triangle")
-                Text(MainViewModel.localizedStatic(english: "Stream error", chinese: "串流错误"))
-                    .font(.title)
-                Text(connectionCallbacks.errorMessage ?? MainViewModel.localizedStatic(english: "Unknown error", chinese: "未知错误"))
-                Button(MainViewModel.localizedStatic(english: "Close", chinese: "关闭")) {
-                    shouldClose.toggle()
-                    dismissWindow()
-                }
+                Text(viewModel.localized("stream_error")).font(.title)
+                Text(connectionCallbacks.errorMessage ?? viewModel.localized("unknown_error"))
+                Button(viewModel.localized("close")) { shouldClose.toggle(); dismissWindow() }
             }
             .padding().glassBackgroundEffect()
         }
-<<<<<<< HEAD
-        .ornament(attachmentAnchor: .scene(.bottomTrailingFront), contentAlignment: .bottomLeading) {
-<<<<<<< HEAD
-            StreamControls(
-                horizontal: false,
-                streamConfig: $streamConfig,
-                isKeyboardActive: showVirtualKeyboard, // <-- Pass State
-                closeAction: {
-                    handleUserRequestedClose()
-                },
-                toggleKeyboardAction: {
-                    showVirtualKeyboard.toggle()
-                }
-            ) {
-                            if needsHdr || viewModel.streamSettings.enableHdr {
-                                HStack {
-                                    Image(systemName: "sun.max.fill")
-                                    Text(viewModel.localized(english: "Boost / Luminance", chinese: "增强 / 亮度"))
-                                    
-                                    // Change the Binding and the Range.
-                                    // We are repurposing the 'brightness' variable in viewModel to store Boost value for now
-                                    // to save you from editing CoreData again immediately.
-                                    // Range: 1.0 (Normal) to 5.0 (Very Bright)
-                                    Slider(value: $viewModel.streamSettings.brightness, in: 1.0...5.0, step: 0.1)
-                                        .frame(width: 300)
-                                }
-                                .padding(.vertical, 5)
-                            }
-                            HStack {
-                                Button(viewModel.localized(english: "Flatten", chinese: "扁平化"), systemImage: viewModel.streamSettings.realitykitRendererCurvature == 0 ? "light.panel" : "pano.fill") {
-                                    if viewModel.streamSettings.realitykitRendererCurvature == 0 {
-                                        viewModel.streamSettings.realitykitRendererCurvature = curveMagnitudeMemory
-                                    } else {
-                                        curveMagnitudeMemory = viewModel.streamSettings.realitykitRendererCurvature
-                                        viewModel.streamSettings.realitykitRendererCurvature = 0
-                                    }
-                                }
-                                Slider(value: $viewModel.streamSettings.realitykitRendererCurvature, in: 0 ... 1, step: 0.001)
-                                    .frame(width: 300)
-                                    .padding([.trailing])
-                            }
-                 
-                // AUTO-CALCULATED Z-DEPTH SLIDER
-                HStack {
-                    Button(viewModel.localized(english: "Reset Depth", chinese: "重置深度"), systemImage: "arrow.up.and.down.and.arrow.left.and.right") {
-                        depthOffset = 0.0
-                    }
-                    .accessibilityLabel(viewModel.localized(english: "Adjust Depth", chinese: "调整深度"))
-                    // Uses dynamic zLimits
-                    Slider(value: $depthOffset, in: zLimits)
-                        .frame(width: 300)
-                        .padding([.trailing])
-                }
-
-                HStack {
-                    Toggle(isOn: Binding(
-                        get: { videoMode == .sideBySide3D },
-                        set: { val in
-                            videoMode = val ? .sideBySide3D : .standard2D
-                            if videoMode == .sideBySide3D {
-                                screen.model?.materials = [surfaceMaterial!]
-                            } else {
-                                screen.model?.materials = [UnlitMaterial(texture: texture)]
-                            }
-                        }
-                    )) {
-                        Text(viewModel.localized(english: "3D Mode", chinese: "3D 模式"))
-                    }
-                    .toggleStyle(.button)
-                }
-                
-                // AUTO-CALCULATED HEIGHT SLIDER
-                HStack {
-                    Button(viewModel.localized(english: "Height", chinese: "高度"), systemImage: "arrow.up.and.line.horizontal.and.arrow.down") {}
-                    // Uses dynamic yLimits
-                    Slider(value: $height, in: yLimits)
-                        .frame(width: 300)
-                        .padding([.trailing])
-                }
-                
-                Button(viewModel.localized(english: "Main Button", chinese: "主按钮"), systemImage: "gamecontroller.fill") {
-                }
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            if let controller = self.controllerSupport?.getOscController() {
-                                self.controllerSupport?.setButtonFlag(controller, flags: 0x0400)
-                                self.controllerSupport?.updateFinished(controller)
-                            }
-                        }
-                        .onEnded { _ in
-                            if let controller = self.controllerSupport?.getOscController() {
-                                self.controllerSupport?.clearButtonFlag(controller, flags: 0x0400)
-                                self.controllerSupport?.updateFinished(controller)
-                            }
-                        }
-                )
-            }
-        }.onChange(of: viewModel.streamSettings.brightness) { _, newValue in
+        .modifier(VolumetricWindowControls(isImmersive: isImmersive, content: { controlsView }))
+        .onChange(of: viewModel.streamSettings.brightness) { _, newValue in
             safeHDRSettings.value = HDRParams(boost: newValue, contrast: 1.0, saturation: 1.0, brightness: 0.0)
         }
         .onAppear {
-            safeHDRSettings.value = HDRParams(
-                boost: viewModel.streamSettings.brightness, // Using brightness slider for boost
-                contrast: 1.0,
-                saturation: 1.0,
-                brightness: 0.0
-            )
-            
-            guard handleAppearanceValidation() else { return }
-            startStreamIfNeeded()
+             safeHDRSettings.value = HDRParams(boost: viewModel.streamSettings.brightness, contrast: 1.0, saturation: 1.0, brightness: 0.0)
+             if !viewModel.activelyStreaming {
+                 openWindow(id: "mainView"); self.closeAction(); return
+             }
+             dismissWindow(id: "mainView"); dismissWindow(id: "dummy")
+             
+             self.curveAnimationMultiplier = viewModel.streamSettings.realitykitRendererAnimateOpening ? 0 : 1
+             
+             // Load saved RealityKit settings if enabled
+             if viewModel.streamSettings.rememberStreamSettings {
+                 loadRealityKitSettings()
+             }
+             
+             self._streamMan = StreamManager(
+                 config: self.streamConfig,
+                 rendererProvider: {
+                     DrawableVideoDecoder(
+                         texture: self.texture,
+                         callbacks: self.connectionCallbacks,
+                         aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height),
+                         useFramePacing: self.streamConfig.useFramePacing,
+                         enableHDR: self.viewModel.streamSettings.enableHdr,
+                         hdrSettingsProvider: { [safeHDRSettings] in return safeHDRSettings.value },
+                         callbackToRender: { texture, correctedResultion in
+                             DispatchQueue.main.async {
+                                 if let correctedResultion = correctedResultion {
+                                     streamConfig.width = Int32(correctedResultion.0)
+                                     streamConfig.height = Int32(correctedResultion.1)
+                                 }
+                                 self.texture.replace(withDrawables: texture)
+                                 self.controllerSupport!.connectionEstablished()
+                                 if self.curveAnimationMultiplier == 0 { animateOpening() }
+                             }
+                         })
+                 },
+                 connectionCallbacks: self.connectionCallbacks
+             )
+             let operationQueue = OperationQueue()
+             operationQueue.addOperation(_streamMan!)
         }
-        .modifier(VolumetricWindowControls(isImmersive: isImmersive, content: { controlsView }))
-        .onChange(of: shouldClose) { _, shouldClose in
-            if shouldClose {
-                handleUserRequestedClose()
-            }
-        }
+        .onChange(of: shouldClose) { _, val in if val { openWindow(id: "mainView"); self.closeAction() } }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
-            case .active:
-                if needsResume, viewModel.activelyStreaming {
-                    // Add a small delay to ensure we're truly back from background
-                    // This prevents resuming when just switching between regular apps
-                    Task {
-                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second delay
-                        if needsResume, viewModel.activelyStreaming {
-                            await MainActor.run {
-                                startStreamIfNeeded()
-                            }
-                        }
-                    }
-                }
             case .background:
                 // Only pause when truly backgrounded (e.g., immersive scene or headset removal)
-                // Don't pause on .inactive as it triggers too easily when switching apps
-                pauseStreamForBackground()
+                guard !hasPerformedTeardown else { return }
+                guard !shouldClose else { return }
+                
+                // Set needsResume flag before stopping
+                needsResume = true
+                hasPerformedTeardown = true
+                
+                viewModel.activelyStreaming = false
+                _streamMan?.stopStream()
+                controllerSupport?.cleanup()
+            case .active:
+                // Resume stream if we were backgrounded and need to resume
+                guard needsResume else { return }
+                guard !shouldClose else { return }
+                guard streamConfig != nil else { return }
+                
+                // Add a small delay to ensure we're truly back from background
+                Task {
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second delay
+                    
+                    await MainActor.run {
+                        guard needsResume else { return }
+                        guard !shouldClose else { return }
+                        guard streamConfig != nil else { return }
+                        
+                        needsResume = false
+                        hasPerformedTeardown = false
+                        viewModel.activelyStreaming = true
+                        
+                        // Restart stream
+                        self._streamMan = StreamManager(
+                            config: self.streamConfig,
+                            rendererProvider: {
+                                DrawableVideoDecoder(
+                                    texture: self.texture,
+                                    callbacks: self.connectionCallbacks,
+                                    aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height),
+                                    useFramePacing: self.streamConfig.useFramePacing,
+                                    enableHDR: self.viewModel.streamSettings.enableHdr,
+                                    hdrSettingsProvider: { [safeHDRSettings] in return safeHDRSettings.value },
+                                    callbackToRender: { texture, correctedResultion in
+                                        DispatchQueue.main.async {
+                                            if let correctedResultion = correctedResultion {
+                                                streamConfig.width = Int32(correctedResultion.0)
+                                                streamConfig.height = Int32(correctedResultion.1)
+                                            }
+                                            self.texture.replace(withDrawables: texture)
+                                            self.controllerSupport!.connectionEstablished()
+                                            if self.curveAnimationMultiplier == 0 { animateOpening() }
+                                        }
+                                    })
+                            },
+                            connectionCallbacks: self.connectionCallbacks
+                        )
+                        let operationQueue = OperationQueue()
+                        operationQueue.addOperation(_streamMan!)
+                    }
+                }
             default:
                 break
             }
@@ -533,121 +507,7 @@ struct _RealityKitStreamView: View {
         .persistentSystemOverlays(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
         .preferredSurroundingsEffect(viewModel.streamSettings.dimPassthrough ? .systemDark : nil)
         .volumeBaseplateVisibility(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .supportedVolumeViewpoints(.front)
-            .onDisappear {
-                handleSceneDisappearance()
-            }
-        } else {
-            VStack(spacing: 16) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.largeTitle)
-                Text(viewModel.localized(english: "Stream stopped", chinese: "串流已停止"))
-                    .font(.title2)
-                Text(viewModel.localized(english: "Please close this window before starting a new stream from the main menu.", chinese: "请在窗口横条上点击关闭按钮，之后即可在主菜单重新启动串流。"))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.thinMaterial)
-        }
-    }
-
-    private func handleAppearanceValidation() -> Bool {
-        if !viewModel.activelyStreaming {
-            print("_RealityKitStreamView: Detected appearance without active stream state. Closing stream window and opening main view.")
-            openWindow(id: "mainView")
-            self.closeAction()
-            return false
-        }
-        return true
-    }
-
-    private func startStreamIfNeeded() {
-        guard _streamMan == nil else {
-            needsResume = false
-            return
-        }
-
-        dismissWindow(id: "mainView")
-        dismissWindow(id: "dummy")
-
-        self.curveAnimationMultiplier = viewModel.streamSettings.realitykitRendererAnimateOpening ? 0 : 1
-        didPerformFullClose = false
-        self._streamMan = StreamManager(
-            config: self.streamConfig,
-            rendererProvider: {
-                DrawableVideoDecoder(
-                    texture: self.texture,
-                    callbacks: self.connectionCallbacks,
-                    aspectRatio: Float(self.streamConfig.width) / Float(self.streamConfig.height),
-                    useFramePacing: self.streamConfig.useFramePacing,
-                    enableHDR: self.viewModel.streamSettings.enableHdr,
-                    hdrSettingsProvider: { [safeHDRSettings] in
-                        return safeHDRSettings.value
-                    },
-                    callbackToRender: { texture, correctedResultion in
-                        DispatchQueue.main.async {
-                            if let correctedResultion = correctedResultion {
-                                streamConfig.width = Int32(correctedResultion.0)
-                                streamConfig.height = Int32(correctedResultion.1)
-                            }
-                            self.texture.replace(withDrawables: texture)
-                            self.controllerSupport!.connectionEstablished()
-                            if self.curveAnimationMultiplier == 0 { animateOpening() }
-                        }
-                    })
-            },
-            connectionCallbacks: self.connectionCallbacks
-        )
-        let operationQueue = OperationQueue()
-        operationQueue.addOperation(_streamMan!)
-        needsResume = false
-    }
-
-    private func pauseStreamForBackground() {
-        guard _streamMan != nil else { return }
-        stopStream(teardownCompletely: false)
-    }
-
-    private func handleUserRequestedClose() {
-        stopStream(teardownCompletely: true)
-        DispatchQueue.main.async {
-            openWindow(id: "mainView")
-        }
-        viewModel.realityWindowNeedsManualClose = true
-    }
-
-    private func stopStream(teardownCompletely: Bool) {
-        _streamMan?.stopStream()
-        _streamMan = nil
-        controllerSupport?.cleanup()
-
-        if teardownCompletely {
-            if didPerformFullClose {
-                return
-            }
-            didPerformFullClose = true
-            viewModel.activelyStreaming = false
-            needsResume = false
-            self.closeAction()
-        } else {
-            needsResume = true
-        }
-    }
-
-    private func handleSceneDisappearance() {
-        guard !didPerformFullClose else { return }
-        guard !needsResume else { return }
-        handleExternalWindowDismiss()
-    }
-
-    private func handleExternalWindowDismiss() {
-        stopStream(teardownCompletely: true)
-        DispatchQueue.main.async {
-            openWindow(id: "mainView")
-        }
-        viewModel.realityWindowNeedsManualClose = true
+        .supportedVolumeViewpoints(.front)
     }
     
     @ViewBuilder
@@ -657,6 +517,13 @@ struct _RealityKitStreamView: View {
             streamConfig: $streamConfig,
             isKeyboardActive: showVirtualKeyboard,
             closeAction: {
+               // Save config for auto-resume before closing
+               if streamConfig != nil {
+                   viewModel.savedStreamConfigForResume = streamConfig
+               }
+               // Clear needsResume flag when manually closing
+               needsResume = false
+               hasPerformedTeardown = false
                viewModel.activelyStreaming = false
                self._streamMan?.stopStream()
                self.controllerSupport?.cleanup()
@@ -665,83 +532,134 @@ struct _RealityKitStreamView: View {
              },
             toggleKeyboardAction: { showVirtualKeyboard.toggle() }
         ) {
-            HStack {
-                Image(systemName: "sun.max.fill")
-                Text("Boost / Luminance")
-                Slider(value: $viewModel.streamSettings.brightness, in: 1.0...5.0, step: 0.1).frame(width: 220)
+            if needsHdr || viewModel.streamSettings.enableHdr {
+                HStack {
+                    Image(systemName: "sun.max.fill")
+                    Text(viewModel.localized("boost_luminance"))
+                    Slider(value: $viewModel.streamSettings.brightness, in: 1.0...5.0, step: 0.1)
+                        .frame(width: 220)
+                    .onChange(of: viewModel.streamSettings.brightness) { _, _ in
+                        if viewModel.streamSettings.rememberStreamSettings {
+                            saveRealityKitSettings()
+                        }
+                    }
+                }
+                .padding(.vertical, 5)
             }
-            .padding(.vertical, 5)
             
             HStack {
-               Button("Flatten", systemImage: viewModel.streamSettings.realitykitRendererCurvature == 0 ? "light.panel" : "pano.fill") {
+               Button(viewModel.localized("flatten"), systemImage: viewModel.streamSettings.realitykitRendererCurvature == 0 ? "light.panel" : "pano.fill") {
                    if viewModel.streamSettings.realitykitRendererCurvature == 0 {
                        viewModel.streamSettings.realitykitRendererCurvature = curveMagnitudeMemory
                    } else {
                        curveMagnitudeMemory = viewModel.streamSettings.realitykitRendererCurvature
                        viewModel.streamSettings.realitykitRendererCurvature = 0
                    }
+                   if viewModel.streamSettings.rememberStreamSettings {
+                       saveRealityKitSettings()
+                   }
                }
                Slider(value: $viewModel.streamSettings.realitykitRendererCurvature, in: 0 ... 1, step: 0.001)
                    .frame(width: 220)
                    .padding([.trailing])
+                   .onChange(of: viewModel.streamSettings.realitykitRendererCurvature) { _, _ in
+                       if viewModel.streamSettings.rememberStreamSettings {
+                           saveRealityKitSettings()
+                       }
+                   }
            }
 
             if !isImmersive {
                 // --- VOLUMETRIC CONTROLS ---
                 HStack {
-                    Button("Reset Depth", systemImage: "arrow.up.and.down.and.arrow.left.and.right") { depthOffset = 0.0 }
+                    Button(viewModel.localized("reset_depth"), systemImage: "arrow.up.and.down.and.arrow.left.and.right") { 
+                        depthOffset = 0.0
+                        if viewModel.streamSettings.rememberStreamSettings {
+                            saveRealityKitSettings()
+                        }
+                    }
                     Slider(value: $depthOffset, in: zLimits)
                         .frame(width: 220)
                         .padding([.trailing])
+                        .onChange(of: depthOffset) { _, _ in
+                            if viewModel.streamSettings.rememberStreamSettings {
+                                saveRealityKitSettings()
+                            }
+                        }
                 }
                 HStack {
-                    Button("Height", systemImage: "arrow.up.and.line.horizontal.and.arrow.down") {}
+                    Button(viewModel.localized("height"), systemImage: "arrow.up.and.line.horizontal.and.arrow.down") {}
                     Slider(value: $height, in: yLimits)
                         .frame(width: 220)
                         .padding([.trailing])
+                        .onChange(of: height) { _, _ in
+                            if viewModel.streamSettings.rememberStreamSettings {
+                                saveRealityKitSettings()
+                            }
+                        }
                 }
             } else {
                 // --- IMMERSIVE CONTROLS ---
                 Divider().padding(.vertical, 5)
-                Text("Spatial").font(.caption).foregroundStyle(.secondary)
+                Text(viewModel.localized("spatial")).font(.caption).foregroundStyle(.secondary)
                 
                 // BLACK OUT SLIDER
                 HStack {
                     Image(systemName: immersionAmount > 0.5 ? "moon.fill" : "moon")
-                    Text("Black Sphere Opacity")
+                    Text(viewModel.localized("black_sphere_opacity"))
                     Slider(value: $immersionAmount, in: 0.0...1.0)
                         .frame(width: 220)
+                        .onChange(of: immersionAmount) { _, _ in
+                            if viewModel.streamSettings.rememberStreamSettings {
+                                saveRealityKitSettings()
+                            }
+                        }
                 }
                 
                 HStack {
                       Image(systemName: "arrow.up.left.and.arrow.down.right")
-                      Text("Size")
+                      Text(viewModel.localized("size"))
                       Slider(value: $immersiveScale, in: 0.5...6.0)
                         .frame(width: 220)
+                        .onChange(of: immersiveScale) { _, _ in
+                            if viewModel.streamSettings.rememberStreamSettings {
+                                saveRealityKitSettings()
+                            }
+                        }
                 }
                 
                 HStack {
                       Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
-                      Text("Distance")
+                      Text(viewModel.localized("distance"))
                       Slider(value: Binding(
                         get: { immersivePosition.z },
-                        set: { immersivePosition.z = $0 }
+                        set: { 
+                            immersivePosition.z = $0
+                            if viewModel.streamSettings.rememberStreamSettings {
+                                saveRealityKitSettings()
+                            }
+                        }
                       ), in: -10.0 ... -0.5)
                         .frame(width: 220)
                 }
                 
                 HStack {
                       Image(systemName: "arrow.up.and.down")
-                      Text("Height")
+                      Text(viewModel.localized("height"))
                       Slider(value: Binding(
                         get: { immersivePosition.y },
-                        set: { immersivePosition.y = $0 }
+                        set: { 
+                            immersivePosition.y = $0
+                            if viewModel.streamSettings.rememberStreamSettings {
+                                saveRealityKitSettings()
+                            }
+                        }
                       ), in: 0.0 ... 5.0)
                         .frame(width: 220)
                 }
                 
                 Toggle(isOn: $isInteractive) {
-                    Label(isInteractive ? "Screen Locked (Inputs Active)" : "Screen Unlocked (Movable Screen Active)",
+                    Label(isInteractive ? viewModel.localized("screen_locked") : viewModel.localized("screen_unlocked"),
                           systemImage: isInteractive ? "lock.fill" : "lock.open.fill")
                 }
                 .toggleStyle(.button)
@@ -759,10 +677,10 @@ struct _RealityKitStreamView: View {
                            screen.model?.materials = [UnlitMaterial(texture: texture)]
                        }
                     }
-                )) { Text("3D Mode") }.toggleStyle(.button)
+                )) { Text(viewModel.localized("3d_mode")) }.toggleStyle(.button)
             }
             
-            Button("Main Button", systemImage: "gamecontroller.fill") { }
+            Button(viewModel.localized("main_button"), systemImage: "gamecontroller.fill") { }
            .simultaneousGesture(
                DragGesture(minimumDistance: 0)
                    .onChanged { _ in
@@ -794,6 +712,50 @@ struct _RealityKitStreamView: View {
             }
             self.animationTimer?.fire()
         }
+    }
+    
+    // MARK: - RealityKit Settings Persistence
+    
+    private func loadRealityKitSettings() {
+        let defaults = UserDefaults.standard
+        
+        // Load volumetric settings
+        if let savedHeight = defaults.object(forKey: "realitykitHeight") as? Float {
+            height = savedHeight
+        }
+        if let savedDepthOffset = defaults.object(forKey: "realitykitDepthOffset") as? Float {
+            depthOffset = savedDepthOffset
+        }
+        
+        // Load immersive settings
+        if let savedScale = defaults.object(forKey: "realitykitImmersiveScale") as? Float {
+            immersiveScale = savedScale
+        }
+        if let savedPosX = defaults.object(forKey: "realitykitImmersivePosX") as? Float,
+           let savedPosY = defaults.object(forKey: "realitykitImmersivePosY") as? Float,
+           let savedPosZ = defaults.object(forKey: "realitykitImmersivePosZ") as? Float {
+            immersivePosition = SIMD3<Float>(savedPosX, savedPosY, savedPosZ)
+        }
+        if let savedImmersion = defaults.object(forKey: "realitykitImmersionAmount") as? Float {
+            immersionAmount = savedImmersion
+        }
+    }
+    
+    private func saveRealityKitSettings() {
+        guard viewModel.streamSettings.rememberStreamSettings else { return }
+        
+        let defaults = UserDefaults.standard
+        
+        // Save volumetric settings
+        defaults.set(height, forKey: "realitykitHeight")
+        defaults.set(depthOffset, forKey: "realitykitDepthOffset")
+        
+        // Save immersive settings
+        defaults.set(immersiveScale, forKey: "realitykitImmersiveScale")
+        defaults.set(immersivePosition.x, forKey: "realitykitImmersivePosX")
+        defaults.set(immersivePosition.y, forKey: "realitykitImmersivePosY")
+        defaults.set(immersivePosition.z, forKey: "realitykitImmersivePosZ")
+        defaults.set(immersionAmount, forKey: "realitykitImmersionAmount")
     }
     
     static func generateCurvedPlane(

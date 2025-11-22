@@ -32,7 +32,7 @@ struct ComputerView: View {
             // --- Handle Main States ---
             if host.updatePending {
                 // Show a generic updating indicator when manually refreshed or during initial task update
-                ProgressView(viewModel.localized(english: "Updating \(host.name)...", chinese: "正在更新 \(host.name)..."))
+                ProgressView(viewModel.localized("updating_host", host.name))
                     .scaleEffect(1.5) // Make spinner larger
             } else {
                 // Switch based on the host's primary state (Online, Offline, Unknown)
@@ -49,7 +49,7 @@ struct ComputerView: View {
                     offlineView
                 case .unknown:
                     // Waiting for initial discovery or update to determine state
-                    ProgressView(viewModel.localized(english: "Connecting to \(host.name)...", chinese: "正在连接到 \(host.name)..."))
+                    ProgressView(viewModel.localized("connecting_to_host", host.name))
                         .scaleEffect(1.5)
                 // No default needed if HostState enum covers all cases explicitly
                 }
@@ -77,7 +77,7 @@ struct ComputerView: View {
                         }
                     }
                 } label: {
-                    Label(viewModel.localized(english: "Refresh Status", chinese: "刷新状态"), systemImage: "arrow.clockwise")
+                    Label(viewModel.localized("refresh_status"), systemImage: "arrow.clockwise")
                 }
                 .disabled(host.updatePending)
             }
@@ -118,26 +118,16 @@ struct ComputerView: View {
         }
         // Use the view model's pairing state for the alert, as pairing is a global action
         .alert(
-            viewModel.localized(english: "Pairing", chinese: "配对"),
+            viewModel.localized("pairing"),
             isPresented: $viewModel.pairingInProgress,
             presenting: viewModel.currentPin // Use the PIN from the ViewModel
         ) { pinData in // Action buttons using the presented data (PIN)
-            Button(viewModel.localized(english: "Cancel", chinese: "取消"), role: .cancel) {
+            Button(viewModel.localized("cancel"), role: .cancel) {
                 viewModel.endPairing() // Call ViewModel's cancel function
             }
         } message: { pinData in // Message using the presented data (PIN)
             // Ensure currentPin is properly published and updated in ViewModel
-            Text(viewModel.localized(english: """
-            Enter the following PIN on the host machine:
-            \(pinData)
-
-            If your host PC is running Sunshine, navigate to the Sunshine web UI to enter the PIN.
-            """, chinese: """
-            请在主机上输入以下 PIN：
-            \(pinData)
-
-            如果您的 PC 运行的是 Sunshine，请导航到 Sunshine Web UI 输入 PIN。
-            """))
+            Text(viewModel.localized("pairing_pin_message", pinData))
         }
     }
 
@@ -156,16 +146,16 @@ struct ComputerView: View {
         case .unpaired:
             // Host is Online but Unpaired -> Show Pairing UI
             VStack(spacing: 15) {
-                 Label(viewModel.localized(english: "Ready to Pair", chinese: "准备配对"), systemImage: "lock.desktopcomputer")
+                 Label(viewModel.localized("ready_to_pair"), systemImage: "lock.desktopcomputer")
                      .font(.title2)
                      .foregroundColor(.orange) // Use a distinct color
 
-                Text(viewModel.localized(english: "This computer is online but needs to be paired with this device.", chinese: "此电脑已在线，但需要与此设备配对。"))
+                Text(viewModel.localized("pairing_needed_message"))
                      .font(.body)
                      .multilineTextAlignment(.center)
                      .padding(.horizontal)
 
-                Button(viewModel.localized(english: "Start Pairing", chinese: "开始配对")) {
+                Button(viewModel.localized("start_pairing")) {
                     // ViewModel should handle checking if host is online again if necessary,
                     // but ComputerView already knows it's online here.
                     viewModel.tryPairHost(host)
@@ -177,14 +167,14 @@ struct ComputerView: View {
         case .unknown:
              // Host is Online, but we haven't determined pairing status yet
              VStack(spacing: 15) {
-                 Label(viewModel.localized(english: "Checking Pairing Status...", chinese: "正在检查配对状态..."), systemImage: "questionmark.circle")
+                 Label(viewModel.localized("checking_pairing_status"), systemImage: "questionmark.circle")
                       .font(.title2)
                       .foregroundColor(.gray) // Indicate uncertainty
                  ProgressView()
                       .padding(.bottom)
 
                  // Option to force pairing attempt
-                 Button(viewModel.localized(english: "Start Pairing Anyway", chinese: "仍然开始配对")) {
+                 Button(viewModel.localized("start_pairing_anyway")) {
                      print("User initiated pairing while pairState is unknown for \(host.name).")
                      viewModel.tryPairHost(host)
                  }
@@ -192,7 +182,7 @@ struct ComputerView: View {
                  // The alert is attached higher up in the view hierarchy
 
                  // Option to stop automatic background checks for this view instance
-                 Button(viewModel.localized(english: "Stop Automatic Checks", chinese: "停止自动检查")) {
+                 Button(viewModel.localized("stop_automatic_checks")) {
                      print("User stopped automatic checks for \(host.name).")
                      stopAutomaticStateUpdate = true // Stop this view's task modifier
                      // Optionally tell ViewModel to pause background *polling* if implemented
@@ -209,10 +199,10 @@ struct ComputerView: View {
     /// View displayed when the host is offline.
     private var offlineView: some View {
         VStack(spacing: 15) {
-            Label(viewModel.localized(english: "Offline", chinese: "离线"), systemImage: "desktopcomputer.trianglebadge.exclamationmark")
+            Label(viewModel.localized("offline"), systemImage: "desktopcomputer.trianglebadge.exclamationmark")
                 .font(.title2)
                 .foregroundColor(.red) // Clear offline indicator
-            Text(viewModel.localized(english: "Moonlight cannot connect to this computer. Ensure it is turned on and connected to the network.", chinese: "Moonlight 无法连接到此电脑。请确保它已开机并连接到网络。"))
+            Text(viewModel.localized("offline_message"))
                 .font(.body)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -234,14 +224,14 @@ struct ComputerView: View {
                     }
                 }
             } label: {
-                Label(viewModel.localized(english: "Force Refresh Status", chinese: "强制刷新状态"), systemImage: "arrow.clockwise")
+                Label(viewModel.localized("force_refresh_status"), systemImage: "arrow.clockwise")
             }
             .disabled(host.updatePending)
             // Wake-on-LAN button
             Button {
                 viewModel.wakeHost(host)
             } label: {
-                Label(viewModel.localized(english: "Wake PC", chinese: "唤醒电脑"), systemImage: "sun.horizon")
+                Label(viewModel.localized("wake_pc"), systemImage: "sun.horizon")
             }
             .controlSize(.large)
             // Disable if MAC address is missing or invalid

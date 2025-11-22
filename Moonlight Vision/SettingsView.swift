@@ -17,10 +17,10 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text(viewModel.localized(english: "Video settings", chinese: "视频设置"))) {
+                Section(header: Text(viewModel.localized("video_settings"))) {
                     NavigationLink {
                         Form {
-                            Picker(viewModel.localized(english: "Resolution", chinese: "分辨率"), selection: $settings.resolution) {
+                            Picker(viewModel.localized("resolution"), selection: $settings.resolution) {
                                 ForEach(Self.resolutionsGroupedByType, id: \.0) { aspectRatio, resolutions in
                                     ForEach(resolutions, id: \.self) { resolution in
                                         Text(resolution.description)
@@ -37,9 +37,9 @@ struct SettingsView: View {
                         }
                         .ornament(attachmentAnchor: .scene(.bottom)) {
                             HStack {
-                                TextField(viewModel.localized(english: "Width", chinese: "宽度"), value: $settings.resolution.width, format: .number)
-                                Text(viewModel.localized(english: "by", chinese: "×"))
-                                TextField(viewModel.localized(english: "Height", chinese: "高度"), value: $settings.resolution.height, format: .number)
+                                TextField(viewModel.localized("width"), value: $settings.resolution.width, format: .number)
+                                Text(viewModel.localized("by"))
+                                TextField(viewModel.localized("height"), value: $settings.resolution.height, format: .number)
                             }
                             .textFieldStyle(.roundedBorder)
                             .keyboardType(.numberPad)
@@ -55,10 +55,10 @@ struct SettingsView: View {
                                 settings.save()
                             }
                         }
-                        .navigationTitle(viewModel.localized(english: "Resolution", chinese: "分辨率"))
+                        .navigationTitle(viewModel.localized("resolution"))
                     } label: {
                         HStack {
-                            Text(viewModel.localized(english: "Resolution", chinese: "分辨率"))
+                            Text(viewModel.localized("resolution"))
                             Spacer()
                             Text(settings.resolution.description)
                         }
@@ -66,7 +66,7 @@ struct SettingsView: View {
                     
                     NavigationLink {
                         Form {
-                            Picker(viewModel.localized(english: "Aspect Ratio", chinese: "宽高比"), selection: $selectedAspectRatio) {
+                            Picker(viewModel.localized("aspect_ratio"), selection: $selectedAspectRatio) {
                                 ForEach(Self.resolutionsGroupedByType.map { $0.0 }, id: \.self) { aspectRatio in
                                     Text(aspectRatio.casualDescription).tag(aspectRatio as AspectRatio?)
                                 }
@@ -78,7 +78,7 @@ struct SettingsView: View {
                                 if let selectedAspectRatio {
                                     Text(selectedAspectRatio.casualDescription)
                                 } else {
-                                    Text(viewModel.localized(english: "Custom", chinese: "自定义"))
+                                    Text(viewModel.localized("custom"))
                                 }
                             }
                             .textFieldStyle(.roundedBorder)
@@ -93,145 +93,126 @@ struct SettingsView: View {
                                 }
                             }
                         }
-                        .navigationTitle(viewModel.localized(english: "Aspect Ratio", chinese: "宽高比"))
+                        .navigationTitle(viewModel.localized("aspect_ratio"))
                     } label: {
                         HStack {
-                            Text(viewModel.localized(english: "Aspect Ratio", chinese: "宽高比"))
+                            Text(viewModel.localized("aspect_ratio"))
                             Spacer()
                             Text(settings.resolution.aspectRatio.casualDescription)
                         }
                     }
-                    Picker(viewModel.localized(english: "Framerate", chinese: "帧率"), selection: $settings.framerate) {
+                    
+                    Picker(viewModel.localized("framerate"), selection: $settings.framerate) {
                         ForEach(Self.framerateTable, id: \.self) { framerate in
                             Text("\(framerate)")
                         }
                     }
                     .onChange(of: settings.framerate) { _, _ in settings.save() }
                     
-                    Picker(viewModel.localized(english: "Bitrate", chinese: "比特率"), selection: $settings.bitrate) {
+                    Picker(viewModel.localized("bitrate"), selection: $settings.bitrate) {
                         ForEach(Self.bitrateTable, id: \.self) { bitrate in
                             Text("\(bitrate / 1000)Mbps")
                         }
                     }
                     .onChange(of: settings.bitrate) { _, _ in settings.save() }
                     
-                    Picker(viewModel.localized(english: "Renderer", chinese: "渲染器"), selection: $settings.renderer) {
-                        Text(viewModel.localized(english: "UIKit (classic)", chinese: "UIKit（经典）")).tag(Renderer.classic)
-                        Text(viewModel.localized(english: "RealityKit (native)", chinese: "RealityKit（原生）")).tag(Renderer.realitykit)
+                    Picker(viewModel.localized("renderer"), selection: $settings.renderer) {
+                        Text(viewModel.localized("uikit_classic")).tag(Renderer.classic)
+                        Text(viewModel.localized("realitykit_native")).tag(Renderer.realitykit)
                     }
                     .onChange(of: settings.renderer) { _, _ in settings.save() }
                 }
                 
                 if (settings.renderer == .realitykit) {
-                    Section(header: Text(viewModel.localized(english: "RealityKit Renderer Settings (Experimental)", chinese: "RealityKit 渲染器设置（实验性）")), footer: Text(viewModel.localized(english: "The new RealityKit renderer is experemental and does not support tap to control mouse, but will support a physical mouse and keyboard", chinese: "新的 RealityKit 渲染器是实验性的，不支持点击控制鼠标，但支持物理鼠标和键盘"))) {
-                        Toggle(viewModel.localized(english: "Immersive Mode (Movable Screen)", chinese: "沉浸模式（可移动屏幕）"), isOn: $settings.realitykitImmersiveMode)
-                            .onChange(of: settings.realitykitImmersiveMode) { _, _ in settings.save() }
-                        Toggle(viewModel.localized(english: "Animate screen curve", chinese: "屏幕曲线动画"), isOn: $settings.realitykitRendererAnimateOpening)
+                    Section(header: Text(viewModel.localized("realitykit_settings")), footer: Text(viewModel.localized("realitykit_footer"))) {
+                        // Add this Toggle
+                                Toggle(viewModel.localized("immersive_mode"), isOn: $settings.realitykitImmersiveMode)
+                                    .onChange(of: settings.realitykitImmersiveMode) { _, _ in settings.save() }
+                        Toggle(viewModel.localized("animate_screen_curve"), isOn: $settings.realitykitRendererAnimateOpening)
                             .onChange(of: settings.realitykitRendererAnimateOpening) { _, _ in settings.save() }
                         
-                        Text(viewModel.localized(english: "Screen curvature", chinese: "屏幕曲面度"))
+                        Text(viewModel.localized("screen_curvature"))
                         Slider(value: $settings.realitykitRendererCurvature, in: (0...1), step: 0.001)
                             .onChange(of: settings.realitykitRendererCurvature) { _, _ in settings.save() }
                     }
-                } else {
-                    Section(header: Text(viewModel.localized(english: "UIKit (Classic) Renderer Settings", chinese: "UIKit（经典）渲染器设置"))) {
-                        Picker(viewModel.localized(english: "Touch Mode", chinese: "触摸模式"), selection: $settings.absoluteTouchMode) {
-                            Text(viewModel.localized(english: "Touchpad", chinese: "触控板")).tag(false)
-                            Text(viewModel.localized(english: "Touchscreen", chinese: "触摸屏")).tag(true)
+                }
+                
+                Section(header: Text(viewModel.localized("stream_settings"))) {
+                    Toggle(viewModel.localized("remember_stream_settings"), isOn: $settings.rememberStreamSettings)
+                        .onChange(of: settings.rememberStreamSettings) { _, _ in settings.save() }
+                }
+                
+                if (settings.renderer == .classic) {
+                    Section(header: Text(viewModel.localized("uikit_settings"))) {
+                        Picker(viewModel.localized("touch_mode"), selection: $settings.absoluteTouchMode) {
+                            Text(viewModel.localized("touchpad")).tag(false)
+                            Text(viewModel.localized("touchscreen")).tag(true)
                         }
                         .onChange(of: settings.absoluteTouchMode) { _, _ in settings.save() }
                         
-                        Picker(viewModel.localized(english: "On-Screen Controls", chinese: "屏幕控制"), selection: $settings.onscreenControls) {
-                            Text(viewModel.localized(english: "Off", chinese: "关闭")).tag(OnScreenControlsLevel.off)
-                            Text(viewModel.localized(english: "Auto", chinese: "自动")).tag(OnScreenControlsLevel.auto)
-                            Text(viewModel.localized(english: "Simple", chinese: "简单")).tag(OnScreenControlsLevel.simple)
-                            Text(viewModel.localized(english: "Full", chinese: "完整")).tag(OnScreenControlsLevel.full)
+                        Picker(viewModel.localized("on_screen_controls"), selection: $settings.onscreenControls) {
+                            Text(viewModel.localized("off")).tag(OnScreenControlsLevel.off)
+                            Text(viewModel.localized("auto")).tag(OnScreenControlsLevel.auto)
+                            Text(viewModel.localized("simple")).tag(OnScreenControlsLevel.simple)
+                            Text(viewModel.localized("full")).tag(OnScreenControlsLevel.full)
                         }
                         .onChange(of: settings.onscreenControls) { _, _ in settings.save() }
                         
-                        Toggle(viewModel.localized(english: "Citrix X1 Mouse Support", chinese: "Citrix X1 鼠标支持"), isOn: $settings.btMouseSupport)
+                        Toggle(viewModel.localized("citrix_x1_mouse"), isOn: $settings.btMouseSupport)
                             .onChange(of: settings.btMouseSupport) { _, _ in settings.save() }
                         
-                        Toggle(viewModel.localized(english: "Statistics Overlay", chinese: "统计信息叠加"), isOn: $settings.statsOverlay)
+                        Toggle(viewModel.localized("statistics_overlay"), isOn: $settings.statsOverlay)
                             .onChange(of: settings.statsOverlay) { _, _ in settings.save() }
                     }
                 }
                 
-                Section(header: Text(viewModel.localized(english: "Stream Settings", chinese: "串流设置"))) {
-                    Toggle(viewModel.localized(english: "Remember stream settings", chinese: "记住串流设置"), isOn: $settings.rememberStreamSettings)
-                        .onChange(of: settings.rememberStreamSettings) { _, _ in settings.save() }
-                }
-                
-                Toggle(viewModel.localized(english: "Optimize Game Settings", chinese: "优化游戏设置"), isOn: $settings.optimizeGames)
+                Toggle(viewModel.localized("optimize_game_settings"), isOn: $settings.optimizeGames)
                     .onChange(of: settings.optimizeGames) { _, _ in settings.save() }
                 
-                Picker(viewModel.localized(english: "Multi-Controller Mode", chinese: "多控制器模式"), selection: $settings.multiController) {
-                    Text(viewModel.localized(english: "Single", chinese: "单个")).tag(false)
-                    Text(viewModel.localized(english: "Auto", chinese: "自动")).tag(true)
+                Picker(viewModel.localized("multi_controller_mode"), selection: $settings.multiController) {
+                    Text(viewModel.localized("single")).tag(false)
+                    Text(viewModel.localized("auto")).tag(true)
                 }
                 .onChange(of: settings.multiController) { _, _ in settings.save() }
                 
-                Toggle(viewModel.localized(english: "Swap A/B and X/Y Buttons", chinese: "交换 A/B 和 X/Y 按钮"), isOn: $settings.swapABXYButtons)
+                Toggle(viewModel.localized("swap_abxy_buttons"), isOn: $settings.swapABXYButtons)
                     .onChange(of: settings.swapABXYButtons) { _, _ in settings.save() }
                 
-                Toggle(viewModel.localized(english: "Play Audio on PC", chinese: "在 PC 上播放音频"), isOn: $settings.playAudioOnPC)
+                Toggle(viewModel.localized("play_audio_on_pc"), isOn: $settings.playAudioOnPC)
                     .onChange(of: settings.playAudioOnPC) { _, _ in settings.save() }
                 
-                Picker(viewModel.localized(english: "Audio Session Mode", chinese: "音频会话模式"), selection: $settings.audioSessionMode) {
-                    ForEach(Array(AudioSessionMode.allCases), id: \.self) { mode in
-                        Text(mode.localizedDisplayName(for: viewModel.currentLanguage)).tag(mode)
-                    }
+                Picker(viewModel.localized("preferred_codec"), selection: $settings.preferredCodec) {
+                    Text(viewModel.localized("h264")).tag(PreferredCodec.h264)
+                    Text(viewModel.localized("hevc")).tag(PreferredCodec.hevc)
+                    Text(viewModel.localized("av1")).tag(PreferredCodec.av1)
+                    Text(viewModel.localized("auto")).tag(PreferredCodec.auto)
                 }
-                .onChange(of: settings.audioSessionMode) { _, _ in settings.save() }
+                .onChange(of: settings.preferredCodec) { _, _ in settings.save() }
                 
-                Picker(viewModel.localized(english: "App Language", chinese: "应用语言"), selection: Binding(get: { settings.appLanguage }, set: { settings.appLanguage = $0 })) {
+                Toggle(viewModel.localized("enable_hdr"), isOn: $settings.enableHdr)
+                    .onChange(of: settings.enableHdr) { _, _ in settings.save() }
+                
+                Picker(viewModel.localized("frame_pacing"), selection: $settings.useFramePacing) {
+                    Text(viewModel.localized("lowest_latency")).tag(false)
+                    Text(viewModel.localized("smoothest_video")).tag(true)
+                }
+                .onChange(of: settings.useFramePacing) { _, _ in settings.save() }
+                
+                Toggle(viewModel.localized("dim_passthrough"), isOn: $settings.dimPassthrough)
+                    .onChange(of: settings.dimPassthrough) { _, _ in settings.save() }
+                
+                Picker(viewModel.localized("app_language"), selection: Binding(get: { settings.appLanguage }, set: { newLanguage in
+                    settings.appLanguage = newLanguage
+                    settings.save()
+                    // Trigger view update when language changes
+                    viewModel.objectWillChange.send()
+                })) {
                     ForEach(Array(AppLanguage.allCases), id: \.self) { lang in
                         Text(lang.displayName).tag(lang)
                     }
                 }
-                .onChange(of: settings.appLanguage) { _, _ in
-                    settings.save()
-                    viewModel.objectWillChange.send()
-                }
-                
-                HStack {
-                    Text(viewModel.localized(english: "Window Corner Radius", chinese: "窗口圆角"))
-                    Spacer()
-                    Slider(value: $settings.windowCornerRadius, in: 0...60, step: 5) {
-                        Text(viewModel.localized(english: "Window Corner Radius", chinese: "窗口圆角"))
-                    }
-                    .frame(width: 200)
-                    Text("\(Int(settings.windowCornerRadius))")
-                }
-                .onChange(of: settings.windowCornerRadius) { _, _ in settings.save() }
-                
-                if settings.windowCornerRadius > 0 {
-                    Text(viewModel.localized(english: "Note: Corner radius may slightly affect rendering sharpness. Set to 0 for maximum clarity.", chinese: "注意：圆角可能会略微影响渲染清晰度。设置为 0 可获得最佳清晰度。"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                
-                Picker(viewModel.localized(english: "Preferred Codec", chinese: "首选编解码器"), selection: $settings.preferredCodec) {
-                    Text("H.264").tag(PreferredCodec.h264)
-                    Text("HEVC").tag(PreferredCodec.hevc)
-                    Text("AV1").tag(PreferredCodec.av1)
-                    Text(viewModel.localized(english: "Auto", chinese: "自动")).tag(PreferredCodec.auto)
-                }
-                .onChange(of: settings.preferredCodec) { _, _ in settings.save() }
-                
-                Toggle(viewModel.localized(english: "Enable HDR", chinese: "启用 HDR"), isOn: $settings.enableHdr)
-                    .onChange(of: settings.enableHdr) { _, _ in settings.save() }
-                
-                Picker(viewModel.localized(english: "Frame Pacing", chinese: "帧节奏"), selection: $settings.useFramePacing) {
-                    Text(viewModel.localized(english: "Lowest Latency", chinese: "最低延迟")).tag(false)
-                    Text(viewModel.localized(english: "Smoothest Video", chinese: "最流畅视频")).tag(true)
-                }
-                .onChange(of: settings.useFramePacing) { _, _ in settings.save() }
-                
-                Toggle(viewModel.localized(english: "Automatically dim passthrough and hide window controls", chinese: "自动调暗穿透并隐藏窗口控制"), isOn: $settings.dimPassthrough)
-                    .onChange(of: settings.dimPassthrough) { _, _ in settings.save() }
             }
-            .navigationTitle(viewModel.localized(english: "Settings", chinese: "设置"))
+            .navigationTitle(viewModel.localized("settings"))
             .onDisappear {
                 settings.save()
             }
@@ -388,4 +369,3 @@ private func simplifyFraction<I: BinaryInteger>(numerator: I, denominator: I) ->
     @State var settings = TemporarySettings()
     return SettingsView(settings: $settings)
 }
-

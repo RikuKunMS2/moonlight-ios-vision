@@ -7,7 +7,6 @@
 //
 
 import SwiftUI
-import UIKit
 
 struct UIKitStreamView: View {
     @Binding var streamConfig: StreamConfiguration?
@@ -21,21 +20,20 @@ struct UIKitStreamView: View {
     @State private var needsResume = false
     @State private var reloadToken = UUID()
     @State private var backgroundTask: Task<Void, Never>?
+    @State private var windowSizeMonitorTask: Task<Void, Never>? = nil
+    @State private var lastSavedWindowSize: CGSize? = nil
 
     var body: some View {
         Group {
             if viewModel.activelyStreaming,
                let configBinding = Binding($streamConfig) {
-                let cornerRadius = CGFloat(viewModel.streamSettings.windowCornerRadius)
                 _UIKitStreamView(streamConfig: configBinding)
                     .id(reloadToken)
-                    .compositingGroup()
-                    .applyCornerRadius(cornerRadius)
                     .ornament(attachmentAnchor: .scene(.top), contentAlignment: .bottom) {
                         StreamControls(
                             horizontal: true,
                             streamConfig: configBinding,
-                            isKeyboardActive: false,
+                            isKeyboardActive: false, 
                             closeAction: {
                                 handleHomeButtonClose()
                             },
@@ -45,23 +43,22 @@ struct UIKitStreamView: View {
                                 }
                             }
                         ) {
-                            _UIKitStreamViewWindowButton(
-                                streamConfig: configBinding,
-                                controllerReference: _UIKitStreamView.controllerReference
-                            )
+                            _UIKitStreamViewWindowButton(streamConfig: configBinding, controllerReference: _UIKitStreamView.controllerReference)
                         }
+                    }
                     .onAppear {
                         hasPerformedTeardown = false
                         dismissWindow(id: "mainView")
+                        startWindowSizeMonitoring()
                     }
                     .onDisappear {
+                        stopWindowSizeMonitoring()
                         handleWindowDisappearance()
                     }
                     .onChange(of: scenePhase) { _, phase in
                         switch phase {
                         case .background:
                             // Only pause when truly backgrounded (e.g., immersive scene or headset removal)
-                            // Don't pause on .inactive as it triggers too easily when switching apps
                             prepareForBackground()
                         case .active:
                             resumeIfNeeded()
@@ -70,23 +67,26 @@ struct UIKitStreamView: View {
                         }
                     }
             } else {
-                VStack(spacing: 16) {
+                VStack(spacing: 20) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.largeTitle)
-                    Text(viewModel.localized(english: "Stream stopped", chinese: "串流已停止"))
+                    Text(viewModel.localized("stream_stopped"))
                         .font(.title2)
-                    Text(viewModel.localized(english: "Please close this window before starting a new stream from the main menu.", chinese: "在返回主菜单前请先关闭此窗口，之后即可在主菜单重新启动串流。"))
+                    Text(viewModel.localized("stream_stopped_message"))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
+                    
+                    Button {
+                        openWindow(id: "mainView")
+                    } label: {
+                        Label(viewModel.localized("open_main_menu"), systemImage: "house.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .padding(.horizontal)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.thinMaterial)
-                .onAppear {
-                    viewModel.classicWindowNeedsManualClose = true
-                }
-                .onDisappear {
-                    viewModel.classicWindowNeedsManualClose = false
-                }
             }
         }
     }
@@ -112,14 +112,120 @@ struct UIKitStreamView: View {
             streamVC.stopStream()
         }
 
+        // Save window size if remember settings is enabled
+        if viewModel.streamSettings.rememberStreamSettings {
+            saveWindowSizeForRestore()
+        }
+
+        // Always save the stream config for auto-resume
+        if let config = streamConfig {
+            viewModel.savedStreamConfigForResume = config
+        }
+
         streamConfig = nil
         if openMainWindow {
             DispatchQueue.main.async {
                 openWindow(id: "mainView")
             }
         }
+    }
+    
+    private func saveWindowSizeForRestore() {
+        // Try to find the window and save its size
+        if let streamVC = _UIKitStreamView.controllerReference.object,
+           let window = streamVC.view.window ?? streamVC.view?.superview?.window {
+            let currentSize = window.bounds.size
+            saveWindowSizeToUserDefaults(currentSize)
+        }
+    }
+    
+    private func saveWindowSizeToUserDefaults(_ size: CGSize) {
+        guard viewModel.streamSettings.rememberStreamSettings else { return }
         
-        viewModel.classicWindowNeedsManualClose = true
+        // Only save if size has changed significantly (avoid unnecessary writes)
+        if let lastSize = lastSavedWindowSize {
+            let widthDiff = abs(size.width - lastSize.width)
+            let heightDiff = abs(size.height - lastSize.height)
+            // Only save if change is more than 1 pixel
+            if widthDiff < 1.0 && heightDiff < 1.0 {
+                return
+            }
+        }
+        
+        let defaults = UserDefaults.standard
+        defaults.set(size.width, forKey: "uikitWindowWidth")
+        defaults.set(size.height, forKey: "uikitWindowHeight")
+        lastSavedWindowSize = size
+        print("Saved UIKit window size to UserDefaults: \(size)")
+    }
+    
+    private func startWindowSizeMonitoring() {
+        stopWindowSizeMonitoring() // Stop any existing monitor
+        
+        guard viewModel.streamSettings.rememberStreamSettings else { return }
+        
+        windowSizeMonitorTask = Task {
+            var lastCheckedSize: CGSize? = nil
+            
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 500_000_000) // Check every 0.5 seconds
+                
+                guard !Task.isCancelled else { break }
+                
+                if let streamVC = _UIKitStreamView.controllerReference.object,
+                   let window = streamVC.view.window ?? streamVC.view?.superview?.window {
+                    let currentSize = window.bounds.size
+                    
+                    // Check if size has changed
+                    if let lastSize = lastCheckedSize {
+                        let widthDiff = abs(currentSize.width - lastSize.width)
+                        let heightDiff = abs(currentSize.height - lastSize.height)
+                        
+                        // If size changed significantly (more than 1 pixel), save it
+                        if widthDiff > 1.0 || heightDiff > 1.0 {
+                            await MainActor.run {
+                                saveWindowSizeToUserDefaults(currentSize)
+                            }
+                        }
+                    } else {
+                        // First check, just record the size
+                        lastCheckedSize = currentSize
+                    }
+                }
+            }
+        }
+    }
+    
+    private func stopWindowSizeMonitoring() {
+        windowSizeMonitorTask?.cancel()
+        windowSizeMonitorTask = nil
+    }
+    
+    private func restoreWindowSizeIfNeeded() {
+        guard viewModel.streamSettings.rememberStreamSettings else { return }
+        
+        let defaults = UserDefaults.standard
+        guard let savedWidth = defaults.object(forKey: "uikitWindowWidth") as? CGFloat,
+              let savedHeight = defaults.object(forKey: "uikitWindowHeight") as? CGFloat else {
+            return // No saved size
+        }
+        
+        let savedSize = CGSize(width: savedWidth, height: savedHeight)
+        print("Restoring UIKit window size: \(savedSize)")
+        
+        // Try to find the window and restore its size
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            if let streamVC = _UIKitStreamView.controllerReference.object,
+               let window = streamVC.view.window ?? streamVC.view?.superview?.window,
+               let windowScene = window.windowScene {
+                let geometryRequest = UIWindowScene.GeometryPreferences.Vision(
+                    size: savedSize,
+                    resizingRestrictions: .uniform
+                )
+                windowScene.requestGeometryUpdate(geometryRequest)
+                print("Applied restored window size")
+            }
+        }
     }
 
     private func prepareForBackground() {
@@ -175,6 +281,7 @@ struct UIKitStreamView: View {
 }
 
 struct _UIKitStreamViewWindowButton: View {
+    @EnvironmentObject private var viewModel: MainViewModel
     @Binding var streamConfig: StreamConfiguration
     @State private var currentWindow: UIWindow? = nil // State to hold the window reference
     let controllerReference: Reference<StreamFrameViewController> // Receive the reference
@@ -184,15 +291,14 @@ struct _UIKitStreamViewWindowButton: View {
             if let window = currentWindow {
                 // When manually triggered, don't use saved size - recalculate
                 applyAspectRatioLock(streamConfig: streamConfig, targetWindow: window, useSavedSize: false)
-                let exclusive = MainViewModel.shouldUseExclusiveAudio(microphoneActive: false)
-                AudioHelpers.fixAudioForSurroundForUIKitWindow(window, exclusive: exclusive) // TODO(shinyquagsire23): Make this configurable
+                AudioHelpers.fixAudioForSurroundForUIKitWindow(window) // TODO(shinyquagsire23): Make this configurable
             } else {
                 print("Error: No window reference available to apply aspect ratio lock.")
                 // Optionally provide user feedback here, e.g., an alert
             }
         } label: {
             Label {
-                Text("Fix Aspect Ratio")
+                Text(viewModel.localized("fix_aspect_ratio"))
             } icon: {
                 Image(systemName: "aspectratio")
             }
@@ -228,8 +334,7 @@ struct _UIKitStreamViewWindowButton: View {
                     if let window = viewToFindWindow?.window {
                         print("Found window by traversing view hierarchy: \(window)")
                         currentWindow = window
-                        let exclusive = MainViewModel.shouldUseExclusiveAudio(microphoneActive: false)
-                        AudioHelpers.fixAudioForSurroundForUIKitWindow(window, exclusive: exclusive)
+                        AudioHelpers.fixAudioForSurroundForUIKitWindow(window)
                         return
                     }
                     viewToFindWindow = viewToFindWindow?.superview
@@ -264,15 +369,17 @@ struct _UIKitStreamView: UIViewControllerRepresentable {
         streamView.streamConfig = streamConfig
         streamView.connectedCallback = { [weak streamView] in
             print("Connected in Swift!")
-            let exclusive = MainViewModel.shouldUseExclusiveAudio(microphoneActive: false)
-            AudioHelpers.fixAudioForSurroundForCurrentWindow(exclusive: exclusive) // TODO(shinyquagsire23): Make this configurable
+            AudioHelpers.fixAudioForSurroundForCurrentWindow() // TODO(shinyquagsire23): Make this configurable
+            // Automatically apply aspect ratio lock when stream starts
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 guard
                     let window = streamView?.view.window ?? streamView?.view?.superview?.window
                 else {
                     return
                 }
-                applyAspectRatioLock(streamConfig: streamConfig, targetWindow: window)
+                // Check if we should use saved window size or calculate new size
+                let useSavedSize = MainViewModel.shared.streamSettings.rememberStreamSettings
+                applyAspectRatioLock(streamConfig: streamConfig, targetWindow: window, useSavedSize: useSavedSize)
             }
         };
         streamView.disconnectedCallback = {
@@ -290,21 +397,6 @@ struct _UIKitStreamView: UIViewControllerRepresentable {
 
 class Reference<T: AnyObject> {
     weak var object: T?
-}
-
-// MARK: - View Modifiers
-
-extension View {
-    @ViewBuilder
-    func applyCornerRadius(_ radius: CGFloat) -> some View {
-        if radius > 0 {
-            // Use compositingGroup to optimize rendering, then clipShape
-            // This approach minimizes the impact on rendering quality
-            self.clipShape(RoundedRectangle(cornerRadius: radius))
-        } else {
-            self
-        }
-    }
 }
 
 // MARK: - Helper Functions
@@ -325,20 +417,35 @@ func applyAspectRatioLock(streamConfig: StreamConfiguration, targetWindow: UIWin
     var desiredSize = CGSize.zero
     
     // If we have a saved window size and useSavedSize is true, use it
-    if useSavedSize, let savedSize = MainViewModel.shared.savedStreamWindowSize {
-        // Verify the saved size maintains the correct aspect ratio (within tolerance)
-        let savedAspectRatio = savedSize.width / savedSize.height
-        let aspectRatioDifference = abs(savedAspectRatio - streamAspectRatio) / streamAspectRatio
+    if useSavedSize {
+        // First check MainViewModel's saved size (for background resume)
+        if let savedSize = MainViewModel.shared.savedStreamWindowSize {
+            let savedAspectRatio = savedSize.width / savedSize.height
+            let aspectRatioDifference = abs(savedAspectRatio - streamAspectRatio) / streamAspectRatio
+            
+            if aspectRatioDifference < 0.05 {
+                desiredSize = savedSize
+                print("Using saved window size from MainViewModel: \(savedSize)")
+                MainViewModel.shared.savedStreamWindowSize = nil
+            }
+        }
         
-        // If aspect ratio is close enough (within 5% tolerance), use saved size
-        if aspectRatioDifference < 0.05 {
-            desiredSize = savedSize
-            print("Using saved window size: \(savedSize)")
-            // Clear saved size after using it
-            MainViewModel.shared.savedStreamWindowSize = nil
-        } else {
-            print("Saved size aspect ratio mismatch, recalculating. Saved AR: \(savedAspectRatio), Stream AR: \(streamAspectRatio)")
-            // Fall through to calculate new size
+        // If no size from MainViewModel, check UserDefaults for persistent saved size
+        if desiredSize == .zero {
+            let defaults = UserDefaults.standard
+            if let savedWidth = defaults.object(forKey: "uikitWindowWidth") as? CGFloat,
+               let savedHeight = defaults.object(forKey: "uikitWindowHeight") as? CGFloat {
+                let savedSize = CGSize(width: savedWidth, height: savedHeight)
+                let savedAspectRatio = savedSize.width / savedSize.height
+                let aspectRatioDifference = abs(savedAspectRatio - streamAspectRatio) / streamAspectRatio
+                
+                if aspectRatioDifference < 0.05 {
+                    desiredSize = savedSize
+                    print("Using saved window size from UserDefaults: \(savedSize)")
+                } else {
+                    print("Saved size aspect ratio mismatch, recalculating. Saved AR: \(savedAspectRatio), Stream AR: \(streamAspectRatio)")
+                }
+            }
         }
     }
     

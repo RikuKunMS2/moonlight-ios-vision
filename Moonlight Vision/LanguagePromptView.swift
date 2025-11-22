@@ -1,3 +1,11 @@
+//
+//  LanguagePromptView.swift
+//  Moonlight Vision
+//
+//  Created on 2/2/25.
+//  Copyright © 2025 Moonlight Game Streaming Project. All rights reserved.
+//
+
 import SwiftUI
 
 struct LanguagePromptView: View {
@@ -7,12 +15,12 @@ struct LanguagePromptView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
-                Text(viewModel.localized(english: "Choose your language", chinese: "请选择界面语言"))
+                Text(viewModel.localized("choose_language"))
                     .font(.title2)
                     .multilineTextAlignment(.center)
                     .padding(.top)
 
-                Picker(viewModel.localized(english: "Language", chinese: "语言"), selection: $selection) {
+                Picker(viewModel.localized("language"), selection: $selection) {
                     ForEach(AppLanguage.allCases, id: \.self) { lang in
                         Text(lang.displayName).tag(lang)
                     }
@@ -22,7 +30,7 @@ struct LanguagePromptView: View {
                 Button {
                     viewModel.updateLanguage(selection)
                 } label: {
-                    Text(viewModel.localized(english: "Continue", chinese: "继续"))
+                    Text(viewModel.localized("continue"))
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -33,3 +41,4 @@ struct LanguagePromptView: View {
         }
     }
 }
+

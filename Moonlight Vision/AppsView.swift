@@ -22,14 +22,53 @@ struct AppsView: View {
     public var host: TemporaryHost
     
     var body: some View {
-        List {
-            ForEach(host.appList.sorted(by: { $0.name ?? "" < $1.name ?? "" }), id: \.id) { app in
+        let sortedApps = host.appList.sorted(by: { ($0.name ?? "") < ($1.name ?? "") })
+        
+        return List {
+            ForEach(sortedApps, id: \.id) { app in
                 HStack {
                     if (nowLoading == (app.id ?? app.name)) {
                         ProgressView()
                     }
                     AppButtonView(host: host, app: app) {
+
                         Task { await handleStreamLaunch(for: app) }
+
+                        if (nowLoading != nil) {
+                            return
+                        }
+                        nowLoading = app.id ?? app.name
+                        
+                        // 1. Generate Configuration
+                        if let config = viewModel.stream(app: app) {
+                            
+                            let settings = viewModel.streamSettings
+                            
+                            // 2. Route based on Renderer Selection
+                            if settings.renderer == .realitykit {
+                                
+                                // Check if user wants Immersive Mode (Full Space) or Volumetric Window
+                                if settings.realitykitImmersiveMode {
+                                    // Immersive Space requires an async Task
+                                    Task {
+                                        await openImmersiveSpace(id: "realitykitImmersiveSpace", value: config)
+                                        dismissWindow(id: "mainView")
+                                        // Note: Immersive space doesn't automatically dismiss main view,
+                                        // so we do it manually here.
+                                    }
+                                } else {
+                                    // Standard Volumetric Window
+                                    openWindow(id: "realitykitStreamingWindow", value: config)
+                                    dismissWindow(id: "mainView")
+                                }
+                                
+                            } else {
+                                // Classic UIKit Renderer (Push Window)
+                                pushWindow(id: "classicStreamingWindow", value: config)
+                                nowLoading = nil
+                            }
+                        }
+
                     }
                     .environmentObject(viewModel)
                 }
@@ -43,36 +82,36 @@ struct AppsView: View {
                 viewModel.refreshAppsFor(host: host)
             }
         }
-        .alert(viewModel.localized(english: "Active Stream", chinese: "已有串流窗口"), isPresented: $viewModel.showActiveStreamAlert) {
-            Button(viewModel.localized(english: "Go back to window", chinese: "回到窗口")) {
+        .alert(viewModel.localized("active_stream"), isPresented: $viewModel.showActiveStreamAlert) {
+            Button(viewModel.localized("go_back_to_window")) {
                 if viewModel.streamSettings.renderer == .realitykit {
                     openWindow(id: viewModel.streamSettings.renderer.windowId)
                 } else {
                     pushWindow(id: viewModel.streamSettings.renderer.windowId)
                 }
             }
-            Button(viewModel.localized(english: "Force quit", chinese: "强制结束"), role: .destructive) {
-                viewModel.forceStopActiveStream()
+            Button(viewModel.localized("force_quit"), role: .destructive) {
+                viewModel.activelyStreaming = false
                 if let pendingApp = viewModel.pendingAppToStream {
                     Task { await startStream(for: pendingApp) }
                 }
                 viewModel.pendingAppToStream = nil
             }
-            Button(viewModel.localized(english: "Cancel", chinese: "取消"), role: .cancel) {
+            Button(viewModel.localized("cancel"), role: .cancel) {
                 viewModel.pendingAppToStream = nil
             }
         } message: {
-            Text(viewModel.localized(english: "A stream is already running. Please return to that window or terminate it before starting a new one.", chinese: "检测到已有串流窗口在运行。请选择回到该窗口或强制结束后重新启动。"))
+            Text(viewModel.localized("active_stream_message"))
         }
-        .alert(viewModel.localized(english: "Please close the previous window", chinese: "请先关闭旧窗口"), isPresented: $viewModel.showClassicWindowCloseAlert) {
-            Button(viewModel.localized(english: "Got it", chinese: "知道了"), role: .cancel) {}
+        .alert(viewModel.localized("close_previous_window"), isPresented: $viewModel.showClassicWindowCloseAlert) {
+            Button(viewModel.localized("got_it"), role: .cancel) {}
         } message: {
-            Text(viewModel.localized(english: "The previous classic window is still open. Please close it before starting another stream.", chinese: "上一次串流已停止，但窗口仍保持打开。请在原窗口横条上点击关闭按钮后再重试。"))
+            Text(viewModel.localized("close_previous_window_message"))
         }
-        .alert(viewModel.localized(english: "Please close the RealityKit window", chinese: "请先关闭 RealityKit 窗口"), isPresented: $viewModel.showRealityWindowCloseAlert) {
-            Button(viewModel.localized(english: "Got it", chinese: "知道了"), role: .cancel) {}
+        .alert(viewModel.localized("close_realitykit_window"), isPresented: $viewModel.showRealityWindowCloseAlert) {
+            Button(viewModel.localized("got_it"), role: .cancel) {}
         } message: {
-            Text(viewModel.localized(english: "The RealityKit window is still open. Close it before launching another stream.", chinese: "RealityKit 窗口仍保持打开。请关闭后再尝试启动新的串流。"))
+            Text(viewModel.localized("close_realitykit_window_message"))
         }
         .refreshable() {
             print("REFRESH")
@@ -93,17 +132,8 @@ struct AppsView: View {
             return
         }
         
-        if viewModel.streamSettings.renderer == .classic {
-            if viewModel.classicWindowNeedsManualClose {
-                viewModel.showClassicWindowCloseAlert = true
-                return
-            }
-        } else {
-            if viewModel.realityWindowNeedsManualClose {
-                viewModel.showRealityWindowCloseAlert = true
-                return
-            }
-        }
+        // Note: Manual close checks removed as they are no longer needed
+        // Windows are now properly managed through the window lifecycle
         
         await startStream(for: app)
     }
@@ -111,24 +141,12 @@ struct AppsView: View {
     @MainActor
     private func startStream(for app: TemporaryApp) async {
         guard let config = viewModel.stream(app: app) else { return }
-        let settings = viewModel.streamSettings
-        
-        if settings.renderer == .realitykit {
-            // Check if user wants Immersive Mode (Full Space) or Volumetric Window
-            if settings.realitykitImmersiveMode {
-                // Immersive Space requires an async Task
-                await openImmersiveSpace(id: "realitykitImmersiveSpace", value: config)
-                dismissWindow(id: "mainView")
-                // Note: Immersive space doesn't automatically dismiss main view,
-                // so we do it manually here.
-            } else {
-                // Standard Volumetric Window
-                openWindow(id: "realitykitStreamingWindow", value: config)
-                dismissWindow(id: "mainView")
-            }
+        if viewModel.streamSettings.renderer == .realitykit {
+            openWindow(id: viewModel.streamSettings.renderer.windowId, value: config)
+            dismissWindow(id: "mainView")
         } else {
-            // Classic UIKit Renderer
-            pushWindow(id: "classicStreamingWindow", value: config)
+            openWindow(id: "classicStreamingWindow", value: config)
+            dismissWindow(id: "mainView")
         }
     }
 }
@@ -140,8 +158,8 @@ struct AppButtonView: View {
     let action: () -> Void
     
     var body: some View {
-        Button(app.name ?? viewModel.localized(english: "Unknown", chinese: "未知"), action: action)
-            .badge(Text(app.id == host.currentGame ? viewModel.localized(english: "Running", chinese: "运行中") : ""))
+        Button(app.name ?? viewModel.localized("unknown"), action: action)
+            .badge(Text(app.id == host.currentGame ? viewModel.localized("running") : ""))
             .contextMenu {
                 if app.id == host.currentGame {
                     Button {
@@ -153,7 +171,7 @@ struct AppButtonView: View {
                             // lol no error handling...
                         }
                     } label: {
-                        Label(viewModel.localized(english: "Stop", chinese: "停止"), systemImage: "stop.circle")
+                        Label(viewModel.localized("stop"), systemImage: "stop.circle")
                     }
                 }
             }

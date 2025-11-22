@@ -22,7 +22,7 @@ struct UpdatesView: View {
                 Section { // Section for the title (no header)
                     HStack { // 2. HStack to apply padding to title
                         Spacer() // Push title to center if needed
-                        Text(viewModel.localized(english: "Changelog", chinese: "更新日志"))
+                        Text(viewModel.localized("changelog"))
                             .font(.largeTitle)
                             .multilineTextAlignment(.center) // Ensure title text is centered within its area
                         Spacer() // Push title to center if needed
@@ -33,7 +33,7 @@ struct UpdatesView: View {
                 .listRowBackground(Color.clear) // Remove background from this section
 
 
-                Section(header: Text(viewModel.localized(english: "Latest Updates", chinese: "最新更新"))) { // Section for latest updates
+                Section(header: Text(viewModel.localized("latest_updates"))) { // Section for latest updates
                     VStack(alignment: .leading) { // Original VStack for text alignment
                         Text("Version 11.0.14 (Nov 19, 2025)")
                                                     .font(.headline)
@@ -186,7 +186,7 @@ struct UpdatesView: View {
                     .frame(maxWidth: .infinity, alignment: .leading) // Ensure VStack takes full width and aligns content to leading
                 }
 
-                Section(header: Text(viewModel.localized(english: "Noted Bugs", chinese: "已知问题"))) { // Section for older updates
+                Section(header: Text(viewModel.localized("noted_bugs"))) { // Section for older updates
                     VStack(alignment: .leading) {
                         Text("- If you get a blackscreen trying to resume a volume, this has to do with resumption, I am trying to figure out a better alert system for when this happens. Just force quit the app.")
                             .font(.body)
@@ -209,7 +209,7 @@ struct UpdatesView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 
-                Section(header: Text(viewModel.localized(english: "Feature Requests", chinese: "功能请求"))) { // Section for older updates
+                Section(header: Text(viewModel.localized("feature_requests"))) { // Section for older updates
                     VStack(alignment: .leading) {
                         Text("- Virtual Keyboard Button.")
                             .font(.body)
@@ -229,9 +229,9 @@ struct UpdatesView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                Section(header: Text(viewModel.localized(english: "More Information", chinese: "更多信息"))) { // Optional section for more links etc.
+                Section(header: Text(viewModel.localized("more_information"))) { // Optional section for more links etc.
                     VStack(alignment: .leading) {
-                        Text(viewModel.localized(english: "Official Website:", chinese: "官方网站："))
+                        Text(viewModel.localized("official_website"))
                             .font(.body)
                         Link("Moonlight Game Streaming Project Website", destination: URL(string: "https://moonlight-stream.org/")!)
                             .font(.body)

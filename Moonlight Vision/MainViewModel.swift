@@ -13,7 +13,6 @@ import AVFoundation
 
 @MainActor
 class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback, AppAssetCallback {
-    private let languagePromptDefaultsKey = "didCompleteLanguagePrompt"
     @objc
     static let shared = MainViewModel()
 
@@ -27,17 +26,22 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     @Published var currentStreamConfig = StreamConfiguration()
     @Published var activelyStreaming = false
-    @Published var showActiveStreamAlert = false
-    @Published var pendingAppToStream: TemporaryApp?
     @Published var showLanguagePrompt = false
+    @Published var streamSettings: TemporarySettings
     
     // Store saved window size for aspect ratio lock restoration
     @Published var savedStreamWindowSize: CGSize? = nil
-    @Published var classicWindowNeedsManualClose = false
-    @Published var realityWindowNeedsManualClose = false
+    
+    // Store saved stream config for auto-resume on window reopen
+    @Published var savedStreamConfigForResume: StreamConfiguration? = nil
+    
+    // Stream launch management
+    @Published var pendingAppToStream: TemporaryApp? = nil
+    @Published var showActiveStreamAlert = false
     @Published var showClassicWindowCloseAlert = false
     @Published var showRealityWindowCloseAlert = false
-    @Published var streamSettings: TemporarySettings
+    
+    private let languagePromptDefaultsKey = "didCompleteLanguagePrompt"
 
     @Published var volumeSliderValue: Float = 1.0
 
@@ -493,8 +497,6 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         print("stream - Final supportedVideoFormats: \(String(format: "0x%04X", config.supportedVideoFormats))")
 
         currentStreamConfig = config
-        classicWindowNeedsManualClose = false
-        realityWindowNeedsManualClose = false
         activelyStreaming = true
         print("stream - Stream configuration complete. Ready to start streaming.")
         return currentStreamConfig
@@ -505,53 +507,75 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         streamSettings.save()
         showLanguagePrompt = false
         UserDefaults.standard.set(true, forKey: languagePromptDefaultsKey)
+        // Trigger view update by publishing language change
+        objectWillChange.send()
     }
-
-    func forceStopActiveStream() {
-        activelyStreaming = false
-        classicWindowNeedsManualClose = false
-        realityWindowNeedsManualClose = false
-    }
-
-    nonisolated static func audioSessionMode() -> AudioSessionMode {
-        return MainActor.assumeIsolated {
-            MainViewModel.shared.streamSettings.audioSessionMode
-        }
-    }
-
 
     var currentLanguage: AppLanguage {
         streamSettings.appLanguage
     }
 
-    func localized(english: String, chinese: String) -> String {
-        currentLanguage == .chinese ? chinese : english
+    private func bundle(for language: AppLanguage) -> Bundle {
+        let localeIdentifier: String
+        switch language {
+        case .english:
+            localeIdentifier = "en"
+        case .chinese:
+            localeIdentifier = "zh-Hans"
+        }
+        guard let path = Bundle.main.path(forResource: localeIdentifier, ofType: "lproj"),
+              let bundle = Bundle(path: path) else {
+            return Bundle.main
+        }
+        return bundle
+    }
+    
+    func localized(_ key: String) -> String {
+        let bundle = bundle(for: currentLanguage)
+        return NSLocalizedString(key, bundle: bundle, comment: "")
+    }
+    
+    func localized(_ key: String, _ arguments: CVarArg...) -> String {
+        let bundle = bundle(for: currentLanguage)
+        let format = NSLocalizedString(key, bundle: bundle, comment: "")
+        return String(format: format, arguments: arguments)
     }
 
-    nonisolated static func localizedStatic(english: String, chinese: String) -> String {
+    nonisolated static func localizedStatic(_ key: String) -> String {
         return MainActor.assumeIsolated {
-            MainViewModel.shared.streamSettings.appLanguage == .chinese ? chinese : english
+            let localeIdentifier: String
+            switch MainViewModel.shared.currentLanguage {
+            case .english:
+                localeIdentifier = "en"
+            case .chinese:
+                localeIdentifier = "zh-Hans"
+            }
+            guard let path = Bundle.main.path(forResource: localeIdentifier, ofType: "lproj"),
+                  let bundle = Bundle(path: path) else {
+                return NSLocalizedString(key, bundle: Bundle.main, comment: "")
+            }
+            return NSLocalizedString(key, bundle: bundle, comment: "")
         }
     }
     
-    @objc nonisolated static func localizedString(english: String, chinese: String) -> String {
-        return localizedStatic(english: english, chinese: chinese)
+    @objc nonisolated static func localizedString(_ key: String) -> String {
+        return localizedStatic(key)
     }
     
     @objc nonisolated static func startingStreamFormatString() -> String {
-        return localizedStatic(english: "Starting %@...", chinese: "正在启动 %@...")
-    }
-
-    nonisolated static func shouldUseExclusiveAudio(microphoneActive: Bool) -> Bool {
         return MainActor.assumeIsolated {
-            switch MainViewModel.shared.streamSettings.audioSessionMode {
-            case .exclusive:
-                return true
-            case .mixed:
-                return false
-            case .exclusiveWhenMicActive:
-                return microphoneActive
+            let localeIdentifier: String
+            switch MainViewModel.shared.currentLanguage {
+            case .english:
+                localeIdentifier = "en"
+            case .chinese:
+                localeIdentifier = "zh-Hans"
             }
+            guard let path = Bundle.main.path(forResource: localeIdentifier, ofType: "lproj"),
+                  let bundle = Bundle(path: path) else {
+                return NSLocalizedString("starting_stream", bundle: Bundle.main, comment: "")
+            }
+            return NSLocalizedString("starting_stream", bundle: bundle, comment: "")
         }
     }
 }

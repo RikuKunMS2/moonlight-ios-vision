@@ -58,10 +58,6 @@ struct MoonlightVisionApp: SwiftUI.App {
                          streamConfig.wrappedValue = nil
                      }
                 }
-                .onChange(of: appDelegate.mainViewModel) {
-                    let exclusive = MainViewModel.shouldUseExclusiveAudio(microphoneActive: false)
-                    AudioHelpers.fixAudioForSurroundForCurrentWindow(exclusive: exclusive)
-                }
                 .windowStyle(.volumetric)
                 .defaultSize(width: 2, height: 2, depth: 2, in: .meters)
 

@@ -229,8 +229,6 @@
 		FBD349621A0089F6002D2A60 /* DataManager.m in Sources */ = {isa = PBXBuildFile; fileRef = FBD349611A0089F6002D2A60 /* DataManager.m */; };
 		FBDE86E019F7A837001C18A8 /* UIComputerView.m in Sources */ = {isa = PBXBuildFile; fileRef = FBDE86DF19F7A837001C18A8 /* UIComputerView.m */; };
 		FBDE86E619F82297001C18A8 /* UIAppView.m in Sources */ = {isa = PBXBuildFile; fileRef = FBDE86E519F82297001C18A8 /* UIAppView.m */; };
-		F7C8B2022D60B40000A1A1A1 /* LanguagePromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7C8B2012D60B40000A1A1A1 /* LanguagePromptView.swift */; };
-
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -547,8 +545,6 @@
 		FBDE86DF19F7A837001C18A8 /* UIComputerView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = UIComputerView.m; sourceTree = "<group>"; };
 		FBDE86E419F82297001C18A8 /* UIAppView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = UIAppView.h; sourceTree = "<group>"; };
 		FBDE86E519F82297001C18A8 /* UIAppView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = UIAppView.m; sourceTree = "<group>"; };
-		F7C8B2012D60B40000A1A1A1 /* LanguagePromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguagePromptView.swift; sourceTree = "<group>"; };
-
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -696,7 +692,6 @@
 				F7A4A4D02B5F216C001591F3 /* MainViewModel.swift */,
 				F778956D2B65975900F02568 /* SDLMainWrapper.m */,
 				F778956F2B65979500F02568 /* SDLMainWrapper.h */,
-				F7C8B2012D60B40000A1A1A1 /* LanguagePromptView.swift */,
 			);
 			path = "Moonlight Vision";
 			sourceTree = "<group>";
@@ -1331,7 +1326,6 @@
 				F7A1191A2B5DDF73001E8686 /* mkcert.c in Sources */,
 				B1EDB13D2D4D95BF00EB1839 /* StreamConfiguration.swift in Sources */,
 				F77B58B22B5EFC9000482BD5 /* ComputerView.swift in Sources */,
-				F7C8B2022D60B40000A1A1A1 /* LanguagePromptView.swift in Sources */,
 				F7199AFB2B72F33000E6D62D /* SettingsView.swift in Sources */,
 				F7A1191B2B5DDF73001E8686 /* HttpResponse.m in Sources */,
 				F718014A2B655C1F00A9336B /* Utils.swift in Sources */,

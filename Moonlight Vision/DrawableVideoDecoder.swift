@@ -461,8 +461,8 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 
                 VTDecompressionSessionCreate(allocator: kCFAllocatorDefault, formatDescription: formatDesc, decoderSpecification: decoderConfiguration as CFDictionary, imageBufferAttributes: attributes as CFDictionary, outputCallback: &decoderCallback, decompressionSessionOut: &session)
                 
-                let exclusive = MainViewModel.shouldUseExclusiveAudio(microphoneActive: false)
-                AudioHelpers.fixAudioForSurroundForCurrentWindow(exclusive: exclusive) // TODO(shinyquagsire23): Make this configurable?
+                // Use exclusive audio mode (microphone not active in this context)
+                AudioHelpers.fixAudioForSurroundForCurrentWindow(exclusive: false) // TODO(shinyquagsire23): Make this configurable?
             } else {
                 // Couldn't create format description yet
 //                free(dataPtr)

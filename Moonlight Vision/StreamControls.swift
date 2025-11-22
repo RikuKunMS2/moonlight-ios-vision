@@ -56,14 +56,11 @@ struct StreamControls<Additions: View>: View {
 
     var controls: some View {
         Group {
-<<<<<<< HEAD
-            // --- START ADDITION ---
-            Button(viewModel.localized(english: "Home", chinese: "主页"), systemImage: "house.fill") {
-               // openWindow(id: "mainView")
-                closeAction() // Call the provided close action
+            Button(viewModel.localized("home"), systemImage: "house.fill") {
+                closeAction()
             }
             
-            Button(viewModel.localized(english: "Toggle Dimming", chinese: "切换调暗"), systemImage: viewModel.streamSettings.dimPassthrough ? "moon.fill" : "moon") {
+            Button(viewModel.localized("toggle_dimming"), systemImage: viewModel.streamSettings.dimPassthrough ? "moon.fill" : "moon") {
                 viewModel.streamSettings.dimPassthrough.toggle()
             }
             
@@ -71,7 +68,7 @@ struct StreamControls<Additions: View>: View {
             if let toggleAction = toggleKeyboardAction {
                 Button(action: toggleAction) {
                     // Change icon and style based on state
-                    Label("Keyboard", systemImage: isKeyboardActive ? "keyboard.fill" : "keyboard")
+                    Label(viewModel.localized("keyboard"), systemImage: isKeyboardActive ? "keyboard.fill" : "keyboard")
                 }
                 .background(isKeyboardActive ? Color.white.opacity(0.2) : Color.clear) // Visual Highlight
                 .clipShape(Circle())
@@ -79,7 +76,7 @@ struct StreamControls<Additions: View>: View {
             // -------------------------------
 
             HStack {
-                Button(viewModel.localized(english: "Volume", chinese: "音量"), systemImage: viewModel.vol == 0 || viewModel.mute ? "speaker.slash.fill" : "speaker.fill" ) {
+                Button(viewModel.localized("volume"), systemImage: viewModel.vol == 0 || viewModel.mute ? "speaker.slash.fill" : "speaker.fill" ) {
                     viewModel.mute.toggle()
                 }
                 Slider(value: $viewModel.vol, in: 0...127)
