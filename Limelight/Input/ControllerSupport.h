@@ -25,7 +25,7 @@
 @end
 
 @interface ControllerSupport : NSObject
-
+@property (nonatomic, assign) BOOL relativeMouseMode;
 -(id) initWithConfig:(StreamConfiguration*)streamConfig delegate:(id<ControllerSupportDelegate>)delegate;
 -(void) connectionEstablished;
 

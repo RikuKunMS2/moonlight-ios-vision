@@ -30,7 +30,7 @@ The Vision OS Version is not available in the App Store, to download the latest 
 ## ChangeLog (Version 11.0.14 - Nov 19, 2025)
 
 * **AV1 Support:** AV1 is now supported in Reality Kit mode.
-* **Bitrate:** Added support for higher bitrate configurations (untested—performance depends on network and M2/M5 limits).
+* **Bitrate:** Added support for higher bitrate configurations (untestedâ€”performance depends on network and M2/M5 limits).
 * **Immersive View:** Added option to setup an immersive view and change stream view to any size (use lock/unlock to reposition).
 * **Settings Fix:** Fixed an issue where settings weren't saving on window dismissal/force quit.
 * **Curved Screen:** Redid the math for curved screens to eliminate distortion and stretching.
@@ -110,4 +110,5 @@ Thanks again for your support :)
     * Click on the "Signing & Capabilities" tab
     * Select your Team (Sign into Apple account if needed)
     * Change the "Bundle Identifier" to something unique.
+	* Remove the low latency entitlement from signing and capabilities because otherwise you'll need to manually enable it in the apple developer certificates section of a paid developer account for the bundle you chose above. 
     * Select your registered Vision Pro in the target bar and click Play.

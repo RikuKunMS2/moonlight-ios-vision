@@ -1,9 +1,9 @@
 //
-//  UIKitStreamView.swift
-//  Moonlight Vision
+//  UIKitStreamView.swift
+//  Moonlight Vision
 //
-//  Created by Alex Haugland on 1/27/24.
-//  Copyright © 2024 Moonlight Game Streaming Project.
+//  Created by Alex Haugland on 1/27/24.
+//  Copyright © 2024 Moonlight Game Streaming Project.
 //
 
 import SwiftUI
@@ -33,7 +33,8 @@ struct UIKitStreamView: View {
                         StreamControls(
                             horizontal: true,
                             streamConfig: configBinding,
-                            isKeyboardActive: false, 
+                            mouseInputMode: .constant(.absolute),
+                            isKeyboardActive: false,
                             closeAction: {
                                 handleHomeButtonClose()
                             },
@@ -48,8 +49,24 @@ struct UIKitStreamView: View {
                     }
                     .onAppear {
                         hasPerformedTeardown = false
-                        dismissWindow(id: "mainView")
-                        startWindowSizeMonitoring()
+                        
+                        // Zombie / Resume Fix:
+                        // If we appear but shouldn't be streaming, close immediately.
+                        if !viewModel.activelyStreaming {
+                            print("[UIKitStreamView] Zombie state detected onAppear. Closing.")
+                            // We don't show the "Stream Stopped" error here because the user likely just
+                            // restarted the app or came back from a long sleep.
+                            openWindow(id: "mainView")
+                            
+                            // Dismiss after small delay to ensure main view registers
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                dismissWindow(id: "classicStreamingWindow")
+                                streamConfig = nil
+                            }
+                        } else {
+                            dismissWindow(id: "mainView")
+                            startWindowSizeMonitoring()
+                        }
                     }
                     .onDisappear {
                         stopWindowSizeMonitoring()
@@ -67,6 +84,8 @@ struct UIKitStreamView: View {
                         }
                     }
             } else {
+                // Stream Stopped / Error UI [PRESERVED]
+                // This handles edge cases where the stream dies but the window remains.
                 VStack(spacing: 20) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.largeTitle)
@@ -77,7 +96,10 @@ struct UIKitStreamView: View {
                         .padding(.horizontal)
                     
                     Button {
+                        // Manual Close Button Action
                         openWindow(id: "mainView")
+                        dismissWindow(id: "classicStreamingWindow")
+                        streamConfig = nil
                     } label: {
                         Label(viewModel.localized("open_main_menu"), systemImage: "house.fill")
                             .frame(maxWidth: .infinity)
@@ -87,18 +109,55 @@ struct UIKitStreamView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.thinMaterial)
+                // Ensure we catch zombies here too if they linger
+                .onAppear {
+                    // Optional: You could add auto-close logic here if you wanted,
+                    // but keeping it manual is safer for debugging errors.
+                }
             }
         }
     }
 
+    // MARK: - Window Management Logic
+
     private func handleHomeButtonClose() {
-        tearDownStream(openMainWindow: true)
+        print("[UIKitStreamView] Home button pressed.")
+        
+        // 1. Stop Data Stream
+        viewModel.activelyStreaming = false
+        if let streamVC = _UIKitStreamView.controllerReference.object {
+            streamVC.stopStream()
+        }
+        
+        // 2. Open Main Window FIRST (Critical for visionOS window management)
+        openWindow(id: "mainView")
+        
+        // 3. Dismiss THIS window after a short delay
+        // This prevents the OS from ignoring the dismiss if it thinks this is the only window.
+        // During this 0.5s, the user might briefly see the "Stream Stopped" UI, which is expected behavior.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            dismissWindow(id: "classicStreamingWindow")
+            
+            // 4. Clear config cleanup
+            self.streamConfig = nil
+        }
+        
+        // Save settings if needed
+        if viewModel.streamSettings.rememberStreamSettings {
+            saveWindowSizeForRestore()
+        }
     }
 
     private func handleWindowDisappearance() {
+        // This handles when the user closes the window via the "X" bar or system gesture
         guard !hasPerformedTeardown else { return }
         guard !needsResume else { return }
-        tearDownStream(openMainWindow: true)
+        
+        // If we are disappearing but activelyStreaming is true, it means the user closed the window manually.
+        // We should clean up the stream logic.
+        if viewModel.activelyStreaming {
+            tearDownStream(openMainWindow: true)
+        }
     }
 
     private func tearDownStream(openMainWindow: Bool) {
@@ -112,17 +171,16 @@ struct UIKitStreamView: View {
             streamVC.stopStream()
         }
 
-        // Save window size if remember settings is enabled
         if viewModel.streamSettings.rememberStreamSettings {
             saveWindowSizeForRestore()
         }
 
-        // Always save the stream config for auto-resume
         if let config = streamConfig {
             viewModel.savedStreamConfigForResume = config
         }
 
         streamConfig = nil
+        
         if openMainWindow {
             DispatchQueue.main.async {
                 openWindow(id: "mainView")
@@ -131,7 +189,6 @@ struct UIKitStreamView: View {
     }
     
     private func saveWindowSizeForRestore() {
-        // Try to find the window and save its size
         if let streamVC = _UIKitStreamView.controllerReference.object,
            let window = streamVC.view.window ?? streamVC.view?.superview?.window {
             let currentSize = window.bounds.size
@@ -142,11 +199,9 @@ struct UIKitStreamView: View {
     private func saveWindowSizeToUserDefaults(_ size: CGSize) {
         guard viewModel.streamSettings.rememberStreamSettings else { return }
         
-        // Only save if size has changed significantly (avoid unnecessary writes)
         if let lastSize = lastSavedWindowSize {
             let widthDiff = abs(size.width - lastSize.width)
             let heightDiff = abs(size.height - lastSize.height)
-            // Only save if change is more than 1 pixel
             if widthDiff < 1.0 && heightDiff < 1.0 {
                 return
             }
@@ -160,35 +215,29 @@ struct UIKitStreamView: View {
     }
     
     private func startWindowSizeMonitoring() {
-        stopWindowSizeMonitoring() // Stop any existing monitor
-        
+        stopWindowSizeMonitoring()
         guard viewModel.streamSettings.rememberStreamSettings else { return }
         
         windowSizeMonitorTask = Task {
             var lastCheckedSize: CGSize? = nil
-            
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 500_000_000) // Check every 0.5 seconds
-                
+                try? await Task.sleep(nanoseconds: 500_000_000)
                 guard !Task.isCancelled else { break }
                 
                 if let streamVC = _UIKitStreamView.controllerReference.object,
                    let window = streamVC.view.window ?? streamVC.view?.superview?.window {
                     let currentSize = window.bounds.size
                     
-                    // Check if size has changed
                     if let lastSize = lastCheckedSize {
                         let widthDiff = abs(currentSize.width - lastSize.width)
                         let heightDiff = abs(currentSize.height - lastSize.height)
                         
-                        // If size changed significantly (more than 1 pixel), save it
                         if widthDiff > 1.0 || heightDiff > 1.0 {
                             await MainActor.run {
                                 saveWindowSizeToUserDefaults(currentSize)
                             }
                         }
                     } else {
-                        // First check, just record the size
                         lastCheckedSize = currentSize
                     }
                 }
@@ -201,54 +250,20 @@ struct UIKitStreamView: View {
         windowSizeMonitorTask = nil
     }
     
-    private func restoreWindowSizeIfNeeded() {
-        guard viewModel.streamSettings.rememberStreamSettings else { return }
-        
-        let defaults = UserDefaults.standard
-        guard let savedWidth = defaults.object(forKey: "uikitWindowWidth") as? CGFloat,
-              let savedHeight = defaults.object(forKey: "uikitWindowHeight") as? CGFloat else {
-            return // No saved size
-        }
-        
-        let savedSize = CGSize(width: savedWidth, height: savedHeight)
-        print("Restoring UIKit window size: \(savedSize)")
-        
-        // Try to find the window and restore its size
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            if let streamVC = _UIKitStreamView.controllerReference.object,
-               let window = streamVC.view.window ?? streamVC.view?.superview?.window,
-               let windowScene = window.windowScene {
-                let geometryRequest = UIWindowScene.GeometryPreferences.Vision(
-                    size: savedSize,
-                    resizingRestrictions: .uniform
-                )
-                windowScene.requestGeometryUpdate(geometryRequest)
-                print("Applied restored window size")
-            }
-        }
-    }
-
     private func prepareForBackground() {
         guard !hasPerformedTeardown else { return }
         guard streamConfig != nil else { return }
         
-        // Save current window size before backgrounding
         saveCurrentWindowSize()
-        
-        // Cancel any pending background task
         backgroundTask?.cancel()
-        
-        // Set needsResume flag
         needsResume = true
         
-        // Stop the stream
         if let streamVC = _UIKitStreamView.controllerReference.object {
             streamVC.stopStream()
         }
     }
     
     private func saveCurrentWindowSize() {
-        // Try to find the window and save its size
         if let streamVC = _UIKitStreamView.controllerReference.object,
            let window = streamVC.view.window ?? streamVC.view?.superview?.window {
             let currentSize = window.bounds.size
@@ -261,13 +276,10 @@ struct UIKitStreamView: View {
         guard needsResume else { return }
         guard streamConfig != nil else { return }
         
-        // Cancel any pending background task
         backgroundTask?.cancel()
         
-        // Only resume if we were actually backgrounded (not just briefly inactive)
-        // Add a small delay to ensure we're truly back from background
         backgroundTask = Task {
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 second delay
+            try? await Task.sleep(nanoseconds: 100_000_000)
             
             guard !Task.isCancelled else { return }
             guard needsResume else { return }
@@ -283,18 +295,16 @@ struct UIKitStreamView: View {
 struct _UIKitStreamViewWindowButton: View {
     @EnvironmentObject private var viewModel: MainViewModel
     @Binding var streamConfig: StreamConfiguration
-    @State private var currentWindow: UIWindow? = nil // State to hold the window reference
-    let controllerReference: Reference<StreamFrameViewController> // Receive the reference
+    @State private var currentWindow: UIWindow? = nil
+    let controllerReference: Reference<StreamFrameViewController>
 
     var body: some View {
         Button {
             if let window = currentWindow {
-                // When manually triggered, don't use saved size - recalculate
                 applyAspectRatioLock(streamConfig: streamConfig, targetWindow: window, useSavedSize: false)
-                AudioHelpers.fixAudioForSurroundForUIKitWindow(window) // TODO(shinyquagsire23): Make this configurable
+                AudioHelpers.fixAudioForSurroundForUIKitWindow(window)
             } else {
                 print("Error: No window reference available to apply aspect ratio lock.")
-                // Optionally provide user feedback here, e.g., an alert
             }
         } label: {
             Label {
@@ -304,52 +314,30 @@ struct _UIKitStreamViewWindowButton: View {
             }
         }
         .onAppear {
-            // Find the window when the button appears (or when the view is updated)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { // Small delay
-                findWindow()
-            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { findWindow() }
         }
-        .onChange(of: streamConfig) { _ in // Update if streamConfig changes (though window likely stays the same)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { // Small delay
-                findWindow()
-            }
+        .onChange(of: streamConfig) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { findWindow() }
         }
     }
 
     private func findWindow() {
-        print("Attempting to find window...")
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
-            print("Warning: Could not get the first connected scene.")
-            return
-        }
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
 
-        print("Connected scenes count: \(UIApplication.shared.connectedScenes.count)")
-        print("Window scene windows count: \(scene.windows.count)")
-
-        // More robust approach: Try to find the window from the StreamFrameViewController's view
-        if let streamViewController = controllerReference.object { // Access the StreamFrameViewController through the reference
+        if let streamViewController = controllerReference.object {
             if let streamView = streamViewController.view {
                 var viewToFindWindow: UIView? = streamView
                 while viewToFindWindow != nil {
                     if let window = viewToFindWindow?.window {
-                        print("Found window by traversing view hierarchy: \(window)")
                         currentWindow = window
                         AudioHelpers.fixAudioForSurroundForUIKitWindow(window)
                         return
                     }
                     viewToFindWindow = viewToFindWindow?.superview
                 }
-            } else {
-                print("Warning: streamViewController.view is nil")
             }
-        } else {
-            print("Warning: controllerReference.object is nil")
         }
-
-
-        print("Warning: Could not find window associated with StreamFrameViewController using view hierarchy traversal.")
-        currentWindow = nil // Ensure currentWindow is nil if not found.
-        // Optionally provide user feedback here if window is not found
+        currentWindow = nil
     }
 }
 
@@ -358,9 +346,9 @@ struct _UIKitStreamView: UIViewControllerRepresentable {
     typealias UIViewControllerType = StreamFrameViewController
 
     @Binding var streamConfig: StreamConfiguration
-    static let controllerReference = Reference<UIViewControllerType>() // Make it static
+    static let controllerReference = Reference<UIViewControllerType>()
 
-    static var reference: Reference<UIViewControllerType> { // Provide access to the reference
+    static var reference: Reference<UIViewControllerType> {
         return controllerReference
     }
 
@@ -369,15 +357,10 @@ struct _UIKitStreamView: UIViewControllerRepresentable {
         streamView.streamConfig = streamConfig
         streamView.connectedCallback = { [weak streamView] in
             print("Connected in Swift!")
-            AudioHelpers.fixAudioForSurroundForCurrentWindow() // TODO(shinyquagsire23): Make this configurable
-            // Automatically apply aspect ratio lock when stream starts
+            AudioHelpers.fixAudioForSurroundForCurrentWindow()
+            
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                guard
-                    let window = streamView?.view.window ?? streamView?.view?.superview?.window
-                else {
-                    return
-                }
-                // Check if we should use saved window size or calculate new size
+                guard let window = streamView?.view.window ?? streamView?.view?.superview?.window else { return }
                 let useSavedSize = MainViewModel.shared.streamSettings.rememberStreamSettings
                 applyAspectRatioLock(streamConfig: streamConfig, targetWindow: window, useSavedSize: useSavedSize)
             }
@@ -385,13 +368,13 @@ struct _UIKitStreamView: UIViewControllerRepresentable {
         streamView.disconnectedCallback = {
             print("Disconnected in Swift!")
         };
-        _UIKitStreamView.controllerReference.object = streamView // Use the static reference
+        _UIKitStreamView.controllerReference.object = streamView
         return streamView
     }
 
     func updateUIViewController(_ viewController: UIViewControllerType, context: Context) {
-        viewController.streamConfig = streamConfig // Ensure streamConfig updates
-        _UIKitStreamView.controllerReference.object = viewController // Update in case view controller instance changes (though unlikely in this setup)
+        viewController.streamConfig = streamConfig
+        _UIKitStreamView.controllerReference.object = viewController
     }
 }
 
@@ -403,34 +386,25 @@ class Reference<T: AnyObject> {
 
 @MainActor
 func applyAspectRatioLock(streamConfig: StreamConfiguration, targetWindow: UIWindow?, useSavedSize: Bool = true) {
-    guard let window = targetWindow else {
-        print("Error: No target window provided to apply aspect ratio lock.")
-        return
-    }
+    guard let window = targetWindow else { return }
 
     let streamWidth = CGFloat(streamConfig.width)
     let streamHeight = CGFloat(streamConfig.height)
     let streamAspectRatio = streamWidth / streamHeight
 
-    print("Applying Aspect Ratio Lock - Stream Width: \(streamWidth), Stream Height: \(streamHeight), Stream AR: \(streamAspectRatio)")
-
     var desiredSize = CGSize.zero
     
-    // If we have a saved window size and useSavedSize is true, use it
     if useSavedSize {
-        // First check MainViewModel's saved size (for background resume)
         if let savedSize = MainViewModel.shared.savedStreamWindowSize {
             let savedAspectRatio = savedSize.width / savedSize.height
             let aspectRatioDifference = abs(savedAspectRatio - streamAspectRatio) / streamAspectRatio
             
             if aspectRatioDifference < 0.05 {
                 desiredSize = savedSize
-                print("Using saved window size from MainViewModel: \(savedSize)")
                 MainViewModel.shared.savedStreamWindowSize = nil
             }
         }
         
-        // If no size from MainViewModel, check UserDefaults for persistent saved size
         if desiredSize == .zero {
             let defaults = UserDefaults.standard
             if let savedWidth = defaults.object(forKey: "uikitWindowWidth") as? CGFloat,
@@ -441,18 +415,13 @@ func applyAspectRatioLock(streamConfig: StreamConfiguration, targetWindow: UIWin
                 
                 if aspectRatioDifference < 0.05 {
                     desiredSize = savedSize
-                    print("Using saved window size from UserDefaults: \(savedSize)")
-                } else {
-                    print("Saved size aspect ratio mismatch, recalculating. Saved AR: \(savedAspectRatio), Stream AR: \(streamAspectRatio)")
                 }
             }
         }
     }
     
-    // If we don't have a saved size or it doesn't match, calculate new size
     if desiredSize == .zero {
-        let maxWidth: CGFloat = 2000 // Increased maxWidth for potentially larger screens
-        
+        let maxWidth: CGFloat = 2000
         for desiredWidthInt in (1...Int(maxWidth)).reversed() {
             let desiredWidth = CGFloat(desiredWidthInt)
             let desiredHeightFloat = desiredWidth / streamAspectRatio
@@ -460,58 +429,17 @@ func applyAspectRatioLock(streamConfig: StreamConfiguration, targetWindow: UIWin
 
             if desiredHeightInt > 0 {
                 desiredSize = CGSize(width: desiredWidth, height: CGFloat(desiredHeightInt))
-                //print("Calculated Desired Size - Width: \(desiredSize.width), Height: \(desiredSize.height)")
                 break
             }
         }
     }
 
-    guard let windowScene = window.windowScene else {
-        print("Error: Could not get window scene from target window.")
-        return
-    }
+    guard let windowScene = window.windowScene else { return }
 
     let geometryRequest = UIWindowScene.GeometryPreferences.Vision(
         size: desiredSize,
         resizingRestrictions: .uniform
     )
 
-    //print("Applying Geometry Request for Aspect Ratio Lock.")
-
-    // Apply to the provided window.
-    //print("Applying to the provided window.")
-
-    //print("Window Information Before Request:")
-    let windowBounds = window.bounds
-    let windowWidth = windowBounds.width
-    let windowHeight = windowBounds.height
-    let windowAspectRatio = windowWidth / windowHeight
-    let identifier = window.accessibilityIdentifier ?? "nil"
-    let rootViewControllerClassName = String(describing: window.rootViewController?.classForCoder)
-
-    //print("\nWindow Information (Before Geometry Request):")
-    //print("Window Width: \(windowWidth)")
-    //print("Window Height: \(windowHeight)")
-    //print("Window Aspect Ratio: \(windowAspectRatio)")
-    //print("Window Accessibility Identifier: \(identifier)")
-    //print("Window Root View Controller Class: \(rootViewControllerClassName)")
-
     windowScene.requestGeometryUpdate(geometryRequest)
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { // Short delay for logging
-        //print("\nWindow Information After Request:")
-        let updatedBounds = window.bounds
-        let updatedWidth = updatedBounds.width
-        let updatedHeight = updatedBounds.height
-        let updatedAspectRatio = updatedWidth / updatedHeight
-        let identifier = window.accessibilityIdentifier ?? "nil"
-        let rootViewControllerClassName = String(describing: window.rootViewController?.classForCoder)
-
-        //print("\nWindow Size (After Delay):")
-        //print("Updated Window Width: \(updatedWidth)")
-        //print("Updated Window Height: \(updatedHeight)")
-        //print("Updated Aspect Ratio: \(updatedAspectRatio)")
-        //print("Window Accessibility Identifier: \(identifier)")
-        //print("Window Root View Controller Class: \(rootViewControllerClassName)")
-    }
 }

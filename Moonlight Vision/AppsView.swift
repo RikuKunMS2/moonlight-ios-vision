@@ -14,7 +14,7 @@ struct AppsView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.pushWindow) private var pushWindow
     @Environment(\.dismissWindow) private var dismissWindow
-    @Environment(\.openImmersiveSpace) private var openImmersiveSpace // Required for Immersive Mode
+    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     
     @State private var nowLoading: String?
     
@@ -31,72 +31,53 @@ struct AppsView: View {
                         ProgressView()
                     }
                     AppButtonView(host: host, app: app) {
-
                         Task { await handleStreamLaunch(for: app) }
-
-                        if (nowLoading != nil) {
-                            return
-                        }
-                        nowLoading = app.id ?? app.name
-                        
-                        // 1. Generate Configuration
-                        if let config = viewModel.stream(app: app) {
-                            
-                            let settings = viewModel.streamSettings
-                            
-                            // 2. Route based on Renderer Selection
-                            if settings.renderer == .realitykit {
-                                
-                                // Check if user wants Immersive Mode (Full Space) or Volumetric Window
-                                if settings.realitykitImmersiveMode {
-                                    // Immersive Space requires an async Task
-                                    Task {
-                                        await openImmersiveSpace(id: "realitykitImmersiveSpace", value: config)
-                                        dismissWindow(id: "mainView")
-                                        // Note: Immersive space doesn't automatically dismiss main view,
-                                        // so we do it manually here.
-                                    }
-                                } else {
-                                    // Standard Volumetric Window
-                                    openWindow(id: "realitykitStreamingWindow", value: config)
-                                    dismissWindow(id: "mainView")
-                                }
-                                
-                            } else {
-                                // Classic UIKit Renderer (Push Window)
-                                pushWindow(id: "classicStreamingWindow", value: config)
-                                nowLoading = nil
-                            }
-                        }
-
                     }
-                    .environmentObject(viewModel)
                 }
             }
         }
         .navigationTitle(host.name)
         .onAppear() {
-            // this MUST be async lmao
             Task {
-                print("LOAD")
+                // print("LOAD")
                 viewModel.refreshAppsFor(host: host)
             }
         }
         .alert(viewModel.localized("active_stream"), isPresented: $viewModel.showActiveStreamAlert) {
+            // --- 1. RESUME ACTION ---
             Button(viewModel.localized("go_back_to_window")) {
-                if viewModel.streamSettings.renderer == .realitykit {
-                    openWindow(id: viewModel.streamSettings.renderer.windowId)
-                } else {
-                    pushWindow(id: viewModel.streamSettings.renderer.windowId)
+                Task {
+                    // FIX: Removed 'if let' because the config is guaranteed to exist by the compiler
+                    let config = viewModel.savedStreamConfigForResume ?? viewModel.currentStreamConfig
+                    
+                    if viewModel.streamSettings.renderer == .realitykit {
+                        if viewModel.streamSettings.realitykitImmersiveMode {
+                            await openImmersiveSpace(id: "realitykitImmersiveSpace", value: config)
+                        } else {
+                            openWindow(id: "realitykitStreamingWindow", value: config)
+                        }
+                    } else {
+                        openWindow(id: "classicStreamingWindow", value: config)
+                    }
+                    dismissWindow(id: "mainView")
                 }
             }
+            
+            // --- 2. FORCE QUIT & RESTART ACTION ---
             Button(viewModel.localized("force_quit"), role: .destructive) {
+                // Stop current stream
                 viewModel.activelyStreaming = false
+                
                 if let pendingApp = viewModel.pendingAppToStream {
-                    Task { await startStream(for: pendingApp) }
+                    // Add delay to ensure previous window tears down completely
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        Task { await startStream(for: pendingApp) }
+                    }
+                } else {
+                    viewModel.pendingAppToStream = nil
                 }
-                viewModel.pendingAppToStream = nil
             }
+            
             Button(viewModel.localized("cancel"), role: .cancel) {
                 viewModel.pendingAppToStream = nil
             }
@@ -114,7 +95,7 @@ struct AppsView: View {
             Text(viewModel.localized("close_realitykit_window_message"))
         }
         .refreshable() {
-            print("REFRESH")
+            // print("REFRESH")
             viewModel.refreshAppsFor(host: host)
         }
     }
@@ -124,6 +105,7 @@ struct AppsView: View {
         guard nowLoading == nil else { return }
         nowLoading = app.id ?? app.name
         
+        // Defer clearing loading state
         defer { nowLoading = nil }
         
         if viewModel.activelyStreaming {
@@ -132,22 +114,36 @@ struct AppsView: View {
             return
         }
         
-        // Note: Manual close checks removed as they are no longer needed
-        // Windows are now properly managed through the window lifecycle
-        
         await startStream(for: app)
     }
     
     @MainActor
     private func startStream(for app: TemporaryApp) async {
-        guard let config = viewModel.stream(app: app) else { return }
-        if viewModel.streamSettings.renderer == .realitykit {
-            openWindow(id: viewModel.streamSettings.renderer.windowId, value: config)
-            dismissWindow(id: "mainView")
-        } else {
-            openWindow(id: "classicStreamingWindow", value: config)
-            dismissWindow(id: "mainView")
+        // 1. Generate Configuration and CAPTURE IT
+        // Passing 'value:' in openWindow is required for the WindowGroup data binding to work
+        guard let config = viewModel.stream(app: app) else {
+            print("Failed to generate stream config")
+            return
         }
+        
+        let settings = viewModel.streamSettings
+        
+        // 2. Route based on Renderer WITH VALUE
+        if settings.renderer == .realitykit {
+            if settings.realitykitImmersiveMode {
+                // Pass config value
+                await openImmersiveSpace(id: "realitykitImmersiveSpace", value: config)
+            } else {
+                // Pass config value
+                openWindow(id: "realitykitStreamingWindow", value: config)
+            }
+        } else {
+            // Pass config value
+            openWindow(id: "classicStreamingWindow", value: config)
+        }
+        
+        // 3. Dismiss Main View (The stream window should now be active)
+        dismissWindow(id: "mainView")
     }
 }
 
@@ -168,7 +164,6 @@ struct AppButtonView: View {
                         let quitRequest = HttpRequest(for: httpResponse, with: httpManager?.newQuitAppRequest())
                         Task {
                             httpManager?.executeRequestSynchronously(quitRequest)
-                            // lol no error handling...
                         }
                     } label: {
                         Label(viewModel.localized("stop"), systemImage: "stop.circle")

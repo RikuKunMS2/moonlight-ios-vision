@@ -357,7 +357,7 @@
 		F7A1195A2B5DE1E2001E8686 /* MoonlightVisionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoonlightVisionApp.swift; sourceTree = "<group>"; };
 		F7A1195C2B5DE1FD001E8686 /* MainContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainContentView.swift; sourceTree = "<group>"; };
 		F7A1195F2B5DE1FD001E8687 /* LanguagePromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguagePromptView.swift; sourceTree = "<group>"; };
-		F7A119632B5DE1FD001E8689 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = "Resources/en.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		F7A119632B5DE1FD001E8689 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = Resources/en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		F7A119652B5DE1FD001E868A /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "Resources/zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		F7A119EF2B5DE2EA001E8686 /* Moonlight copy-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = "Moonlight copy-Info.plist"; path = "/Users/ahaugland/Documents/github/moonlight-ios/Moonlight copy-Info.plist"; sourceTree = "<absolute>"; };
 		F7A119FF2B5DF387001E8686 /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
@@ -683,7 +683,6 @@
 				3E4F94682DC2E2D6006CF0C1 /* ComputerViewWrapper.swift */,
 				F7A1195C2B5DE1FD001E8686 /* MainContentView.swift */,
 				F7A1195F2B5DE1FD001E8687 /* LanguagePromptView.swift */,
-				F7A119612B5DE1FD001E8688 /* LocalizationHelper.swift */,
 				F7A119662B5DE1FD001E868B /* Localizable.strings */,
 				F77B58B12B5EFC9000482BD5 /* ComputerView.swift */,
 				F71801412B65483D00A9336B /* AppsView.swift */,
@@ -1334,7 +1333,6 @@
 				F7A119212B5DDF73001E8686 /* HttpManager.m in Sources */,
 				F7A1195D2B5DE1FD001E8686 /* MainContentView.swift in Sources */,
 				F7A1195E2B5DE1FD001E8687 /* LanguagePromptView.swift in Sources */,
-				F7A119602B5DE1FD001E8688 /* LocalizationHelper.swift in Sources */,
 				F7A119222B5DDF73001E8686 /* MDNSManager.m in Sources */,
 				F7A11A232B5DF76F001E8686 /* AppDelegate.m in Sources */,
 				F7A119232B5DDF73001E8686 /* StreamView.m in Sources */,
@@ -1546,7 +1544,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = UHY653Z667;
+				DEVELOPMENT_TEAM = 2423V7K2Y5;
 				ENABLE_MODULE_VERIFIER = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
@@ -1594,7 +1592,7 @@
 				);
 				MARKETING_VERSION = 11.0.14;
 				OTHER_LDFLAGS = "-ld64";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-lingganua";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1625,7 +1623,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
-				DEVELOPMENT_TEAM = UHY653Z667;
+				DEVELOPMENT_TEAM = 2423V7K2Y5;
 				ENABLE_MODULE_VERIFIER = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
@@ -1673,7 +1671,7 @@
 				);
 				MARKETING_VERSION = 11.0.14;
 				OTHER_LDFLAGS = "-ld64";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-lingganua";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				PROVISIONING_PROFILE_SPECIFIER = "";

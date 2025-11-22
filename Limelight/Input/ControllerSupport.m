@@ -1067,6 +1067,11 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 
 -(void) registerMouseCallbacks:(GCMouse*) mouse API_AVAILABLE(ios(14.0)) {
     mouse.mouseInput.mouseMovedHandler = ^(GCMouseInput * _Nonnull mouse, float deltaX, float deltaY) {
+        
+        // --- ADD CHECK HERE ---
+        if (!self.relativeMouseMode) { return; }
+        // ----------------------
+
         self->accumulatedDeltaX += deltaX / MOUSE_SPEED_DIVISOR;
         self->accumulatedDeltaY += -deltaY / MOUSE_SPEED_DIVISOR;
         
@@ -1082,12 +1087,18 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     };
     
     mouse.mouseInput.leftButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
+        // --- ADD CHECK HERE ---
+        if (!self.relativeMouseMode) { return; }
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_LEFT);
     };
+    
     mouse.mouseInput.middleButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
+        if (!self.relativeMouseMode) { return; }
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_MIDDLE);
     };
+    
     mouse.mouseInput.rightButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
+        if (!self.relativeMouseMode) { return; }
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
     };
     
