@@ -1,0 +1,136 @@
+/* 
+  Localizable.strings
+  Moonlight Vision
+  
+  English Localization
+*/
+
+// Language Selection
+"choose_language" = "Choose your language";
+"language" = "Language";
+"continue" = "Continue";
+
+// Main Menu
+"computers" = "Computers";
+"settings" = "Settings";
+"changelog" = "Changelog";
+"no_host_selected" = "No host selected";
+"please_read_changelog" = "Please actually read the Change Log";
+
+// Host Management
+"add_server" = "Add Server";
+"enter_server" = "Enter server";
+"ip_or_host" = "IP or Host";
+"add" = "Add";
+"cancel" = "Cancel";
+"ok" = "Ok";
+"unable_to_add_host" = "Unable to add host";
+"really_delete" = "Really delete?";
+"yes_delete_it" = "Yes, delete it";
+"delete_pc" = "Delete PC";
+"wake_pc" = "Wake PC";
+"pair" = "Pair";
+"host_deletion_triggered" = "Host deletion triggered";
+
+// Network Discovery
+"click_to_scan_hosts" = "Click here to scans for Hosts";
+"click_to_stop_discovery" = "Click here to Stop network discovery, or if things are unresponsive";
+
+// Host Status
+"updating_host" = "Updating %@...";
+"connecting_to_host" = "Connecting to %@...";
+"refresh_status" = "Refresh Status";
+"force_refresh_status" = "Force Refresh Status";
+"offline" = "Offline";
+"offline_message" = "Moonlight cannot connect to this computer. Ensure it is turned on and connected to the network.";
+
+// Pairing
+"pairing" = "Pairing";
+"pairing_pin_message" = "Enter the following PIN on the host machine:\n%@\n\nIf your host PC is running Sunshine, navigate to the Sunshine web UI to enter the PIN.";
+"ready_to_pair" = "Ready to Pair";
+"pairing_needed_message" = "This computer is online but needs to be paired with this device.";
+"start_pairing" = "Start Pairing";
+"start_pairing_anyway" = "Start Pairing Anyway";
+"checking_pairing_status" = "Checking Pairing Status...";
+"stop_automatic_checks" = "Stop Automatic Checks";
+
+// Stream Controls
+"home" = "Home";
+"toggle_dimming" = "Toggle Dimming";
+"keyboard" = "Keyboard";
+"volume" = "Volume";
+"fix_aspect_ratio" = "Fix Aspect Ratio";
+
+// Stream Status
+"stream_stopped" = "Stream stopped";
+"stream_stopped_message" = "Please close this window before starting a new stream from the main menu.";
+"open_main_menu" = "Open Main Menu";
+"stream_error" = "Stream error";
+"unknown_error" = "Unknown error";
+"close" = "Close";
+"keyboard_active" = "Keyboard Active";
+"tap_video_to_type" = "Tap video to type";
+
+// RealityKit Controls
+"boost_luminance" = "Boost / Luminance";
+"flatten" = "Flatten";
+"reset_depth" = "Reset Depth";
+"height" = "Height";
+"spatial" = "Spatial";
+"black_sphere_opacity" = "Black Sphere Opacity";
+"size" = "Size";
+"distance" = "Distance";
+"screen_locked" = "Screen Locked (Inputs Active)";
+"screen_unlocked" = "Screen Unlocked (Movable Screen Active)";
+"3d_mode" = "3D Mode";
+"main_button" = "Main Button";
+"starting_stream" = "Starting %@...";
+
+// Settings
+"app_language" = "App Language";
+"video_settings" = "Video settings";
+"resolution" = "Resolution";
+"aspect_ratio" = "Aspect Ratio";
+"framerate" = "Framerate";
+"bitrate" = "Bitrate";
+"renderer" = "Renderer";
+"uikit_classic" = "UIKit (classic)";
+"realitykit_native" = "RealityKit (native)";
+"custom" = "Custom";
+"width" = "Width";
+"by" = "by";
+"realitykit_settings" = "RealityKit Renderer Settings (Experimental)";
+"realitykit_footer" = "The new RealityKit renderer is experemental and does not support tap to control mouse, but will support a physical mouse and keyboard";
+"immersive_mode" = "Immersive Mode (Movable Screen)";
+"animate_screen_curve" = "Animate screen curve";
+"screen_curvature" = "Screen curvature";
+"uikit_settings" = "UIKit (Classic) Renderer Settings";
+"touch_mode" = "Touch Mode";
+"touchpad" = "Touchpad";
+"touchscreen" = "Touchscreen";
+"on_screen_controls" = "On-Screen Controls";
+"off" = "Off";
+"auto" = "Auto";
+"simple" = "Simple";
+"full" = "Full";
+"citrix_x1_mouse" = "Citrix X1 Mouse Support";
+"statistics_overlay" = "Statistics Overlay";
+"optimize_game_settings" = "Optimize Game Settings";
+"multi_controller_mode" = "Multi-Controller Mode";
+"single" = "Single";
+"swap_abxy_buttons" = "Swap A/B and X/Y Buttons";
+"play_audio_on_pc" = "Play Audio on PC";
+"preferred_codec" = "Preferred Codec";
+"h264" = "H.264";
+"hevc" = "HEVC";
+"av1" = "AV1";
+"enable_hdr" = "Enable HDR";
+"frame_pacing" = "Frame Pacing";
+"lowest_latency" = "Lowest Latency";
+"smoothest_video" = "Smoothest Video";
+"dim_passthrough" = "Automatically dim passthrough and hide window controls";
+"auto_resume_stream" = "Auto-resume stream when reopening window";
+"remember_realitykit_settings" = "Remember RealityKit settings";
+"stream_settings" = "Stream Settings";
+"remember_stream_settings" = "Remember stream settings";
+

@@ -1,0 +1,136 @@
+/* 
+  Localizable.strings
+  Moonlight Vision
+  
+  简体中文本地化
+*/
+
+// Language Selection
+"choose_language" = "请选择界面语言";
+"language" = "语言";
+"continue" = "继续";
+
+// Main Menu
+"computers" = "电脑";
+"settings" = "设置";
+"changelog" = "更新日志";
+"no_host_selected" = "未选择主机";
+"please_read_changelog" = "请务必阅读更新日志";
+
+// Host Management
+"add_server" = "添加服务器";
+"enter_server" = "输入服务器";
+"ip_or_host" = "IP 或主机名";
+"add" = "添加";
+"cancel" = "取消";
+"ok" = "确定";
+"unable_to_add_host" = "无法添加主机";
+"really_delete" = "确定要删除吗？";
+"yes_delete_it" = "是的，删除";
+"delete_pc" = "删除电脑";
+"wake_pc" = "唤醒电脑";
+"pair" = "配对";
+"host_deletion_triggered" = "主机删除已触发";
+
+// Network Discovery
+"click_to_scan_hosts" = "点击此处扫描主机";
+"click_to_stop_discovery" = "点击此处停止网络发现，或如果无响应";
+
+// Host Status
+"updating_host" = "正在更新 %@...";
+"connecting_to_host" = "正在连接到 %@...";
+"refresh_status" = "刷新状态";
+"force_refresh_status" = "强制刷新状态";
+"offline" = "离线";
+"offline_message" = "Moonlight 无法连接到此电脑。请确保它已开机并连接到网络。";
+
+// Pairing
+"pairing" = "配对";
+"pairing_pin_message" = "在主机上输入以下 PIN：\n%@\n\n如果主机运行的是 Sunshine，请导航到 Sunshine Web UI 输入 PIN。";
+"ready_to_pair" = "准备配对";
+"pairing_needed_message" = "此电脑已在线，但需要与此设备配对。";
+"start_pairing" = "开始配对";
+"start_pairing_anyway" = "仍然开始配对";
+"checking_pairing_status" = "正在检查配对状态...";
+"stop_automatic_checks" = "停止自动检查";
+
+// Stream Controls
+"home" = "主页";
+"toggle_dimming" = "切换调暗";
+"keyboard" = "键盘";
+"volume" = "音量";
+"fix_aspect_ratio" = "修复宽高比";
+
+// Stream Status
+"stream_stopped" = "串流已停止";
+"stream_stopped_message" = "在返回主菜单前请先关闭此窗口，之后即可在主菜单重新启动串流。";
+"open_main_menu" = "打开主菜单";
+"stream_error" = "串流错误";
+"unknown_error" = "未知错误";
+"close" = "关闭";
+"keyboard_active" = "键盘已激活";
+"tap_video_to_type" = "点击视频以输入";
+
+// RealityKit Controls
+"boost_luminance" = "增强 / 亮度";
+"flatten" = "扁平化";
+"reset_depth" = "重置深度";
+"height" = "高度";
+"spatial" = "空间";
+"black_sphere_opacity" = "黑色球体不透明度";
+"size" = "大小";
+"distance" = "距离";
+"screen_locked" = "屏幕锁定（输入激活）";
+"screen_unlocked" = "屏幕解锁（可移动屏幕激活）";
+"3d_mode" = "3D 模式";
+"main_button" = "主按钮";
+"starting_stream" = "正在启动 %@...";
+
+// Settings
+"app_language" = "应用语言";
+"video_settings" = "视频设置";
+"resolution" = "分辨率";
+"aspect_ratio" = "宽高比";
+"framerate" = "帧率";
+"bitrate" = "比特率";
+"renderer" = "渲染器";
+"uikit_classic" = "UIKit（经典）";
+"realitykit_native" = "RealityKit（原生）";
+"custom" = "自定义";
+"width" = "宽度";
+"by" = "×";
+"realitykit_settings" = "RealityKit 渲染器设置（实验性）";
+"realitykit_footer" = "新的 RealityKit 渲染器是实验性的，不支持点击控制鼠标，但将支持物理鼠标和键盘";
+"immersive_mode" = "沉浸式模式（可移动屏幕）";
+"animate_screen_curve" = "动画屏幕曲线";
+"screen_curvature" = "屏幕曲率";
+"uikit_settings" = "UIKit（经典）渲染器设置";
+"touch_mode" = "触摸模式";
+"touchpad" = "触摸板";
+"touchscreen" = "触摸屏";
+"on_screen_controls" = "屏幕控制";
+"off" = "关闭";
+"auto" = "自动";
+"simple" = "简单";
+"full" = "完整";
+"citrix_x1_mouse" = "Citrix X1 鼠标支持";
+"statistics_overlay" = "统计信息叠加";
+"optimize_game_settings" = "优化游戏设置";
+"multi_controller_mode" = "多控制器模式";
+"single" = "单个";
+"swap_abxy_buttons" = "交换 A/B 和 X/Y 按钮";
+"play_audio_on_pc" = "在 PC 上播放音频";
+"preferred_codec" = "首选编解码器";
+"h264" = "H.264";
+"hevc" = "HEVC";
+"av1" = "AV1";
+"enable_hdr" = "启用 HDR";
+"frame_pacing" = "帧同步";
+"lowest_latency" = "最低延迟";
+"smoothest_video" = "最流畅视频";
+"dim_passthrough" = "自动调暗穿透并隐藏窗口控件";
+"auto_resume_stream" = "重新打开窗口时自动恢复串流";
+"remember_realitykit_settings" = "记住 RealityKit 设置";
+"stream_settings" = "串流设置";
+"remember_stream_settings" = "记住串流设置";
+

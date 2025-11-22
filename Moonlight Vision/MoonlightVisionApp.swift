@@ -36,7 +36,27 @@ struct MoonlightVisionApp: SwiftUI.App {
                          isImmersive: false // Explicitly false
                      )
                      .environmentObject(appDelegate.mainViewModel)
-                     .onDisappear { streamConfig.wrappedValue = nil }
+                     .task {
+                         // Auto-resume: if we have a saved config and current config is nil, restore it
+                         if let savedConfig = appDelegate.mainViewModel.savedStreamConfigForResume,
+                            streamConfig.wrappedValue == nil {
+                             // Restore the saved stream config and start streaming
+                             streamConfig.wrappedValue = savedConfig
+                             appDelegate.mainViewModel.savedStreamConfigForResume = nil
+                             appDelegate.mainViewModel.activelyStreaming = true
+                         }
+                         // If opening with a new config, clear any saved config
+                         if streamConfig.wrappedValue != nil {
+                             appDelegate.mainViewModel.savedStreamConfigForResume = nil
+                         }
+                     }
+                     .onDisappear { 
+                         // Save config for auto-resume when window closes
+                         if let config = streamConfig.wrappedValue {
+                             appDelegate.mainViewModel.savedStreamConfigForResume = config
+                         }
+                         streamConfig.wrappedValue = nil
+                     }
                 }
                 .onChange(of: appDelegate.mainViewModel) {
                     let exclusive = MainViewModel.shouldUseExclusiveAudio(microphoneActive: false)
@@ -53,7 +73,27 @@ struct MoonlightVisionApp: SwiftUI.App {
                          isImmersive: true // Explicitly true
                      )
                      .environmentObject(appDelegate.mainViewModel)
-                     .onDisappear { streamConfig.wrappedValue = nil }
+                     .task {
+                         // Auto-resume: if we have a saved config and current config is nil, restore it
+                         if let savedConfig = appDelegate.mainViewModel.savedStreamConfigForResume,
+                            streamConfig.wrappedValue == nil {
+                             // Restore the saved stream config and start streaming
+                             streamConfig.wrappedValue = savedConfig
+                             appDelegate.mainViewModel.savedStreamConfigForResume = nil
+                             appDelegate.mainViewModel.activelyStreaming = true
+                         }
+                         // If opening with a new config, clear any saved config
+                         if streamConfig.wrappedValue != nil {
+                             appDelegate.mainViewModel.savedStreamConfigForResume = nil
+                         }
+                     }
+                     .onDisappear { 
+                         // Save config for auto-resume when immersive space closes
+                         if let config = streamConfig.wrappedValue {
+                             appDelegate.mainViewModel.savedStreamConfigForResume = config
+                         }
+                         streamConfig.wrappedValue = nil
+                     }
                 }
                 .immersionStyle(selection: .constant(.mixed), in: .mixed) // Mixed allows passthrough
 
@@ -61,6 +101,20 @@ struct MoonlightVisionApp: SwiftUI.App {
                 WindowGroup(id: "classicStreamingWindow", for: StreamConfiguration.self) { streamConfig in
                     UIKitStreamView(streamConfig: streamConfig)
                     .environmentObject(appDelegate.mainViewModel)
+                    .task {
+                        // Auto-resume: if we have a saved config and current config is nil, restore it
+                        if let savedConfig = appDelegate.mainViewModel.savedStreamConfigForResume,
+                           streamConfig.wrappedValue == nil {
+                            // Restore the saved stream config and start streaming
+                            streamConfig.wrappedValue = savedConfig
+                            appDelegate.mainViewModel.savedStreamConfigForResume = nil
+                            appDelegate.mainViewModel.activelyStreaming = true
+                        }
+                        // If opening with a new config, clear any saved config
+                        if streamConfig.wrappedValue != nil {
+                            appDelegate.mainViewModel.savedStreamConfigForResume = nil
+                        }
+                    }
                 }
                 .windowStyle(.plain)
                 .windowResizability(.contentSize)

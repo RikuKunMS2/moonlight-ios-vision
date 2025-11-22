@@ -56,13 +56,6 @@
 
 ### Comprehensive Localization / 全面本地化
 - **Complete UI Translation**: All user-facing text in the app now supports both English and Simplified Chinese:
-  - Main menu and navigation
-  - Settings and preferences
-  - Error messages and alerts
-  - Stream controls and status messages
-  - Pairing and connection prompts
-  - Window close instructions
-- **Dynamic Language Switching**: Language changes take effect immediately without requiring app restart
 - **完整界面翻译**: 应用中所有面向用户的文本现在都支持英文和简体中文：
   - 主菜单和导航
   - 设置和偏好
@@ -150,4 +143,3 @@
 - 窗口圆角默认 0 像素（以获得最佳清晰度）
 - **重要**: 窗口圆角实现使用 `.clipShape()`，可能会略微影响渲染清晰度。这是 SwiftUI/UIKit 渲染系统的限制。用户可将其设置为 0 以获得最佳清晰度。
 - 所有本地化使用辅助方法模式以保持一致性
-
