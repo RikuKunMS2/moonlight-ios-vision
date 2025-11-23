@@ -19,6 +19,9 @@ struct StreamControls<Additions: View>: View {
     let closeAction: () -> Void
     let toggleKeyboardAction: (() -> Void)?
 
+    @State private var spatialAudioMode: Bool = true // From Razorub
+    @State private var volumeBeforeMute: Float = 127
+    
     @ViewBuilder var additions: () -> Additions
     
     // Initializer
@@ -63,6 +66,19 @@ struct StreamControls<Additions: View>: View {
             Button(viewModel.localized("toggle_dimming"), systemImage: viewModel.streamSettings.dimPassthrough ? "moon.fill" : "moon") {
                 viewModel.streamSettings.dimPassthrough.toggle()
             }
+            // --- SPATIAL AUDIO TOGGLE (From Razorub) ---
+            Button(spatialAudioMode ? "Spatial Audio" : "Direct Audio",
+                systemImage: spatialAudioMode ? "speaker.wave.3" : "headphones") {
+                spatialAudioMode.toggle()
+                if spatialAudioMode {
+                // Switch to spatial audio (sound from screen)
+                    AudioHelpers.fixAudioForSurroundForCurrentWindow()
+                } else {
+                    // Switch to direct audio (sound from ears)
+                    AudioHelpers.fixAudioForDirectStereo()
+                }
+            }
+            // -------------------------------------
             
             // Virtual Keyboard Toggle
             if let toggleAction = toggleKeyboardAction {
