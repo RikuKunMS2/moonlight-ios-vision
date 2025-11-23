@@ -984,15 +984,12 @@ struct RealityKitInputView: UIViewControllerRepresentable {
         if let overlay = vc.view as? RealityKitInputOverlay {
             overlay.streamConfig = streamConfig
             overlay.showSoftwareKeyboard = showKeyboard
-        }
-        
-        // REMOVED: premature becomeFirstResponder() call.
-        // We now handle this in the ViewController's lifecycle methods
-        // to ensure the window exists first.
-        
-        // However, if the keyboard toggle CHANGED to true, we should enforce focus immediately.
-        if showKeyboard && !vc.isFirstResponder {
-            vc.becomeFirstResponder()
+            
+            // If the user actively toggled the keyboard ON, force focus just in case
+            if showKeyboard && !overlay.isFirstResponder {
+                print("[RealityKitInput] Update: Forcing focus on Overlay because toggle is ON")
+                overlay.becomeFirstResponder()
+            }
         }
     }
 }
@@ -1032,7 +1029,7 @@ class RealityKitInputViewController: UIViewController {
             // 2. Mouse Callback
             support.realityKitMouseMovedHandler = { [weak self] (dx: Float, dy: Float) in
                 guard let self = self else { return }
-                (self.view as? RealityKitInputOverlay)?.handleRawMouseDelta(dx: dx, dy: dy)
+                self.inputOverlayView.handleRawMouseDelta(dx: dx, dy: dy)
             }
             
             // 3. Explicitly disable GCKeyboard to prevent double inputs
@@ -1040,7 +1037,7 @@ class RealityKitInputViewController: UIViewController {
         }
     }
     
-    // THE FIX: Enforce focus when the view actually appears
+    // THE FIX: Target the VIEW, not the CONTROLLER for focus
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
@@ -1052,14 +1049,13 @@ class RealityKitInputViewController: UIViewController {
             }
         }
         
-        // Attempt to become first responder immediately
-        if !self.becomeFirstResponder() {
+        // CRITICAL FIX: Call becomeFirstResponder on the VIEW (overlay), not self (controller)
+        if !self.inputOverlayView.becomeFirstResponder() {
             print("[RealityKitInput] Initial becomeFirstResponder failed. Retrying in 0.5s...")
             
-            // Retry after a short delay (common fix for SwiftUI/UIKit integration issues)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 guard let self = self else { return }
-                let success = self.becomeFirstResponder()
+                let success = self.inputOverlayView.becomeFirstResponder()
                 print("[RealityKitInput] Delayed becomeFirstResponder result: \(success)")
             }
         } else {
@@ -1077,7 +1073,8 @@ class RealityKitInputViewController: UIViewController {
         }
     }
     
-    override var canBecomeFirstResponder: Bool { true }
+    // CRITICAL FIX: The Controller itself should NOT be the responder. The View should be.
+    override var canBecomeFirstResponder: Bool { false }
 }
 
 // --- OVERLAY VIEW (With Debug Logging) ---
