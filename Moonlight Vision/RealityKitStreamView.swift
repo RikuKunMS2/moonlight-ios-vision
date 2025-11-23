@@ -399,42 +399,49 @@ struct _RealityKitStreamView: View {
             updateAttachments(attachments: attachments)
         }
     
-        // Updated helper to just handle state updates
-        func updateWindowedLimits(minZ: Float, maxZ: Float, minY: Float, maxY: Float) {
+    func updateWindowedLimits(volSize: SIMD3<Float>, scaleFactor: Float, curveDepth: Float) {
             Task { @MainActor in
-                // Only update state if changed to prevent render loops
-                let newZLimits = minZ...max(minZ, maxZ)
-                let newYLimits = minY...max(minY, maxY)
+                // 1. Calculate Constraints based on Curvature (Mesh) and Size (Window Scale)
+                let screenHalfHeight = (MAX_WIDTH_METERS * self.aspectRatio * scaleFactor) / 2
+                let volHalfHeight = volSize.y / 2
+                let safePadding: Float = 0.05
                 
-                if self.zLimits != newZLimits { self.zLimits = newZLimits }
-                if self.yLimits != newYLimits { self.yLimits = newYLimits }
+                // 2. Calculate Height Limits (Priority: Height)
+                // We ensure the screen stays within the Y volume bounds
+                let maxY = max(0, volHalfHeight - screenHalfHeight - safePadding)
+                let newYLimits = -maxY...maxY
                 
-                // Optional: Auto-correct the slider values if they are wildly out of bounds
-                if self.depthOffset < minZ { self.depthOffset = minZ }
-                if self.depthOffset > maxZ { self.depthOffset = maxZ }
+                // 3. Calculate Depth Limits (Priority: Depth)
+                // We ensure the screen stays within Z volume bounds, accounting for the curve pushing back
+                let volHalfDepth = volSize.z / 2
+                let maxZ = volHalfDepth - safePadding
+                let scaledCurveDepth = curveDepth * scaleFactor
+                // Ensure the back of the curve doesn't clip the back of the volume
+                let minZ = -volHalfDepth + scaledCurveDepth + safePadding
+                let safeMaxZ = max(minZ, maxZ)
+                let newZLimits = minZ...safeMaxZ
+                
+                // 4. Update State & Enforce Bounds (Clamping)
+                
+                // Update Height Limits
+                if self.yLimits != newYLimits {
+                    self.yLimits = newYLimits
+                    
+                    // If the loaded/current height is out of bounds, clamp it immediately
+                    if self.height < newYLimits.lowerBound { self.height = newYLimits.lowerBound }
+                    else if self.height > newYLimits.upperBound { self.height = newYLimits.upperBound }
+                }
+                
+                // Update Depth Limits
+                if self.zLimits != newZLimits {
+                    self.zLimits = newZLimits
+                    
+                    // If the loaded/current depth is out of bounds, clamp it immediately
+                    if self.depthOffset < newZLimits.lowerBound { self.depthOffset = newZLimits.lowerBound }
+                    else if self.depthOffset > newZLimits.upperBound { self.depthOffset = newZLimits.upperBound }
+                }
             }
         }
-    
-    func updateWindowedLimits(volSize: SIMD3<Float>, scaleFactor: Float, curveDepth: Float) {
-        Task { @MainActor in
-            let screenHalfHeight = (MAX_WIDTH_METERS * self.aspectRatio * scaleFactor) / 2
-            let volHalfHeight = volSize.y / 2
-            let safePadding: Float = 0.05
-            
-            let maxY = max(0, volHalfHeight - screenHalfHeight - safePadding)
-            let newYLimits = -maxY...maxY
-            
-            let volHalfDepth = volSize.z / 2
-            let maxZ = volHalfDepth - safePadding
-            let scaledCurveDepth = curveDepth * scaleFactor
-            let minZ = -volHalfDepth + scaledCurveDepth + safePadding
-            let safeMaxZ = max(minZ, maxZ)
-            let newZLimits = minZ...safeMaxZ
-            
-            if self.yLimits != newYLimits { self.yLimits = newYLimits }
-            if self.zLimits != newZLimits { self.zLimits = newZLimits }
-        }
-    }
     
     func updateAttachments(attachments: RealityViewAttachments) {
         // Attachments handled in RealityViewBuilder now
