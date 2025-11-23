@@ -35,6 +35,18 @@ struct UpdatesView: View {
 
                 Section(header: Text(viewModel.localized("latest_updates"))) { // Section for latest updates
                     VStack(alignment: .leading) { // Original VStack for text alignment
+                        Text("Version 11.0.15 (Nov 22, 2025)")
+                                                    .font(.headline)
+                        Text("- Linggan-ua also fixed the parameters saving in the reality kit (the side bar sliders and stuff). This has some knock on effects though, if you have a clipping issue where the stream is kind of clipped, its because the position is set in a way that exceeds the volume size, so just re-adjust it. https://github.com/linggan-ua for his contributions in getting this fixed")
+                            .font(.body)
+                        Text("- fixed reality kit mouse input")
+                            .font(.body)
+                    
+
+                    }
+                    .padding(.vertical) // Keep vertical padding
+                    .frame(maxWidth: .infinity, alignment: .leading) // Ensure VStack takes full width and aligns content to leading
+                    VStack(alignment: .leading) { // Original VStack for text alignment
                         Text("Version 11.0.14 (Nov 19, 2025)")
                                                     .font(.headline)
                         Text("- Really really reworked how the home button works and how the resume works so that its a lot less jank special thanks to https://github.com/linggan-ua for his contributions in getting this fixed")

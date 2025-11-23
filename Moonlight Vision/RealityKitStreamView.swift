@@ -93,8 +93,6 @@ struct _RealityKitStreamView: View {
     
     // Tracks when the texture instance has been replaced
     @State private var textureId: UUID = UUID()
-    // Tracks if the visual entity has been updated to match the new texture
-    @State private var appliedTextureId: UUID? = nil
     
     // Interaction State
     @State private var isInteractive: Bool = true
@@ -210,9 +208,10 @@ struct _RealityKitStreamView: View {
     var activeStreamView: some View {
         GeometryReader3D { proxy in
             ZStack {
-                // 1. GLOBAL INPUT CAPTURE (Moved here)
-                // This ensures it captures input regardless of 3D gaze
-                if let support = controllerSupport {
+                // 1. GLOBAL INPUT CAPTURE (NON-IMMERSIVE ONLY)
+                // In Volume mode (isImmersive=false), we rely on the ZStack to fill the volume.
+                // In Immersive mode (isImmersive=true), we move this to an Attachment (see makeRealityView).
+                if !isImmersive, let support = controllerSupport {
                     RealityKitInputView(
                         streamConfig: streamConfig,
                         controllerSupport: support,
@@ -236,26 +235,41 @@ struct _RealityKitStreamView: View {
     }
     
     @ViewBuilder
-        func makeRealityView(proxy: GeometryProxy3D) -> some View {
-            RealityView { content, attachments in
-                setupRealityView(content: content, attachments: attachments)
-            } update: { content, attachments in
-                updateStreamEntity(content: content, attachments: attachments, proxy: proxy)
-            } attachments: {
-                // Attachments
-                
-                Attachment(id: "controls") {
-                    if isImmersive {
-                        controlsView
-                            .frame(width: 600)
-                            .glassBackgroundEffect()
-                    }
+    func makeRealityView(proxy: GeometryProxy3D) -> some View {
+        RealityView { content, attachments in
+            setupRealityView(content: content, attachments: attachments)
+        } update: { content, attachments in
+            updateStreamEntity(content: content, attachments: attachments, proxy: proxy)
+        } attachments: {
+            // Attachments
+            Attachment(id: "controls") {
+                if isImmersive {
+                    controlsView
+                        .frame(width: 600)
+                        .glassBackgroundEffect()
                 }
             }
-            // NOTE: Removed .handlesGameControllerEvents to prevent conflict with GCMouse
-            .gesture(dragGesture)
-            .gesture(magnifyGesture)
+            
+            // INPUT ATTACHMENT (IMMERSIVE ONLY)
+            // This attaches the input view physically to the screen in 3D space
+            Attachment(id: "input_overlay") {
+                if isImmersive, let support = controllerSupport {
+                    RealityKitInputView(
+                        streamConfig: streamConfig,
+                        controllerSupport: support,
+                        showKeyboard: $showVirtualKeyboard
+                    )
+                    // We give it a high-res fixed frame.
+                    // We will scale this down to match MAX_WIDTH_METERS in updateStreamEntity.
+                    .frame(width: 1920, height: 1920 / CGFloat(aspectRatio))
+                    .opacity(0.01) // Invisible but hittable
+                }
+            }
         }
+        // NOTE: Removed .handlesGameControllerEvents to prevent conflict with GCMouse
+        .gesture(dragGesture)
+        .gesture(magnifyGesture)
+    }
     
     // MARK: - Logic Helpers
     
@@ -293,7 +307,6 @@ struct _RealityKitStreamView: View {
        
         screen = ModelEntity(mesh: mesh, materials: [])
 
-        // FIX: Only apply surfaceMaterial if it exists AND we are actually in 3D mode
         if videoMode == .sideBySide3D, let material = surfaceMaterial {
             screen.model?.materials = [material]
         } else {
@@ -319,6 +332,15 @@ struct _RealityKitStreamView: View {
             screen.addChild(controls)
             let screenHeight = MAX_WIDTH_METERS * aspectRatio
             controls.position = [0, -(screenHeight / 2.0) - 0.25, 0.1]
+        }
+        
+        // Setup Input Overlay (Immersive Only)
+        // We parent it to the screen so it moves/scales with the screen
+        if isImmersive, let inputEnt = attachments.entity(for: "input_overlay") {
+            screen.addChild(inputEnt)
+            // Position slightly in front to prevent z-fighting (though it's invisible)
+            // and ensures it catches the raycast first
+            inputEnt.position = [0, 0, 0.01]
         }
     }
     
@@ -347,10 +369,23 @@ struct _RealityKitStreamView: View {
                 
                 blackOutSphere.components.set(OpacityComponent(opacity: immersionAmount))
                 blackOutSphere.position = .zero
-            } else {
-                // We can revert to the standard logic since the Volume Size is now guaranteed
-                // to be 2m (thanks to the Invisible Tent Pole).
                 
+                // --- UPDATE INPUT OVERLAY SCALE ---
+                // The input overlay is attached to 'screen', so it inherits 'immersiveScale' automatically.
+                // However, we need to ensure the input entity's local size matches the mesh size (2 meters).
+                if let inputEnt = attachments.entity(for: "input_overlay") {
+                    // We defined the SwiftUI frame as 1920 px wide.
+                    // We want it to fill MAX_WIDTH_METERS (2.0).
+                    // First, get the entity's native size (based on points)
+                    let bounds = inputEnt.visualBounds(relativeTo: nil)
+                    if bounds.extents.x > 0 {
+                        let scale = MAX_WIDTH_METERS / bounds.extents.x
+                        inputEnt.scale = SIMD3<Float>(scale, scale, 1)
+                    }
+                }
+                
+            } else {
+                // Volume Mode Logic (Unchanged)
                 let volSize = content.convert(proxy.frame(in: .local), from: .local, to: .scene).extents
                 let scaleFactor = volSize.x / 2.0
                 screen.scale = SIMD3<Float>(repeating: scaleFactor)
