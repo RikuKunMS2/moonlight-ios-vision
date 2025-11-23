@@ -138,7 +138,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             __strong typeof(weakSelf) strongSelf = weakSelf;
             if (!strongSelf) return;
 
-            //Log(LOG_I, @"Mouse disconnected!");
+            Log(LOG_I, @"Mouse disconnected!");
 
             GCMouse* mouse = note.object;
             [strongSelf unregisterMouseCallbacks:mouse];
@@ -1029,10 +1029,10 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                     
 //                    leftStickX = gamepad.leftThumbstick.xAxis.value * 0x7FFE;
 //                    leftStickY = gamepad.leftThumbstick.yAxis.value * 0x7FFE;
-//                    
+//
 //                    rightStickX = gamepad.rightThumbstick.xAxis.value * 0x7FFE;
 //                    rightStickY = gamepad.rightThumbstick.yAxis.value * 0x7FFE;
-//                    
+//
 //                    leftTrigger = gamepad.leftTrigger.value * 0xFF;
 //                    rightTrigger = gamepad.rightTrigger.value * 0xFF;
                     
@@ -1067,11 +1067,6 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 
 -(void) registerMouseCallbacks:(GCMouse*) mouse API_AVAILABLE(ios(14.0)) {
     mouse.mouseInput.mouseMovedHandler = ^(GCMouseInput * _Nonnull mouse, float deltaX, float deltaY) {
-        
-        // --- ADD CHECK HERE ---
-        if (!self.relativeMouseMode) { return; }
-        // ----------------------
-
         self->accumulatedDeltaX += deltaX / MOUSE_SPEED_DIVISOR;
         self->accumulatedDeltaY += -deltaY / MOUSE_SPEED_DIVISOR;
         
@@ -1087,18 +1082,12 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     };
     
     mouse.mouseInput.leftButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
-        // --- ADD CHECK HERE ---
-        if (!self.relativeMouseMode) { return; }
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_LEFT);
     };
-    
     mouse.mouseInput.middleButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
-        if (!self.relativeMouseMode) { return; }
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_MIDDLE);
     };
-    
     mouse.mouseInput.rightButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
-        if (!self.relativeMouseMode) { return; }
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
     };
     
@@ -1323,8 +1312,8 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     _gcEventInteraction = [[GCEventInteraction alloc] init];
     _gcEventInteraction.handledEventTypes = GCUIEventTypeGamepad;
     
-    //Log(LOG_I, @"Number of supported controllers connected: %d", [ControllerSupport getGamepadCount]);
-    //Log(LOG_I, @"Multi-controller: %d", _multiController);
+    Log(LOG_I, @"Number of supported controllers connected: %d", [ControllerSupport getGamepadCount]);
+    Log(LOG_I, @"Multi-controller: %d", _multiController);
     
     _gcEventInteraction = [[GCEventInteraction alloc] init];
     _gcEventInteraction.handledEventTypes = GCUIEventTypeGamepad;
@@ -1429,7 +1418,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             [self->_delegate mousePresenceChanged];
         }];
         _mouseDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            //Log(LOG_I, @"Mouse disconnected!");
+            Log(LOG_I, @"Mouse disconnected!");
             
             GCMouse* mouse = note.object;
             
@@ -1443,13 +1432,13 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             [self->_delegate mousePresenceChanged];
         }];
         _keyboardConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            //Log(LOG_I, @"Keyboard connected!");
+            Log(LOG_I, @"Keyboard connected!");
             
             // Re-evaluate the on-screen control mode
             [self updateAutoOnScreenControlMode];
         }];
         _keyboardDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            //Log(LOG_I, @"Keyboard disconnected!");
+            Log(LOG_I, @"Keyboard disconnected!");
 
             // Re-evaluate the on-screen control mode
             [self updateAutoOnScreenControlMode];

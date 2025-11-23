@@ -65,11 +65,6 @@ struct RealityKitStreamView: View {
                 } else {
                     dismissWindow(id: "realitykitStreamingWindow")
                 }
-                
-                // REMOVED: openWindow(id: "mainView")
-                // We removed this because the child view (_RealityKitStreamView)
-                // already opens the main window before calling the close action.
-                // Leaving it here causes a Double Window bug.
             }
         }
     }
@@ -97,9 +92,6 @@ struct _RealityKitStreamView: View {
         @State private var textureId: UUID = UUID()
         // Tracks if the visual entity has been updated to match the new texture
         @State private var appliedTextureId: UUID? = nil
-    
-    // --- Mouse Mode State ---
-    @State private var mouseInputMode: MouseInputMode = .absolute
     
     // Interaction State
     @State private var isInteractive: Bool = true
@@ -196,10 +188,6 @@ struct _RealityKitStreamView: View {
             .onChange(of: viewModel.streamSettings.brightness) { _, newValue in
                 safeHDRSettings.value = HDRParams(boost: newValue, contrast: 1.0, saturation: 1.0, brightness: 0.0)
             }
-            .onChange(of: mouseInputMode) { _, newMode in
-                // Ensure ControllerSupport has property 'relativeMouseMode' added in Obj-C
-                controllerSupport?.relativeMouseMode = (newMode == .relative)
-            }
             .onAppear {
                 setupStreamOnAppear()
             }
@@ -229,38 +217,36 @@ struct _RealityKitStreamView: View {
     }
     
     @ViewBuilder
-    func makeRealityView(proxy: GeometryProxy3D) -> some View {
-        RealityView { content, attachments in
-            setupRealityView(content: content, attachments: attachments)
-        } update: { content, attachments in
-            updateStreamEntity(content: content, attachments: attachments, proxy: proxy)
-        } attachments: {
-            Attachment(id: "input_capture") {
-                if let support = controllerSupport {
-                    InputCaptureView(
-                        controllerSupport: support,
-                        showKeyboard: $showVirtualKeyboard,
-                        mouseInputMode: $mouseInputMode,
-                        curvature: viewModel.streamSettings.realitykitRendererCurvature
-                    )
-                    .frame(width: 2000, height: 2000 * CGFloat(aspectRatio))
-                    .opacity(0.001)
+        func makeRealityView(proxy: GeometryProxy3D) -> some View {
+            RealityView { content, attachments in
+                setupRealityView(content: content, attachments: attachments)
+            } update: { content, attachments in
+                updateStreamEntity(content: content, attachments: attachments, proxy: proxy)
+            } attachments: {
+                Attachment(id: "input_capture") {
+                    if let support = controllerSupport {
+                        InputCaptureView(
+                            controllerSupport: support,
+                            showKeyboard: $showVirtualKeyboard,
+                            curvature: viewModel.streamSettings.realitykitRendererCurvature
+                        )
+                        .frame(width: 2000, height: 2000 * CGFloat(aspectRatio))
+                        .opacity(0.001)
+                    }
+                }
+                
+                Attachment(id: "controls") {
+                    if isImmersive {
+                        controlsView
+                            .frame(width: 600)
+                            .glassBackgroundEffect()
+                    }
                 }
             }
-            
-            Attachment(id: "controls") {
-                if isImmersive {
-                    controlsView
-                        .frame(width: 600)
-                        .glassBackgroundEffect()
-                }
-            }
+            .handlesGameControllerEvents(matching: .gamepad)
+            .gesture(dragGesture)
+            .gesture(magnifyGesture)
         }
-        .handlesGameControllerEvents(matching: .gamepad)
-        .gesture(dragGesture)
-        .gesture(magnifyGesture)
-    }
-    
     // MARK: - Logic Helpers
     
     func triggerCloseSequence() {
@@ -537,31 +523,30 @@ struct _RealityKitStreamView: View {
     }
     
     @ViewBuilder
-    var controlsView: some View {
-        StreamControls(
-            horizontal: false,
-            streamConfig: $streamConfig,
-            mouseInputMode: $mouseInputMode,
-            isKeyboardActive: showVirtualKeyboard,
-            closeAction: {
-                if streamConfig != nil {
-                    viewModel.savedStreamConfigForResume = streamConfig
-                }
-                needsResume = false
-                hasPerformedTeardown = false
-                viewModel.activelyStreaming = false
-                self._streamMan?.stopStream()
-                self.controllerSupport?.cleanup()
-                
-                // Use central close sequence
-                triggerCloseSequence()
-            },
-            toggleKeyboardAction: { showVirtualKeyboard.toggle() }
-        ) {
-            // Additions (HDR, Flatten, etc.)
-            settingsControls
+        var controlsView: some View {
+            StreamControls(
+                horizontal: false,
+                streamConfig: $streamConfig,
+                isKeyboardActive: showVirtualKeyboard,
+                closeAction: {
+                    if streamConfig != nil {
+                        viewModel.savedStreamConfigForResume = streamConfig
+                    }
+                    needsResume = false
+                    hasPerformedTeardown = false
+                    viewModel.activelyStreaming = false
+                    self._streamMan?.stopStream()
+                    self.controllerSupport?.cleanup()
+                    
+                    // Use central close sequence
+                    triggerCloseSequence()
+                },
+                toggleKeyboardAction: { showVirtualKeyboard.toggle() }
+            ) {
+                // Additions (HDR, Flatten, etc.)
+                settingsControls
+            }
         }
-    }
     
     @ViewBuilder
     var settingsControls: some View {

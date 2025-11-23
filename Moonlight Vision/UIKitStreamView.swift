@@ -33,7 +33,6 @@ struct UIKitStreamView: View {
                         StreamControls(
                             horizontal: true,
                             streamConfig: configBinding,
-                            mouseInputMode: .constant(.absolute),
                             isKeyboardActive: false,
                             closeAction: {
                                 handleHomeButtonClose()
