@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+<<<<<<< Updated upstream
+=======
+		3E1828712ED2F9490027FF43 /* SpatialAudioRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 3E1828702ED2F9460027FF43 /* SpatialAudioRenderer.m */; };
+		3E1828722ED2F9490027FF43 /* SpatialAudioRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 3E1828702ED2F9460027FF43 /* SpatialAudioRenderer.m */; };
+		3E1828732ED2F9490027FF43 /* SpatialAudioRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 3E1828702ED2F9460027FF43 /* SpatialAudioRenderer.m */; };
+		3E3791CA2ED2A4F5004B22A2 /* RealityKitStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E3791C92ED2A4F5004B22A2 /* RealityKitStreamView.swift */; };
+>>>>>>> Stashed changes
 		3E4F94692DC2E2D6006CF0C1 /* ComputerViewWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E4F94682DC2E2D6006CF0C1 /* ComputerViewWrapper.swift */; };
 		3E86FC1D2D4FFDF20016BB8E /* UpdatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */; };
 		3E9440F62D4EB9ED0047E0C2 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = 3E9440F52D4EB9ED0047E0C2 /* OpenSSL */; };
@@ -282,6 +289,12 @@
 
 /* Begin PBXFileReference section */
 		3E0863FF2ECD6BB7006549CB /* Moonlight XrOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Moonlight XrOS.entitlements"; sourceTree = "<group>"; };
+<<<<<<< Updated upstream
+=======
+		3E18286F2ED2F9350027FF43 /* SpatialAudioRenderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SpatialAudioRenderer.h; sourceTree = "<group>"; };
+		3E1828702ED2F9460027FF43 /* SpatialAudioRenderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SpatialAudioRenderer.m; sourceTree = "<group>"; };
+		3E3791C92ED2A4F5004B22A2 /* RealityKitStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealityKitStreamView.swift; sourceTree = "<group>"; };
+>>>>>>> Stashed changes
 		3E4F94682DC2E2D6006CF0C1 /* ComputerViewWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerViewWrapper.swift; sourceTree = "<group>"; };
 		3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatesView.swift; sourceTree = "<group>"; };
 		3EA550B42ECECCE200E2BC86 /* InputCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputCaptureView.swift; sourceTree = "<group>"; };
@@ -612,6 +625,25 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+<<<<<<< Updated upstream
+=======
+		04CFED302ED20FE000A423F7 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
+		3E18286E2ED2F9240027FF43 /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				3E18286F2ED2F9350027FF43 /* SpatialAudioRenderer.h */,
+				3E1828702ED2F9460027FF43 /* SpatialAudioRenderer.m */,
+			);
+			path = Audio;
+			sourceTree = "<group>";
+		};
+>>>>>>> Stashed changes
 		9896219423D15C2900211983 /* X1Kit */ = {
 			isa = PBXGroup;
 			children = (
@@ -761,6 +793,7 @@
 			isa = PBXGroup;
 			children = (
 				D4746EEA1CBC740C006FB401 /* Moonlight-Bridging-Header.h */,
+				3E18286E2ED2F9240027FF43 /* Audio */,
 				FB89460419F646E200339C8A /* Crypto */,
 				FB89460919F646E200339C8A /* Input */,
 				FB89460E19F646E200339C8A /* Network */,
@@ -1340,6 +1373,7 @@
 				F71801422B65483D00A9336B /* AppsView.swift in Sources */,
 				F7199B002B72FC1400E6D62D /* TemporarySettings.swift in Sources */,
 				F7A119372B5DDF73001E8686 /* AppAssetResponse.m in Sources */,
+				3E1828722ED2F9490027FF43 /* SpatialAudioRenderer.m in Sources */,
 				F7A119382B5DDF73001E8686 /* DataManager.m in Sources */,
 				F7A1193A2B5DDF73001E8686 /* ServerInfoResponse.m in Sources */,
 				F778956E2B65975900F02568 /* SDLMainWrapper.m in Sources */,
@@ -1360,6 +1394,7 @@
 				FB1A6819213284FB00507771 /* UIComputerView.m in Sources */,
 				FB1A681A213284FB00507771 /* UIAppView.m in Sources */,
 				F7199AFF2B72FC1400E6D62D /* TemporarySettings.swift in Sources */,
+				3E1828732ED2F9490027FF43 /* SpatialAudioRenderer.m in Sources */,
 				FB1A681B213284FB00507771 /* ComputerScrollView.m in Sources */,
 				FB1A681C213284FB00507771 /* AppCollectionView.m in Sources */,
 				9865DC37213287FE0005B9B9 /* StreamFrameViewController.m in Sources */,
@@ -1426,6 +1461,7 @@
 				FB4678FF1A565DAC00377732 /* WakeOnLanManager.m in Sources */,
 				FB53E1431BE5DC4400CD6ECE /* IdManager.m in Sources */,
 				9897B6A1221260EF00966419 /* Controller.m in Sources */,
+				3E1828712ED2F9490027FF43 /* SpatialAudioRenderer.m in Sources */,
 				FB89462919F646E200339C8A /* mkcert.c in Sources */,
 				FB9AFD281A7C84ED00872C98 /* HttpResponse.m in Sources */,
 				FBDE86E019F7A837001C18A8 /* UIComputerView.m in Sources */,
