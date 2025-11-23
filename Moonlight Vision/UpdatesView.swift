@@ -41,8 +41,6 @@ struct UpdatesView: View {
                             .font(.body)
                         Text("- linggan-ua added localization options, right now we support chinese but other contributers are now free to pr additional language support")
                             .font(.body)
-                        Text("- Added a target icon thing that changes how the mouse is captured in reality kit mode to help people lock their mice in to play FPS shooters")
-                            .font(.body)
                         Text("- AV1 is now supported in reality kit mode, apparently I wrote the code but never bothered to finish it because it wasn't supported at the time and av1 was just returning nil oops. I don't have an m5 version to test so if its still broken please ping me")
                             .font(.body)
                         Text("- Added support for higher bitrate configurations, this is not tested, you may have issues depending on your network configuration and I don't know what the limits of m2/m5 when it comes to processing higher bitrates")

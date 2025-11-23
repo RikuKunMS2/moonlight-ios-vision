@@ -122,37 +122,80 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     }];
 
     if (@available(iOS 14.0, tvOS 14.0, *)) {
-        _mouseConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            __strong typeof(weakSelf) strongSelf = weakSelf;
-            if (!strongSelf) return;
-
-            Log(LOG_I, @"Mouse connected!");
-
-            GCMouse* mouse = note.object;
-
-            [strongSelf registerMouseCallbacks:mouse];
-            [strongSelf updateAutoOnScreenControlMode];
-            [strongSelf->_delegate mousePresenceChanged];
-        }];
-        _mouseDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            __strong typeof(weakSelf) strongSelf = weakSelf;
-            if (!strongSelf) return;
-
-            Log(LOG_I, @"Mouse disconnected!");
-
-            GCMouse* mouse = note.object;
-            [strongSelf unregisterMouseCallbacks:mouse];
-            [strongSelf updateAutoOnScreenControlMode];
-            [strongSelf->_delegate mousePresenceChanged];
-        }];
-        _keyboardConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            [weakSelf updateAutoOnScreenControlMode];
-        }];
-        _keyboardDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-            [weakSelf updateAutoOnScreenControlMode];
-        }];
+            
+            // --- MOUSE OBSERVERS ---
+            _mouseConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+                __strong typeof(weakSelf) strongSelf = weakSelf;
+                if (!strongSelf) return;
+                Log(LOG_I, @"Mouse connected!");
+                
+                GCMouse* mouse = note.object;
+                [strongSelf registerMouseCallbacks:mouse];
+                [strongSelf updateAutoOnScreenControlMode];
+                [strongSelf->_delegate mousePresenceChanged];
+            }];
+            
+            _mouseDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+                __strong typeof(weakSelf) strongSelf = weakSelf;
+                if (!strongSelf) return;
+                Log(LOG_I, @"Mouse disconnected!");
+                
+                GCMouse* mouse = note.object;
+                [strongSelf unregisterMouseCallbacks:mouse];
+                [strongSelf updateAutoOnScreenControlMode];
+                [strongSelf->_delegate mousePresenceChanged];
+            }];
+            
+            // --- KEYBOARD OBSERVERS (FIXED) ---
+            _keyboardConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+                __strong typeof(weakSelf) strongSelf = weakSelf;
+                if (!strongSelf) return;
+                
+                Log(LOG_I, @"Keyboard connected!");
+                GCKeyboard *keyboard = note.object;
+                [strongSelf registerKeyboardCallbacks:keyboard]; // Fixed: using strongSelf
+                [strongSelf updateAutoOnScreenControlMode];
+            }];
+            
+            _keyboardDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+                __strong typeof(weakSelf) strongSelf = weakSelf;
+                if (!strongSelf) return;
+                
+                Log(LOG_I, @"Keyboard disconnected!");
+                GCKeyboard *keyboard = note.object;
+                [strongSelf unregisterKeyboardCallbacks:keyboard]; // Fixed: using strongSelf
+                [strongSelf updateAutoOnScreenControlMode];
+            }];
+        }
     }
-}
+
+    // --- KEYBOARD REGISTRATION LOGIC ---
+
+    -(void) registerKeyboardCallbacks:(GCKeyboard*) keyboard API_AVAILABLE(ios(14.0)) {
+        __weak typeof(self) weakSelf = self;
+        
+        keyboard.keyboardInput.keyChangedHandler = ^(GCKeyboardInput * _Nonnull input, GCControllerButtonInput * _Nonnull key, GCKeyCode keyCode, BOOL pressed) {
+            __strong typeof(weakSelf) strongSelf = weakSelf;
+            if (!strongSelf) return;
+            
+            // --- REALITYKIT PASSTHROUGH ---
+            if (strongSelf.realityKitMode) {
+                // Optional Logging
+                // NSLog(@"[ControllerSupport] Key Event: Code %d, Pressed: %d", (int)keyCode, pressed);
+                
+                if (strongSelf.realityKitKeyboardHandler) {
+                    strongSelf.realityKitKeyboardHandler((int)keyCode, pressed);
+                }
+                return; // Stop processing here if in RealityKit mode
+            }
+            
+            // Add standard iOS keyboard handling here if you need it for the 2D menu
+        };
+    }
+
+    -(void) unregisterKeyboardCallbacks:(GCKeyboard*) keyboard API_AVAILABLE(ios(14.0)) {
+        keyboard.keyboardInput.keyChangedHandler = nil;
+    }
 
 // Attach the interaction to the view
 - (void)attachGCEventInteractionToView:(UIView *)view {
@@ -1066,48 +1109,77 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 }
 
 -(void) registerMouseCallbacks:(GCMouse*) mouse API_AVAILABLE(ios(14.0)) {
+    
+    __weak typeof(self) weakSelf = self;
+    
     mouse.mouseInput.mouseMovedHandler = ^(GCMouseInput * _Nonnull mouse, float deltaX, float deltaY) {
-        self->accumulatedDeltaX += deltaX / MOUSE_SPEED_DIVISOR;
-        self->accumulatedDeltaY += -deltaY / MOUSE_SPEED_DIVISOR;
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return;
+
+        // --- LOGGING: Check Console for this to confirm hardware capture ---
+        // We only log if significant movement to prevent console flooding of 0.000001 values
+        if (fabs(deltaX) > 0.01 || fabs(deltaY) > 0.01) {
+            NSLog(@"[ControllerSupport] GCMouse Moved - Delta X: %.4f, Delta Y: %.4f", deltaX, deltaY);
+        }
+
+        // --- REALITYKIT HANDLING ---
+        // If we are in the Volume, send data to Swift and skip standard processing
+        if (strongSelf.realityKitMode) {
+            if (strongSelf.realityKitMouseMovedHandler) {
+                strongSelf.realityKitMouseMovedHandler(deltaX, deltaY);
+            }
+            return;
+        }
+
+        // --- STANDARD LOGIC (Existing) ---
+        strongSelf->accumulatedDeltaX += deltaX / MOUSE_SPEED_DIVISOR;
+        strongSelf->accumulatedDeltaY += -deltaY / MOUSE_SPEED_DIVISOR;
         
-        short truncatedDeltaX = (short)self->accumulatedDeltaX;
-        short truncatedDeltaY = (short)self->accumulatedDeltaY;
+        short truncatedDeltaX = (short)strongSelf->accumulatedDeltaX;
+        short truncatedDeltaY = (short)strongSelf->accumulatedDeltaY;
         
         if (truncatedDeltaX != 0 || truncatedDeltaY != 0) {
             LiSendMouseMoveEvent(truncatedDeltaX, truncatedDeltaY);
             
-            self->accumulatedDeltaX -= truncatedDeltaX;
-            self->accumulatedDeltaY -= truncatedDeltaY;
+            strongSelf->accumulatedDeltaX -= truncatedDeltaX;
+            strongSelf->accumulatedDeltaY -= truncatedDeltaY;
         }
     };
     
+    // --- BUTTONS WITH LOGGING ---
+    
     mouse.mouseInput.leftButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
+        NSLog(@"[ControllerSupport] Left Click: %@", pressed ? @"DOWN" : @"UP");
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_LEFT);
     };
+    
     mouse.mouseInput.middleButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
+        NSLog(@"[ControllerSupport] Middle Click: %@", pressed ? @"DOWN" : @"UP");
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_MIDDLE);
     };
+    
     mouse.mouseInput.rightButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
+        NSLog(@"[ControllerSupport] Right Click: %@", pressed ? @"DOWN" : @"UP");
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
     };
     
     if (mouse.mouseInput.auxiliaryButtons != nil) {
         if (mouse.mouseInput.auxiliaryButtons.count >= 1) {
             mouse.mouseInput.auxiliaryButtons[0].pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
+                NSLog(@"[ControllerSupport] Aux1 Click: %@", pressed ? @"DOWN" : @"UP");
                 LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_X1);
             };
         }
         if (mouse.mouseInput.auxiliaryButtons.count >= 2) {
             mouse.mouseInput.auxiliaryButtons[1].pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
+                NSLog(@"[ControllerSupport] Aux2 Click: %@", pressed ? @"DOWN" : @"UP");
                 LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_X2);
             };
         }
     }
     
-    // We use UIPanGestureRecognizer on iPadOS because it allows us to distinguish
-    // between discrete and continuous scroll events and also works around a bug
-    // in iPadOS 15 where discrete scroll events are dropped. tvOS only supports
-    // GCMouse for mice, so we will have to just use it and hope for the best.
+    // --- SCROLLING ---
+    // Note: tvOS only logic preserved, but you might need iOS logic here for VisionOS too.
 #if TARGET_OS_TV
     mouse.mouseInput.scroll.xAxis.valueChangedHandler = ^(GCControllerAxisInput * _Nonnull axis, float value) {
         self->accumulatedScrollX += value;
@@ -1131,6 +1203,16 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             
             self->accumulatedScrollY -= truncatedScrollY;
         }
+    };
+#else
+    // Added basic scroll logging for non-TV devices (iOS/VisionOS)
+    mouse.mouseInput.scroll.xAxis.valueChangedHandler = ^(GCControllerAxisInput * _Nonnull axis, float value) {
+        if (fabs(value) > 0.01) NSLog(@"[ControllerSupport] Scroll X: %f", value);
+        LiSendHighResHScrollEvent((short)(-value * 120.0f));
+    };
+    mouse.mouseInput.scroll.yAxis.valueChangedHandler = ^(GCControllerAxisInput * _Nonnull axis, float value) {
+        if (fabs(value) > 0.01) NSLog(@"[ControllerSupport] Scroll Y: %f", value);
+        LiSendHighResScrollEvent((short)(value * 120.0f));
     };
 #endif
 }
@@ -1434,11 +1516,21 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
         _keyboardConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
             Log(LOG_I, @"Keyboard connected!");
             
+            // --- ADD THIS ---
+                        GCKeyboard *keyboard = note.object;
+                        [self registerKeyboardCallbacks:keyboard];
+                        // ----------------
+            
             // Re-evaluate the on-screen control mode
             [self updateAutoOnScreenControlMode];
         }];
         _keyboardDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
             Log(LOG_I, @"Keyboard disconnected!");
+            
+            // --- ADD THIS ---
+                        GCKeyboard *keyboard = note.object;
+                        [self unregisterKeyboardCallbacks:keyboard];
+                        // ----------------
 
             // Re-evaluate the on-screen control mode
             [self updateAutoOnScreenControlMode];

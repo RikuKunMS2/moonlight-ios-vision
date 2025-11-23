@@ -23,6 +23,7 @@
 #import "Limelight.h"
 #import "HDRParsingUtils.h"
 #import "KeyboardSupport.h"
+#import "ControllerSupport.h"
 
 #import "MoonlightApp+CoreDataClass.h"
 #import "MoonlightHost+CoreDataClass.h"

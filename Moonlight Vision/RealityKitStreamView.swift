@@ -15,6 +15,7 @@ let MAX_WIDTH_METERS: Float = 2
 // Limited to ~75 degrees (1.3 rad) to prevent distortion
 let MAX_CURVE_ANGLE: Float = 1.3
 
+// MARK: - Delegate
 @objc
 class DummyControllerDelegate: NSObject, ControllerSupportDelegate {
     func gamepadPresenceChanged() {}
@@ -22,6 +23,7 @@ class DummyControllerDelegate: NSObject, ControllerSupportDelegate {
     func streamExitRequested() {}
 }
 
+// MARK: - Wrapper View
 struct RealityKitStreamView: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.openWindow) private var openWindow
@@ -70,6 +72,7 @@ struct RealityKitStreamView: View {
     }
 }
 
+// MARK: - Main Logic View
 struct _RealityKitStreamView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
@@ -89,9 +92,9 @@ struct _RealityKitStreamView: View {
     @State var controllerSupport: ControllerSupport?
     
     // Tracks when the texture instance has been replaced
-        @State private var textureId: UUID = UUID()
-        // Tracks if the visual entity has been updated to match the new texture
-        @State private var appliedTextureId: UUID? = nil
+    @State private var textureId: UUID = UUID()
+    // Tracks if the visual entity has been updated to match the new texture
+    @State private var appliedTextureId: UUID? = nil
     
     // Interaction State
     @State private var isInteractive: Bool = true
@@ -207,8 +210,24 @@ struct _RealityKitStreamView: View {
     var activeStreamView: some View {
         GeometryReader3D { proxy in
             ZStack {
+                // 1. GLOBAL INPUT CAPTURE (Moved here)
+                // This ensures it captures input regardless of 3D gaze
+                if let support = controllerSupport {
+                    RealityKitInputView(
+                        streamConfig: streamConfig,
+                        controllerSupport: support,
+                        showKeyboard: $showVirtualKeyboard
+                    )
+                    // Make it cover the whole volume so it stays active
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // Invisible, but present in the hierarchy to catch events
+                    .opacity(0.01)
+                }
+
+                // 2. The 3D Screen
                 makeRealityView(proxy: proxy)
                 
+                // 3. Keyboard Overlay
                 if showVirtualKeyboard {
                     virtualKeyboardOverlay
                 }
@@ -223,17 +242,7 @@ struct _RealityKitStreamView: View {
             } update: { content, attachments in
                 updateStreamEntity(content: content, attachments: attachments, proxy: proxy)
             } attachments: {
-                Attachment(id: "input_capture") {
-                    if let support = controllerSupport {
-                        InputCaptureView(
-                            controllerSupport: support,
-                            showKeyboard: $showVirtualKeyboard,
-                            curvature: viewModel.streamSettings.realitykitRendererCurvature
-                        )
-                        .frame(width: 2000, height: 2000 * CGFloat(aspectRatio))
-                        .opacity(0.001)
-                    }
-                }
+                // Attachments
                 
                 Attachment(id: "controls") {
                     if isImmersive {
@@ -243,16 +252,17 @@ struct _RealityKitStreamView: View {
                     }
                 }
             }
-            .handlesGameControllerEvents(matching: .gamepad)
+            // NOTE: Removed .handlesGameControllerEvents to prevent conflict with GCMouse
             .gesture(dragGesture)
             .gesture(magnifyGesture)
         }
+    
     // MARK: - Logic Helpers
     
     func triggerCloseSequence() {
         // 1. Open Main Menu FIRST to ensure user has somewhere to go
         openWindow(id: "mainView")
-        
+       
         // 2. Delay the teardown slightly to allow the new window to appear
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.closeAction()
@@ -276,11 +286,11 @@ struct _RealityKitStreamView: View {
             resolution: (100,100),
             curveMagnitude: viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier
         )
-        
+       
         let colDepth: Float = isImmersive ? 0.1 : 0.001
         let colBox = ShapeResource.generateBox(width: 2, height: 2 * aspectRatio, depth: colDepth)
             .offsetBy(translation: .init(x: 0, y: -0.43, z: 0))
-        
+       
         screen = ModelEntity(mesh: mesh, materials: [])
 
         // FIX: Only apply surfaceMaterial if it exists AND we are actually in 3D mode
@@ -289,28 +299,22 @@ struct _RealityKitStreamView: View {
         } else {
             screen.model?.materials = [UnlitMaterial(texture: self.texture)]
         }
-        
+       
         screen.collision = CollisionComponent(shapes: [colBox], mode: .colliding)
         screen.components.set(InputTargetComponent())
         content.add(screen)
-        
+       
         // Setup "Black Out" Sphere (Immersive Only)
         if isImmersive {
             let sphereMesh = MeshResource.generateSphere(radius: 100) // 100m radius
             let blackMaterial = UnlitMaterial(color: .black)
-            
+           
             blackOutSphere = ModelEntity(mesh: sphereMesh, materials: [blackMaterial])
             blackOutSphere.scale = SIMD3<Float>(-1, 1, 1)
             blackOutSphere.components.set(OpacityComponent(opacity: 0.0))
             content.add(blackOutSphere)
         }
-        
-        // Attachments
-        if let inputAttachment = attachments.entity(for: "input_capture") {
-            screen.addChild(inputAttachment)
-            inputAttachment.position = [0, 0, 0.001]
-        }
-        
+       
         if isImmersive, let controls = attachments.entity(for: "controls") {
             screen.addChild(controls)
             let screenHeight = MAX_WIDTH_METERS * aspectRatio
@@ -398,22 +402,7 @@ struct _RealityKitStreamView: View {
     }
     
     func updateAttachments(attachments: RealityViewAttachments) {
-        if let inputAttachment = attachments.entity(for: "input_capture") {
-            let attachmentWidthPoints: Float = 2000.0
-            let physicalWidth: Float = MAX_WIDTH_METERS
-            let requiredScale = physicalWidth / attachmentWidthPoints
-            inputAttachment.scale = SIMD3<Float>(requiredScale, requiredScale, requiredScale)
-            
-            if isInteractive {
-                if !inputAttachment.components.has(InputTargetComponent.self) {
-                    inputAttachment.components.set(InputTargetComponent())
-                }
-            } else {
-                if inputAttachment.components.has(InputTargetComponent.self) {
-                    inputAttachment.components.remove(InputTargetComponent.self)
-                }
-            }
-        }
+        // Attachments handled in RealityViewBuilder now
     }
     
     var dragGesture: some Gesture {
@@ -668,10 +657,10 @@ struct _RealityKitStreamView: View {
                     videoMode = val ? .sideBySide3D : .standard2D
                     if videoMode == .sideBySide3D {
                        screen.model?.materials = [surfaceMaterial!]
-                   } else {
+                } else {
                        screen.model?.materials = [UnlitMaterial(texture: texture)]
-                   }
                 }
+            }
             )) { Text(viewModel.localized("3d_mode")) }.toggleStyle(.button)
         }
         
@@ -845,7 +834,7 @@ struct _RealityKitStreamView: View {
             
             // CHECK FOR INVALID HEIGHT
             if height.isNaN || height == 0 {
-                 print("🚨 [GenMesh] Calculated Height is INVALID (Width: \(width) * Ratio: \(aspectRatio))")
+               print("🚨 [GenMesh] Calculated Height is INVALID (Width: \(width) * Ratio: \(aspectRatio))")
             }
 
             let vertexCount = Int(resolution.0 * resolution.1)
@@ -936,5 +925,447 @@ class ThreadSafeHDRSettings: @unchecked Sendable {
     var value: HDRParams {
         get { lock.lock(); defer { lock.unlock() }; return params }
         set { lock.lock(); defer { lock.unlock() }; params = newValue }
+    }
+}
+
+// MARK: - INTEGRATED INPUT CONTROLLER
+// ---------------------------------------------------------
+
+// --- C-Function Bridges (Manual Linking) ---
+@_silgen_name("LiSendMouseButtonEvent")
+func LiSendMouseButtonEvent(_ action: Int8, _ button: Int32) -> Int32
+
+@_silgen_name("LiSendMousePositionEvent")
+func LiSendMousePositionEvent(_ x: Int16, _ y: Int16, _ width: Int16, _ height: Int16) -> Int32
+
+@_silgen_name("LiSendHighResScrollEvent")
+func LiSendHighResScrollEvent(_ scrollAmount: Int16) -> Int32
+
+@_silgen_name("LiSendHighResHScrollEvent")
+func LiSendHighResHScrollEvent(_ scrollAmount: Int16) -> Int32
+
+@_silgen_name("LiSendKeyboardEvent")
+func LiSendKeyboardEvent(_ keyCode: Int16, _ keyAction: Int8, _ modifiers: Int8) -> Int32
+
+@_silgen_name("LiSendUtf8TextEvent")
+func LiSendUtf8TextEvent(_ text: UnsafePointer<CChar>, _ length: UInt32) -> Int32
+
+// --- Constants ---
+private let BUTTON_ACTION_PRESS: Int8 = 0
+private let BUTTON_ACTION_RELEASE: Int8 = 1
+private let BUTTON_LEFT: Int32 = 1
+private let BUTTON_RIGHT: Int32 = 2
+private let KEY_ACTION_DOWN: Int8 = 0x03
+private let KEY_ACTION_UP: Int8 = 0x04
+
+// --- SWIFTUI WRAPPER ---
+struct RealityKitInputView: UIViewControllerRepresentable {
+    var streamConfig: StreamConfiguration
+    let controllerSupport: ControllerSupport
+    @Binding var showKeyboard: Bool
+    
+    func makeUIViewController(context: Context) -> RealityKitInputViewController {
+        let vc = RealityKitInputViewController()
+        vc.streamConfig = streamConfig
+        vc.controllerSupport = controllerSupport
+        
+        vc.keyboardDismissHandler = {
+            DispatchQueue.main.async {
+                // Optional: Sync state if needed
+            }
+        }
+        return vc
+    }
+
+    func updateUIViewController(_ vc: RealityKitInputViewController, context: Context) {
+        vc.streamConfig = streamConfig
+        
+        // Pass the toggle state to the overlay
+        if let overlay = vc.view as? RealityKitInputOverlay {
+            overlay.streamConfig = streamConfig
+            overlay.showSoftwareKeyboard = showKeyboard
+        }
+        
+        // REMOVED: premature becomeFirstResponder() call.
+        // We now handle this in the ViewController's lifecycle methods
+        // to ensure the window exists first.
+        
+        // However, if the keyboard toggle CHANGED to true, we should enforce focus immediately.
+        if showKeyboard && !vc.isFirstResponder {
+            vc.becomeFirstResponder()
+        }
+    }
+}
+
+// --- VIEW CONTROLLER ---
+class RealityKitInputViewController: UIViewController {
+    var streamConfig: StreamConfiguration? {
+        didSet {
+            if let overlay = view as? RealityKitInputOverlay {
+                overlay.streamConfig = streamConfig
+            }
+        }
+    }
+    var controllerSupport: ControllerSupport?
+    var keyboardDismissHandler: (() -> Void)?
+    
+    private lazy var inputOverlayView: RealityKitInputOverlay = {
+        let v = RealityKitInputOverlay()
+        v.parentController = self
+        return v
+    }()
+    
+    override func loadView() {
+        self.view = inputOverlayView
+    }
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        
+        if let support = controllerSupport {
+            print("[RealityKitInput] Attaching GCEventInteraction...")
+            support.attachGCEventInteraction(to: self.view)
+            
+            // 1. Enable Passthrough for Mouse
+            support.realityKitMode = true
+            
+            // 2. Mouse Callback
+            support.realityKitMouseMovedHandler = { [weak self] (dx: Float, dy: Float) in
+                guard let self = self else { return }
+                (self.view as? RealityKitInputOverlay)?.handleRawMouseDelta(dx: dx, dy: dy)
+            }
+            
+            // 3. Explicitly disable GCKeyboard to prevent double inputs
+            support.realityKitKeyboardHandler = nil
+        }
+    }
+    
+    // THE FIX: Enforce focus when the view actually appears
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
+        print("[RealityKitInput] ViewDidAppear - Scanning Inputs & Enforcing Focus...")
+        
+        if let support = controllerSupport {
+            for mouse in GCMouse.mice() {
+                support.registerMouseCallbacks(mouse)
+            }
+        }
+        
+        // Attempt to become first responder immediately
+        if !self.becomeFirstResponder() {
+            print("[RealityKitInput] Initial becomeFirstResponder failed. Retrying in 0.5s...")
+            
+            // Retry after a short delay (common fix for SwiftUI/UIKit integration issues)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self = self else { return }
+                let success = self.becomeFirstResponder()
+                print("[RealityKitInput] Delayed becomeFirstResponder result: \(success)")
+            }
+        } else {
+            print("[RealityKitInput] Initial becomeFirstResponder succeeded.")
+        }
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        
+        if let support = controllerSupport {
+            support.realityKitMode = false
+            support.realityKitMouseMovedHandler = nil
+            support.realityKitKeyboardHandler = nil
+        }
+    }
+    
+    override var canBecomeFirstResponder: Bool { true }
+}
+
+// --- OVERLAY VIEW (With Debug Logging) ---
+class RealityKitInputOverlay: UIView, UIKeyInput, UIPointerInteractionDelegate, UIGestureRecognizerDelegate {
+    
+    weak var parentController: RealityKitInputViewController?
+    var streamConfig: StreamConfiguration?
+    
+    // --- KEYBOARD VISIBILITY LOGIC ---
+        // If true, we return nil (default soft keyboard).
+        // If false, we return a dummy view (hides soft keyboard, keeps hardware input).
+        var showSoftwareKeyboard: Bool = false {
+            didSet {
+                if oldValue != showSoftwareKeyboard {
+                    self.reloadInputViews()
+                }
+            }
+        }
+    
+    // This is the magic that allows capturing input without the UI popping up
+        override var inputView: UIView? {
+            if showSoftwareKeyboard {
+                return nil // Default System Keyboard
+            } else {
+                return UIView() // Invisible Dummy View
+            }
+        }
+    
+    // State for Absolute Position Calculation
+    private var currentMousePosition: CGPoint = .zero
+    private var lastMouseButtonMask: UIEvent.ButtonMask = []
+    private var lastScrollTranslation: CGPoint = .zero
+    private let wheelDelta: CGFloat = 120.0
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupInteraction()
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupInteraction()
+    }
+    
+    private func setupInteraction() {
+        print("[RealityKitInput] Setup Interaction - Overlay Initialized")
+        self.backgroundColor = UIColor.black.withAlphaComponent(0.01)
+        self.isMultipleTouchEnabled = true
+        self.isUserInteractionEnabled = true
+        
+        // Pointer interaction
+        let pointerInteraction = UIPointerInteraction(delegate: self)
+        self.addInteraction(pointerInteraction)
+        
+        // Pan gesture
+        let panScroll = UIPanGestureRecognizer(target: self, action: #selector(handleScroll(_:)))
+        panScroll.allowedScrollTypesMask = .all
+        panScroll.minimumNumberOfTouches = 0
+        panScroll.delegate = self
+        self.addGestureRecognizer(panScroll)
+        
+        let hover = UIHoverGestureRecognizer(target: self, action: #selector(handleHover(_:)))
+        self.addGestureRecognizer(hover)
+    }
+    
+    // MARK: - Focus Debugging
+    override var canBecomeFocused: Bool {
+        // print("[RealityKitInput] canBecomeFocused checked") // Commented out to avoid log spam
+        return true
+    }
+    
+    override func becomeFirstResponder() -> Bool {
+        let result = super.becomeFirstResponder()
+        print("[RealityKitInput] becomeFirstResponder result: \(result)")
+        return result
+    }
+    
+    override func resignFirstResponder() -> Bool {
+        print("[RealityKitInput] resignFirstResponder called")
+        let result = super.resignFirstResponder()
+        if result {
+            parentController?.keyboardDismissHandler?()
+        }
+        return result
+    }
+    
+    // MARK: - KEYBOARD SUPPORT
+        
+        override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+            var handled = false
+            for press in presses {
+                if KeyboardSupport.sendKeyEvent(for: press, down: true) {
+                    handled = true
+                }
+            }
+            if !handled { super.pressesBegan(presses, with: event) }
+        }
+        
+        override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+            var handled = false
+            for press in presses {
+                if KeyboardSupport.sendKeyEvent(for: press, down: false) {
+                    handled = true
+                }
+            }
+            if !handled { super.pressesEnded(presses, with: event) }
+        }
+        
+        override var keyCommands: [UIKeyCommand]? {
+            var commands: [UIKeyCommand] = []
+            let action = #selector(handleDummyKeyCommand(_:))
+            let inputs = [
+                UIKeyCommand.inputUpArrow, UIKeyCommand.inputDownArrow,
+                UIKeyCommand.inputLeftArrow, UIKeyCommand.inputRightArrow,
+                UIKeyCommand.inputEscape, UIKeyCommand.inputPageUp,
+                UIKeyCommand.inputPageDown, UIKeyCommand.inputHome, UIKeyCommand.inputEnd
+            ]
+            for input in inputs {
+                commands.append(UIKeyCommand(input: input, modifierFlags: [], action: action))
+            }
+            return commands
+        }
+        
+        @objc func handleDummyKeyCommand(_ sender: UIKeyCommand) { }
+
+    // MARK: - UIKeyInput
+
+    var hasText: Bool { true }
+    
+    func insertText(_ text: String) {
+        print("[RealityKitInput] insertText called with: '\(text)'")
+        
+        if text.count == 1, let char = text.first {
+            let utf16 = String(char).utf16.first!
+            print("[RealityKitInput] Attempting translation for char code: \(utf16)")
+            
+            let keyEvent = KeyboardSupport.translateKeyEvent(utf16, with: [])
+            
+            if keyEvent.keycode != 0 {
+                print("[RealityKitInput] Translation successful -> Sending Low Level Key Event")
+                sendLowLevelEvent(event: keyEvent)
+                return
+            } else {
+                print("[RealityKitInput] Translation returned 0 keycode")
+            }
+        }
+        
+        print("[RealityKitInput] Sending as UTF-8 Text")
+        let cString = text.cString(using: .utf8)
+        cString?.withUnsafeBufferPointer { ptr in
+            if let base = ptr.baseAddress {
+                LiSendUtf8TextEvent(base, UInt32(text.utf8.count))
+            }
+        }
+    }
+    
+    func deleteBackward() {
+        print("[RealityKitInput] deleteBackward")
+        LiSendKeyboardEvent(0x08, 0x03, 0)
+        usleep(50 * 1000)
+        LiSendKeyboardEvent(0x08, 0x04, 0)
+    }
+    
+    private func sendLowLevelEvent(event: KeyEvent) {
+        print("[RealityKitInput] Sending HID Event -> Code: 0x\(String(format: "%02X", event.keycode)), Mod: 0x\(String(format: "%02X", event.modifier))")
+        
+        DispatchQueue.global(qos: .userInteractive).async {
+            if event.modifier != 0 {
+                LiSendKeyboardEvent(Int16(event.modifierKeycode), 0x03, Int8(event.modifier))
+            }
+            
+            LiSendKeyboardEvent(Int16(event.keycode), 0x03, Int8(event.modifier))
+            usleep(50 * 1000)
+            LiSendKeyboardEvent(Int16(event.keycode), 0x04, Int8(event.modifier))
+            
+            if event.modifier != 0 {
+                LiSendKeyboardEvent(Int16(event.modifierKeycode), 0x04, Int8(event.modifier))
+            }
+        }
+    }
+    
+    // MARK: - GCMouse Logic
+    
+    func handleRawMouseDelta(dx: Float, dy: Float) {
+        // print("[RealityKitInput] Mouse Delta: \(dx), \(dy)") // Commented out to avoid log flooding
+        guard let config = streamConfig else { return }
+        
+        let sensitivity: CGFloat = 1.0
+        
+        var newX = currentMousePosition.x + (CGFloat(dx) * sensitivity)
+        var newY = currentMousePosition.y - (CGFloat(dy) * sensitivity)
+        
+        let width = CGFloat(config.width)
+        let height = CGFloat(config.height)
+        
+        newX = min(max(newX, 0), width)
+        newY = min(max(newY, 0), height)
+        
+        currentMousePosition = CGPoint(x: newX, y: newY)
+        
+        LiSendMousePositionEvent(Int16(newX), Int16(newY), Int16(width), Int16(height))
+    }
+    
+    func sendMouseButton(action: Int8, button: Int32) {
+        print("[RealityKitInput] Mouse Button: \(button) Action: \(action)")
+        LiSendMouseButtonEvent(action, button)
+    }
+    
+    // MARK: - Pointer Interaction
+    
+    func pointerInteraction(_ interaction: UIPointerInteraction, regionFor request: UIPointerRegionRequest, defaultRegion: UIPointerRegion) -> UIPointerRegion? {
+        if lastMouseButtonMask.isEmpty {
+            updateCursorFromSystemPointer(location: request.location)
+        }
+        return UIPointerRegion(rect: self.bounds)
+    }
+    
+    func pointerInteraction(_ interaction: UIPointerInteraction, styleFor region: UIPointerRegion) -> UIPointerStyle? {
+        return nil
+    }
+    
+    @objc private func handleHover(_ gesture: UIHoverGestureRecognizer) {
+        let loc = gesture.location(in: self)
+        if lastMouseButtonMask.isEmpty {
+            updateCursorFromSystemPointer(location: loc)
+        }
+    }
+    
+    private func updateCursorFromSystemPointer(location: CGPoint) {
+        guard let config = streamConfig else { return }
+        
+        let normX = location.x / self.bounds.width
+        let normY = location.y / self.bounds.height
+        
+        let hostX = normX * CGFloat(config.width)
+        let hostY = normY * CGFloat(config.height)
+        
+        currentMousePosition = CGPoint(x: hostX, y: hostY)
+        
+        LiSendMousePositionEvent(Int16(hostX), Int16(hostY), Int16(config.width), Int16(config.height))
+    }
+    
+    // MARK: - Touch Handling
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        print("[RealityKitInput] touchesBegan (Click)")
+        sendMouseButton(action: 0, button: 1)
+        if let touch = touches.first {
+            updateCursorFromSystemPointer(location: touch.location(in: self))
+        }
+    }
+    
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if let touch = touches.first {
+            updateCursorFromSystemPointer(location: touch.location(in: self))
+        }
+    }
+    
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        print("[RealityKitInput] touchesEnded (Release)")
+        sendMouseButton(action: 1, button: 1)
+    }
+    
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        sendMouseButton(action: 1, button: 1)
+    }
+    
+    // MARK: - Scroll Handling
+    @objc private func handleScroll(_ gesture: UIPanGestureRecognizer) {
+        guard gesture.state == .changed || gesture.state == .began else {
+            lastScrollTranslation = .zero
+            return
+        }
+        
+        let currentTranslation = gesture.translation(in: self)
+        let deltaY = (currentTranslation.y - lastScrollTranslation.y)
+        let deltaX = (currentTranslation.x - lastScrollTranslation.x)
+        
+        if deltaY != 0 {
+            let scaledY = (deltaY / self.bounds.height) * wheelDelta * 20.0
+            print("[RealityKitInput] Scroll Y: \(scaledY)")
+            LiSendHighResScrollEvent(Int16(scaledY))
+        }
+        
+        if deltaX != 0 {
+            let scaledX = (deltaX / self.bounds.width) * wheelDelta * 20.0
+            LiSendHighResHScrollEvent(Int16(-scaledX))
+        }
+        
+        lastScrollTranslation = currentTranslation
     }
 }

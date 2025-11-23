@@ -24,10 +24,19 @@
 
 @end
 
-@interface ControllerSupport : NSObject
+@interface ControllerSupport : NSObject;
 @property (nonatomic, assign) BOOL relativeMouseMode;
+// Add these properties
+@property (nonatomic, assign) BOOL realityKitMode;
+@property (nonatomic, copy) void (^realityKitMouseMovedHandler)(float deltaX, float deltaY);
+
+// Keyboard Reality Kit Stuff
+@property (nonatomic, copy) void (^realityKitKeyboardHandler)(int keyCode, BOOL pressed);
+-(void) registerKeyboardCallbacks:(GCKeyboard*) keyboard API_AVAILABLE(ios(14.0));
+
 -(id) initWithConfig:(StreamConfiguration*)streamConfig delegate:(id<ControllerSupportDelegate>)delegate;
 -(void) connectionEstablished;
+-(void) registerMouseCallbacks:(GCMouse*) mouse API_AVAILABLE(ios(14.0));
 
 -(void) initAutoOnScreenControlMode:(OnScreenControls*)osc;
 -(void) cleanup;

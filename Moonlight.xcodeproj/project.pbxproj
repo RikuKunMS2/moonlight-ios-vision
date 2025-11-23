@@ -7,10 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3E3791CA2ED2A4F5004B22A2 /* RealityKitStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E3791C92ED2A4F5004B22A2 /* RealityKitStreamView.swift */; };
 		3E4F94692DC2E2D6006CF0C1 /* ComputerViewWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E4F94682DC2E2D6006CF0C1 /* ComputerViewWrapper.swift */; };
 		3E86FC1D2D4FFDF20016BB8E /* UpdatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */; };
 		3E9440F62D4EB9ED0047E0C2 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = 3E9440F52D4EB9ED0047E0C2 /* OpenSSL */; };
-		3EA550B52ECECCEC00E2BC86 /* InputCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EA550B42ECECCE200E2BC86 /* InputCaptureView.swift */; };
 		6581B5F12D5434100022400F /* VideoTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6581B5F02D5434100022400F /* VideoTypes.swift */; };
 		659789EC2D55A93A00B88B25 /* SBSMaterial.usda in Resources */ = {isa = PBXBuildFile; fileRef = 659789EB2D55A93A00B88B25 /* SBSMaterial.usda */; };
 		693B3A9B218638CD00982F7B /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 693B3A9A218638CD00982F7B /* Settings.bundle */; };
@@ -54,7 +54,6 @@
 		B1EDB1352D4D95A700EB1839 /* StreamControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB1332D4D95A700EB1839 /* StreamControls.swift */; };
 		B1EDB1362D4D95A700EB1839 /* DrawableVideoDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB1302D4D95A700EB1839 /* DrawableVideoDecoder.swift */; };
 		B1EDB1372D4D95A700EB1839 /* UIKitStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB1342D4D95A700EB1839 /* UIKitStreamView.swift */; };
-		B1EDB1382D4D95A700EB1839 /* RealityKitStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB1322D4D95A700EB1839 /* RealityKitStreamView.swift */; };
 		B1EDB1392D4D95A700EB1839 /* ObservableConnectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB1312D4D95A700EB1839 /* ObservableConnectionManager.swift */; };
 		B1EDB13C2D4D95BF00EB1839 /* StreamConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB13B2D4D95BF00EB1839 /* StreamConfiguration.swift */; };
 		B1EDB13D2D4D95BF00EB1839 /* StreamConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB13B2D4D95BF00EB1839 /* StreamConfiguration.swift */; };
@@ -284,9 +283,9 @@
 
 /* Begin PBXFileReference section */
 		3E0863FF2ECD6BB7006549CB /* Moonlight XrOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Moonlight XrOS.entitlements"; sourceTree = "<group>"; };
+		3E3791C92ED2A4F5004B22A2 /* RealityKitStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealityKitStreamView.swift; sourceTree = "<group>"; };
 		3E4F94682DC2E2D6006CF0C1 /* ComputerViewWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerViewWrapper.swift; sourceTree = "<group>"; };
 		3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatesView.swift; sourceTree = "<group>"; };
-		3EA550B42ECECCE200E2BC86 /* InputCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputCaptureView.swift; sourceTree = "<group>"; };
 		566E9D2B2770B23A00EF7BFE /* Moonlight v1.7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.7.xcdatamodel"; sourceTree = "<group>"; };
 		6581B5F02D5434100022400F /* VideoTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTypes.swift; sourceTree = "<group>"; };
 		659789EB2D55A93A00B88B25 /* SBSMaterial.usda */ = {isa = PBXFileReference; lastKnownFileType = text; path = SBSMaterial.usda; sourceTree = "<group>"; };
@@ -333,7 +332,6 @@
 		B1AC7CEE2D4E011A0013B9A3 /* HDRParsingUtils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HDRParsingUtils.m; sourceTree = "<group>"; };
 		B1EDB1302D4D95A700EB1839 /* DrawableVideoDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawableVideoDecoder.swift; sourceTree = "<group>"; };
 		B1EDB1312D4D95A700EB1839 /* ObservableConnectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservableConnectionManager.swift; sourceTree = "<group>"; };
-		B1EDB1322D4D95A700EB1839 /* RealityKitStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealityKitStreamView.swift; sourceTree = "<group>"; };
 		B1EDB1332D4D95A700EB1839 /* StreamControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamControls.swift; sourceTree = "<group>"; };
 		B1EDB1342D4D95A700EB1839 /* UIKitStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIKitStreamView.swift; sourceTree = "<group>"; };
 		B1EDB13A2D4D95BF00EB1839 /* AnyVideoDecoderRenderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AnyVideoDecoderRenderer.h; sourceTree = "<group>"; };
@@ -675,8 +673,7 @@
 				E77582CE2D54020300948545 /* CVMetalHelpers.swift */,
 				B1EDB1302D4D95A700EB1839 /* DrawableVideoDecoder.swift */,
 				B1EDB1312D4D95A700EB1839 /* ObservableConnectionManager.swift */,
-				B1EDB1322D4D95A700EB1839 /* RealityKitStreamView.swift */,
-				3EA550B42ECECCE200E2BC86 /* InputCaptureView.swift */,
+				3E3791C92ED2A4F5004B22A2 /* RealityKitStreamView.swift */,
 				B1EDB1332D4D95A700EB1839 /* StreamControls.swift */,
 				B1EDB1342D4D95A700EB1839 /* UIKitStreamView.swift */,
 				F7A1195A2B5DE1E2001E8686 /* MoonlightVisionApp.swift */,
@@ -1309,6 +1306,7 @@
 				F7A119122B5DDF73001E8686 /* AppListResponse.m in Sources */,
 				F7A119132B5DDF73001E8686 /* Utils.m in Sources */,
 				F7A119152B5DDF73001E8686 /* Connection.m in Sources */,
+				3E3791CA2ED2A4F5004B22A2 /* RealityKitStreamView.swift in Sources */,
 				E77582EB2D5550D500948545 /* AudioHelpers.swift in Sources */,
 				F7A119162B5DDF73001E8686 /* AppAssetRetriever.m in Sources */,
 				F7A119172B5DDF73001E8686 /* WakeOnLanManager.m in Sources */,
@@ -1316,7 +1314,6 @@
 				B1EDB1362D4D95A700EB1839 /* DrawableVideoDecoder.swift in Sources */,
 				3E86FC1D2D4FFDF20016BB8E /* UpdatesView.swift in Sources */,
 				B1EDB1372D4D95A700EB1839 /* UIKitStreamView.swift in Sources */,
-				B1EDB1382D4D95A700EB1839 /* RealityKitStreamView.swift in Sources */,
 				B1EDB1392D4D95A700EB1839 /* ObservableConnectionManager.swift in Sources */,
 				F7A119182B5DDF73001E8686 /* IdManager.m in Sources */,
 				F7A119192B5DDF73001E8686 /* Controller.m in Sources */,
@@ -1354,7 +1351,6 @@
 				F7A119342B5DDF73001E8686 /* AppAssetManager.m in Sources */,
 				F7A119352B5DDF73001E8686 /* DiscoveryWorker.m in Sources */,
 				F7A119362B5DDF73001E8686 /* ControllerSupport.m in Sources */,
-				3EA550B52ECECCEC00E2BC86 /* InputCaptureView.swift in Sources */,
 				F71801422B65483D00A9336B /* AppsView.swift in Sources */,
 				F7199B002B72FC1400E6D62D /* TemporarySettings.swift in Sources */,
 				F7A119372B5DDF73001E8686 /* AppAssetResponse.m in Sources */,
