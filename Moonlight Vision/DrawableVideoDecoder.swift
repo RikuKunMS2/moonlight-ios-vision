@@ -325,7 +325,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                     pixelFormat: metalFormat,
                     width: Int(videoWidth),
                     height: Int(videoHeight),
-                    usage: [.renderTarget, .shaderRead], // .shaderRead needed for the Blit engine to read Level 0
+                    usage: [.renderTarget], // .shaderRead needed for the Blit engine to read Level 0
                     mipmapsMode: .allocateAll // <--- FIX: MUST be allocateAll to stop shimmer
                 )
                 do {
