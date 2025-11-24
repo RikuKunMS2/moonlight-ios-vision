@@ -60,6 +60,8 @@
 "keyboard" = "Keyboard";
 "volume" = "Volume";
 "fix_aspect_ratio" = "Fix Aspect Ratio";
+"spatial_audio" = "Spatial Audio";
+"direct_audio" = "Direct Audio";
 
 // Stream Status
 "stream_stopped" = "Stream stopped";

@@ -676,264 +676,277 @@ struct _RealityKitStreamView: View {
         }
     
     @ViewBuilder
-    var settingsControls: some View {
-        // Fixed widths ensure the columns align perfectly
-        let labelWidth: CGFloat = 70
-        let sliderWidth: CGFloat = 170
-        
-        if needsHdr || viewModel.streamSettings.enableHdr {
-            // --- BOOST ---
-            HStack {
-                Text(viewModel.localized("boost"))
-                    .font(.caption).bold()
-                    .frame(width: labelWidth, alignment: .leading)
-                    .help(viewModel.localized("boost_luminance"))
-                
-                Slider(value: $viewModel.streamSettings.brightness, in: 1.0...5.0, step: 0.1)
-                    .frame(width: sliderWidth)
-                    .onChange(of: viewModel.streamSettings.brightness) { _, _ in
-                        if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
-                    }
-                Text(String(format: "%.1f", viewModel.streamSettings.brightness))
-                    .font(.caption)
-                    .monospacedDigit()
-                    .frame(width: 35, alignment: .leading)
-            }
-            .padding(.vertical, 2)
+        var settingsControls: some View {
+            // Fixed widths ensure the columns align perfectly
+            let labelWidth: CGFloat = 70
+            let sliderWidth: CGFloat = 170
             
-            // --- GAMMA ---
-            HStack {
-                Text(viewModel.localized("gamma"))
-                    .font(.caption).bold()
-                    .frame(width: labelWidth, alignment: .leading)
-                
-                Slider(value: $viewModel.streamSettings.gamma, in: 0.5...2.5, step: 0.05)
-                    .frame(width: sliderWidth)
-                    .onChange(of: viewModel.streamSettings.gamma) { _, _ in
-                        if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
-                    }
-                Text(String(format: "%.2f", viewModel.streamSettings.gamma))
-                    .font(.caption)
-                    .monospacedDigit()
-                    .frame(width: 35, alignment: .leading)
-            }
-            
-            // --- SATURATION ---
-            HStack {
-                Text(viewModel.localized("saturation"))
-                    .font(.caption).bold()
-                    .frame(width: labelWidth, alignment: .leading)
-                
-                Slider(value: $viewModel.streamSettings.saturation, in: 0.0...2.0, step: 0.05)
-                    .frame(width: sliderWidth)
-                    .onChange(of: viewModel.streamSettings.saturation) { _, _ in
-                        if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
-                    }
-                Text(String(format: "%.2f", viewModel.streamSettings.saturation))
-                    .font(.caption)
-                    .monospacedDigit()
-                    .frame(width: 35, alignment: .leading)
-            }
-            
-            Divider().padding(.vertical, 5)
-        }
-        
-        // --- CURVATURE ---
-        HStack {
-            Text(viewModel.localized("curvature"))
-                .font(.caption).bold()
-                .frame(width: labelWidth, alignment: .leading)
-            
-            Slider(value: $viewModel.streamSettings.realitykitRendererCurvature, in: 0 ... 1, step: 0.001)
-                .frame(width: sliderWidth)
-                .onChange(of: viewModel.streamSettings.realitykitRendererCurvature) { _, _ in
-                    if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+            if needsHdr || viewModel.streamSettings.enableHdr {
+                // --- BOOST ---
+                HStack {
+                    Text(viewModel.localized("boost"))
+                        .font(.caption).bold()
+                        .frame(width: labelWidth, alignment: .leading)
+                        .help(viewModel.localized("boost_luminance"))
+                    
+                    Slider(value: $viewModel.streamSettings.brightness, in: 1.0...5.0, step: 0.1)
+                        .frame(width: sliderWidth)
+                        .onChange(of: viewModel.streamSettings.brightness) { _, _ in
+                            if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                        }
+                    Text(String(format: "%.1f", viewModel.streamSettings.brightness))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .leading)
                 }
-            Text(String(format: "%.2f", viewModel.streamSettings.realitykitRendererCurvature))
-                .font(.caption)
-                .monospacedDigit()
-                .frame(width: 35, alignment: .leading)
-            
-            Button(action: {
-                if viewModel.streamSettings.realitykitRendererCurvature == 0 {
-                    viewModel.streamSettings.realitykitRendererCurvature = curveMagnitudeMemory
-                } else {
-                    curveMagnitudeMemory = viewModel.streamSettings.realitykitRendererCurvature
-                    viewModel.streamSettings.realitykitRendererCurvature = 0
+                .padding(.vertical, 2)
+                
+                // --- GAMMA ---
+                HStack {
+                    Text(viewModel.localized("gamma"))
+                        .font(.caption).bold()
+                        .frame(width: labelWidth, alignment: .leading)
+                    
+                    Slider(value: $viewModel.streamSettings.gamma, in: 0.5...2.5, step: 0.05)
+                        .frame(width: sliderWidth)
+                        .onChange(of: viewModel.streamSettings.gamma) { _, _ in
+                            if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                        }
+                    Text(String(format: "%.2f", viewModel.streamSettings.gamma))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .leading)
                 }
-                if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
-            }) {
-                Text(viewModel.localized("flatten"))
-                    .font(.caption)
+                
+                // --- SATURATION ---
+                HStack {
+                    Text(viewModel.localized("saturation"))
+                        .font(.caption).bold()
+                        .frame(width: labelWidth, alignment: .leading)
+                    
+                    Slider(value: $viewModel.streamSettings.saturation, in: 0.0...2.0, step: 0.05)
+                        .frame(width: sliderWidth)
+                        .onChange(of: viewModel.streamSettings.saturation) { _, _ in
+                            if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                        }
+                    Text(String(format: "%.2f", viewModel.streamSettings.saturation))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .leading)
+                }
+                
+                Divider().padding(.vertical, 5)
             }
-            .controlSize(.mini)
-            .help(viewModel.localized("flatten"))
-        }
-
-        if !isImmersive {
-            // --- DEPTH (Windowed) ---
+            
+            // --- CURVATURE ---
             HStack {
-                Text(viewModel.localized("depth"))
+                Text(viewModel.localized("curvature"))
                     .font(.caption).bold()
                     .frame(width: labelWidth, alignment: .leading)
                 
-                Slider(value: $depthOffset, in: zLimits)
+                Slider(value: $viewModel.streamSettings.realitykitRendererCurvature, in: 0 ... 1, step: 0.001)
                     .frame(width: sliderWidth)
-                    .onChange(of: depthOffset) { _, _ in
+                    .onChange(of: viewModel.streamSettings.realitykitRendererCurvature) { _, _ in
                         if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
                     }
-                Text(String(format: "%.2f", depthOffset))
+                Text(String(format: "%.2f", viewModel.streamSettings.realitykitRendererCurvature))
                     .font(.caption)
                     .monospacedDigit()
                     .frame(width: 35, alignment: .leading)
                 
+                // FIX: Use Label, remove iconOnly style so text shows
                 Button(action: {
-                    depthOffset = 0.0
+                    if viewModel.streamSettings.realitykitRendererCurvature == 0 {
+                        viewModel.streamSettings.realitykitRendererCurvature = curveMagnitudeMemory
+                    } else {
+                        curveMagnitudeMemory = viewModel.streamSettings.realitykitRendererCurvature
+                        viewModel.streamSettings.realitykitRendererCurvature = 0
+                    }
                     if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
                 }) {
-                    Text(viewModel.localized("reset_depth"))
+                    Label(viewModel.localized("flatten"), systemImage: viewModel.streamSettings.realitykitRendererCurvature == 0 ? "light.panel" : "pano.fill")
                         .font(.caption)
                 }
+                .buttonStyle(.bordered)
                 .controlSize(.mini)
-                .help(viewModel.localized("reset_depth"))
+                .help(viewModel.localized("flatten"))
             }
-            
-            // --- HEIGHT (Windowed) ---
-            HStack {
-                Text(viewModel.localized("height"))
-                    .font(.caption).bold()
-                    .frame(width: labelWidth, alignment: .leading)
-                
-                Slider(value: $height, in: yLimits)
-                    .frame(width: sliderWidth)
-                    .onChange(of: height) { _, _ in
-                        if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
-                    }
-                Text(String(format: "%.2f", height))
-                    .font(.caption)
-                    .monospacedDigit()
-                    .frame(width: 35, alignment: .leading)
-                
-                Spacer()
-            }
-        } else {
-            Divider().padding(.vertical, 5)
-            Text(viewModel.localized("spatial")).font(.caption).foregroundStyle(.secondary)
-            
-            // --- IMMERSION ---
-            HStack {
-                Text(viewModel.localized("immersion"))
-                    .font(.caption).bold()
-                    .frame(width: labelWidth, alignment: .leading)
-                
-                Slider(value: $immersionAmount, in: 0.0...1.0)
-                    .frame(width: sliderWidth)
-                    .onChange(of: immersionAmount) { _, _ in
-                        if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
-                    }
-                Text(String(format: "%.0f%%", immersionAmount * 100))
-                    .font(.caption)
-                    .monospacedDigit()
-                    .frame(width: 35, alignment: .leading)
-            }
-            
-            // --- SCALE ---
-            HStack {
-                Text(viewModel.localized("scale"))
-                    .font(.caption).bold()
-                    .frame(width: labelWidth, alignment: .leading)
-                
-                Slider(value: $immersiveScale, in: 0.5...6.0)
-                    .frame(width: sliderWidth)
-                    .onChange(of: immersiveScale) { _, _ in
-                        if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
-                    }
-                Text(String(format: "%.1fx", immersiveScale))
-                    .font(.caption)
-                    .monospacedDigit()
-                    .frame(width: 35, alignment: .leading)
-            }
-            
-            // --- DISTANCE ---
-            HStack {
-                Text(viewModel.localized("distance"))
-                    .font(.caption).bold()
-                    .frame(width: labelWidth, alignment: .leading)
-                
-                Slider(value: Binding(
-                    get: { immersivePosition.z },
-                    set: {
-                        immersivePosition.z = $0
-                        if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
-                    }
-                ), in: -10.0 ... -0.5)
-                    .frame(width: sliderWidth)
-                Text(String(format: "%.1fm", abs(immersivePosition.z)))
-                    .font(.caption)
-                    .monospacedDigit()
-                    .frame(width: 35, alignment: .leading)
-            }
-            
-            // --- HEIGHT (Immersive) ---
-            HStack {
-                Text(viewModel.localized("height"))
-                    .font(.caption).bold()
-                    .frame(width: labelWidth, alignment: .leading)
-                
-                Slider(value: Binding(
-                    get: { immersivePosition.y },
-                    set: {
-                        immersivePosition.y = $0
-                        if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
-                    }
-                ), in: 0.0 ... 5.0)
-                    .frame(width: sliderWidth)
-                Text(String(format: "%.1fm", immersivePosition.y))
-                    .font(.caption)
-                    .monospacedDigit()
-                    .frame(width: 35, alignment: .leading)
-            }
-            
-            Toggle(isOn: $isInteractive) {
-                Text(isInteractive ? viewModel.localized("screen_locked") : viewModel.localized("screen_unlocked"))
-            }
-            .toggleStyle(.button)
-            .padding(.top, 5)
-        }
 
-        HStack {
-            Toggle(isOn: Binding(
-                get: { videoMode == .sideBySide3D },
-                set: { val in
-                    videoMode = val ? .sideBySide3D : .standard2D
-                    if videoMode == .sideBySide3D {
-                       screen.model?.materials = [surfaceMaterial!]
-                } else {
-                       screen.model?.materials = [UnlitMaterial(texture: texture)]
+            if !isImmersive {
+                // --- DEPTH (Windowed) ---
+                HStack {
+                    Text(viewModel.localized("depth"))
+                        .font(.caption).bold()
+                        .frame(width: labelWidth, alignment: .leading)
+                    
+                    Slider(value: $depthOffset, in: zLimits)
+                        .frame(width: sliderWidth)
+                        .onChange(of: depthOffset) { _, _ in
+                            if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                        }
+                    Text(String(format: "%.2f", depthOffset))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .leading)
+                    
+                    // FIX: Use Label, remove iconOnly style
+                    Button(action: {
+                        depthOffset = 0.0
+                        if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                    }) {
+                        Label(viewModel.localized("reset_depth"), systemImage: "arrow.counterclockwise")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                    .help(viewModel.localized("reset_depth"))
                 }
+                
+                // --- HEIGHT (Windowed) ---
+                HStack {
+                    Text(viewModel.localized("height"))
+                        .font(.caption).bold()
+                        .frame(width: labelWidth, alignment: .leading)
+                    
+                    Slider(value: $height, in: yLimits)
+                        .frame(width: sliderWidth)
+                        .onChange(of: height) { _, _ in
+                            if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                        }
+                    Text(String(format: "%.2f", height))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .leading)
+                    
+                    Spacer().frame(width: 40)
+                }
+            } else {
+                Divider().padding(.vertical, 5)
+                Text(viewModel.localized("spatial")).font(.caption).foregroundStyle(.secondary)
+                
+                // --- IMMERSION ---
+                HStack {
+                    Text(viewModel.localized("immersion"))
+                        .font(.caption).bold()
+                        .frame(width: labelWidth, alignment: .leading)
+                    
+                    Slider(value: $immersionAmount, in: 0.0...1.0)
+                        .frame(width: sliderWidth)
+                        .onChange(of: immersionAmount) { _, _ in
+                            if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                        }
+                    Text(String(format: "%.0f%%", immersionAmount * 100))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .leading)
+                }
+                
+                // --- SCALE ---
+                HStack {
+                    Text(viewModel.localized("scale"))
+                        .font(.caption).bold()
+                        .frame(width: labelWidth, alignment: .leading)
+                    
+                    Slider(value: $immersiveScale, in: 0.5...6.0)
+                        .frame(width: sliderWidth)
+                        .onChange(of: immersiveScale) { _, _ in
+                            if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                        }
+                    Text(String(format: "%.1fx", immersiveScale))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .leading)
+                }
+                
+                // --- DISTANCE ---
+                HStack {
+                    Text(viewModel.localized("distance"))
+                        .font(.caption).bold()
+                        .frame(width: labelWidth, alignment: .leading)
+                    
+                    Slider(value: Binding(
+                        get: { immersivePosition.z },
+                        set: {
+                            immersivePosition.z = $0
+                            if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                        }
+                    ), in: -10.0 ... -0.5)
+                        .frame(width: sliderWidth)
+                    Text(String(format: "%.1fm", abs(immersivePosition.z)))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .leading)
+                }
+                
+                // --- HEIGHT (Immersive) ---
+                HStack {
+                    Text(viewModel.localized("height"))
+                        .font(.caption).bold()
+                        .frame(width: labelWidth, alignment: .leading)
+                    
+                    Slider(value: Binding(
+                        get: { immersivePosition.y },
+                        set: {
+                            immersivePosition.y = $0
+                            if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                        }
+                    ), in: 0.0 ... 5.0)
+                        .frame(width: sliderWidth)
+                    Text(String(format: "%.1fm", immersivePosition.y))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .leading)
+                }
+                
+                // FIX: Use Label within Toggle
+                Toggle(isOn: $isInteractive) {
+                    Label(isInteractive ? viewModel.localized("screen_locked") : viewModel.localized("screen_unlocked"),
+                          systemImage: isInteractive ? "lock.fill" : "lock.open.fill")
+                }
+                .toggleStyle(.button)
+                .padding(.top, 5)
             }
-            )) { Text(viewModel.localized("3d_mode")) }.toggleStyle(.button)
-        }
-        
-        Button(action: { }) {
-            Text(viewModel.localized("main_button"))
-        }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if let controller = self.controllerSupport?.getOscController() {
-                        self.controllerSupport?.setButtonFlag(controller, flags: 0x0400)
-                        self.controllerSupport?.updateFinished(controller)
+
+            HStack {
+                // FIX: Use Label within Toggle
+                Toggle(isOn: Binding(
+                    get: { videoMode == .sideBySide3D },
+                    set: { val in
+                        videoMode = val ? .sideBySide3D : .standard2D
+                        if videoMode == .sideBySide3D {
+                            screen.model?.materials = [surfaceMaterial!]
+                    } else {
+                            screen.model?.materials = [UnlitMaterial(texture: texture)]
                     }
                 }
-                .onEnded { _ in
-                    if let controller = self.controllerSupport?.getOscController() {
-                        self.controllerSupport?.clearButtonFlag(controller, flags: 0x0400)
-                        self.controllerSupport?.updateFinished(controller)
-                    }
+                )) {
+                    Label(viewModel.localized("3d_mode"), systemImage: "cube.transparent")
                 }
-        )
-    }
+                .toggleStyle(.button)
+            }
+            
+            // FIX: Use Label within Button
+            Button(action: { }) {
+                Label(viewModel.localized("main_button"), systemImage: "gamecontroller.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if let controller = self.controllerSupport?.getOscController() {
+                            self.controllerSupport?.setButtonFlag(controller, flags: 0x0400)
+                            self.controllerSupport?.updateFinished(controller)
+                        }
+                    }
+                    .onEnded { _ in
+                        if let controller = self.controllerSupport?.getOscController() {
+                            self.controllerSupport?.clearButtonFlag(controller, flags: 0x0400)
+                            self.controllerSupport?.updateFinished(controller)
+                        }
+                    }
+            )
+        }
     
     func setupStreamOnAppear() {
         safeHDRSettings.value = HDRParams(
@@ -1624,7 +1637,7 @@ class RealityKitInputOverlay: UIView, UIKeyInput, UIPointerInteractionDelegate, 
         
         let currentTranslation = gesture.translation(in: self)
         let deltaY = (currentTranslation.y - lastScrollTranslation.y)
-        let deltaX = (currentTranslation.x - lastScxqrollTranslation.x)
+        let deltaX = (currentTranslation.x - lastScrollTranslation.x)
         
         if deltaY != 0 {
             let scaledY = (deltaY / self.bounds.height) * wheelDelta * 20.0

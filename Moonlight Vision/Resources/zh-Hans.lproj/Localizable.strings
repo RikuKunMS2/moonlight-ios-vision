@@ -60,6 +60,8 @@
 "keyboard" = "键盘";
 "volume" = "音量";
 "fix_aspect_ratio" = "修复宽高比";
+"spatial_audio" = "Spatial Audio";
+"direct_audio" = "Direct Audio";
 
 // Stream Status
 "stream_stopped" = "串流已停止";

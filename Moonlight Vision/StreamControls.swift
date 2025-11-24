@@ -25,32 +25,32 @@ struct StreamControls<Additions: View>: View {
     @ViewBuilder var additions: () -> Additions
     
     // Initializer
-     init(horizontal: Bool,
-          streamConfig: Binding<StreamConfiguration>,
-          isKeyboardActive: Bool = false,
-          closeAction: @escaping () -> Void,
-          toggleKeyboardAction: (() -> Void)? = nil,
-          @ViewBuilder additions: @escaping () -> Additions) {
-         self.horizontal = horizontal
-         self._streamConfig = streamConfig
-         self.isKeyboardActive = isKeyboardActive
-         self.closeAction = closeAction
-         self.toggleKeyboardAction = toggleKeyboardAction
-         self.additions = additions
-     }
+    init(horizontal: Bool,
+         streamConfig: Binding<StreamConfiguration>,
+         isKeyboardActive: Bool = false,
+         closeAction: @escaping () -> Void,
+         toggleKeyboardAction: (() -> Void)? = nil,
+         @ViewBuilder additions: @escaping () -> Additions) {
+        self.horizontal = horizontal
+        self._streamConfig = streamConfig
+        self.isKeyboardActive = isKeyboardActive
+        self.closeAction = closeAction
+        self.toggleKeyboardAction = toggleKeyboardAction
+        self.additions = additions
+    }
 
     var body: some View {
         Group {
             if (horizontal) {
-                HStack(alignment: .firstTextBaseline) { controls }
+                HStack(alignment: .center, spacing: 20) { controls }
             } else {
-                VStack(alignment: .leading) { controls }
+                VStack(alignment: .leading, spacing: 15) { controls }
             }
         }
         .onChange(of: viewModel.vol) { newVal, _ in
             setVolume(Int32(newVal))
         }
-        .labelStyle(.iconOnly)
+        // Removed .labelStyle(.iconOnly) to display Text labels
         .padding()
         .hoverEffect { effect, isActive, _ in
             effect.opacity(isActive ? 1 : 0.3)
@@ -59,40 +59,44 @@ struct StreamControls<Additions: View>: View {
 
     var controls: some View {
         Group {
-            Button(viewModel.localized("home"), systemImage: "house.fill") {
-                closeAction()
+            Button(action: { closeAction() }) {
+                Text(viewModel.localized("home"))
             }
             
-            Button(viewModel.localized("toggle_dimming"), systemImage: viewModel.streamSettings.dimPassthrough ? "moon.fill" : "moon") {
-                viewModel.streamSettings.dimPassthrough.toggle()
+            Button(action: { viewModel.streamSettings.dimPassthrough.toggle() }) {
+                Text(viewModel.localized("toggle_dimming"))
             }
+            
             // --- SPATIAL AUDIO TOGGLE (From Razorub) ---
-            Button(spatialAudioMode ? "Spatial Audio" : "Direct Audio",
-                systemImage: spatialAudioMode ? "speaker.wave.3" : "headphones") {
+            Button(action: {
                 spatialAudioMode.toggle()
                 if spatialAudioMode {
-                // Switch to spatial audio (sound from screen)
+                    // Switch to spatial audio (sound from screen)
                     AudioHelpers.fixAudioForSurroundForCurrentWindow()
                 } else {
                     // Switch to direct audio (sound from ears)
                     AudioHelpers.fixAudioForDirectStereo()
                 }
+            }) {
+                Text(spatialAudioMode ? viewModel.localized("spatial_audio") : viewModel.localized("direct_audio"))
             }
             // -------------------------------------
             
             // Virtual Keyboard Toggle
             if let toggleAction = toggleKeyboardAction {
                 Button(action: toggleAction) {
-                    Label(viewModel.localized("keyboard"), systemImage: isKeyboardActive ? "keyboard.fill" : "keyboard")
+                    Text(viewModel.localized("keyboard"))
                 }
                 .background(isKeyboardActive ? Color.white.opacity(0.2) : Color.clear)
-                .clipShape(Circle())
+                .clipShape(Capsule()) // Changed from Circle to Capsule for text
             }
 
             HStack {
-                Button(viewModel.localized("volume"), systemImage: viewModel.vol == 0 || viewModel.mute ? "speaker.slash.fill" : "speaker.fill" ) {
-                    viewModel.mute.toggle()
+                Button(action: { viewModel.mute.toggle() }) {
+                    Text(viewModel.localized("volume"))
+                        .foregroundStyle(viewModel.mute ? .secondary : .primary)
                 }
+                
                 Slider(value: $viewModel.vol, in: 0...127)
                     .frame(width: 300)
                     .padding([.trailing])
@@ -104,6 +108,7 @@ struct StreamControls<Additions: View>: View {
                     anchor: .leading
                 ))
             }
+            
             additions()
         }
     }
