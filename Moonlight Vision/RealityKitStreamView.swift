@@ -574,18 +574,23 @@ struct _RealityKitStreamView: View {
     // MARK: - View Components
     
     @ViewBuilder
-    var virtualKeyboardOverlay: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "keyboard").font(.system(size: 40))
-            Text(viewModel.localized("keyboard_active")).font(.headline)
-            Text(viewModel.localized("tap_video_to_type")).font(.caption).foregroundStyle(.secondary)
+        var virtualKeyboardOverlay: some View {
+            VStack(spacing: 12) {
+                Image(systemName: "keyboard").font(.system(size: 40))
+                Text(viewModel.localized("keyboard_active")).font(.headline)
+                Text(viewModel.localized("tap_video_to_type")).font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(20)
+            .background(.regularMaterial)
+            .cornerRadius(16)
+            .allowsHitTesting(true) // FIX: Enable hit testing so tapping this box also summons keyboard
+            .onTapGesture {
+                // Backup mechanism: If automatic focus failed, user can tap here to force it
+                // The update loop in RealityKitInputView will see showVirtualKeyboard=true and force focus
+                showVirtualKeyboard = true
+            }
+            .opacity(0.8)
         }
-        .padding(20)
-        .background(.regularMaterial)
-        .cornerRadius(16)
-        .allowsHitTesting(false)
-        .opacity(0.8)
-    }
     
     @ViewBuilder
         var streamStoppedOverlay: some View {
@@ -1247,7 +1252,7 @@ struct RealityKitInputView: UIViewControllerRepresentable {
         let vc = RealityKitInputViewController()
         vc.streamConfig = streamConfig
         vc.controllerSupport = controllerSupport
-        
+       
         vc.keyboardDismissHandler = {
             DispatchQueue.main.async {
                 // Optional: Sync state if needed
@@ -1258,16 +1263,22 @@ struct RealityKitInputView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ vc: RealityKitInputViewController, context: Context) {
         vc.streamConfig = streamConfig
-        
+       
         // Pass the toggle state to the overlay
         if let overlay = vc.view as? RealityKitInputOverlay {
             overlay.streamConfig = streamConfig
-            overlay.showSoftwareKeyboard = showKeyboard
             
-            // If the user actively toggled the keyboard ON, force focus just in case
-            if showKeyboard && !overlay.isFirstResponder {
-                print("[RealityKitInput] Update: Forcing focus on Overlay because toggle is ON")
-                overlay.becomeFirstResponder()
+            // Sync logic
+            if overlay.showSoftwareKeyboard != showKeyboard {
+                overlay.showSoftwareKeyboard = showKeyboard
+                
+                // FORCE FOCUS LOGIC
+                // When toggling ON, we must actively pull focus from whatever button triggered the state change
+                if showKeyboard {
+                    DispatchQueue.main.async {
+                        overlay.becomeFirstResponder()
+                    }
+                }
             }
         }
     }
@@ -1367,7 +1378,15 @@ class RealityKitInputOverlay: UIView, UIKeyInput, UIPointerInteractionDelegate, 
         // If false, we return a dummy view (hides soft keyboard, keeps hardware input).
         var showSoftwareKeyboard: Bool = false {
             didSet {
-                if oldValue != showSoftwareKeyboard {
+                // IMPORTANT: Ensure we are on the main thread
+                DispatchQueue.main.async {
+                    if self.showSoftwareKeyboard {
+                        // If turning keyboard ON, we MUST be the first responder to trigger the slide-up animation.
+                        if !self.isFirstResponder {
+                            self.becomeFirstResponder()
+                        }
+                    }
+                    // Trigger the swap between 'dummy' (hidden) and 'nil' (visible) input views
                     self.reloadInputViews()
                 }
             }
@@ -1583,26 +1602,38 @@ class RealityKitInputOverlay: UIView, UIKeyInput, UIPointerInteractionDelegate, 
     }
     
     private func updateCursorFromSystemPointer(location: CGPoint) {
-        guard let config = streamConfig else { return }
-        
-        // 1. Normalize based on the View size (which is now larger due to the fix)
-        let normX = location.x / self.bounds.width
-        let normY = location.y / self.bounds.height
-        
-        // 2. Map to Host Coordinates
-        var hostX = normX * CGFloat(config.width)
-        var hostY = normY * CGFloat(config.height)
-        
-        // 3. FIX: CLAMP the coordinates
-        // Because the view is 15% larger, touches on the edge might result in
-        // coordinates < 0 or > width. We clamp them to the stream bounds.
-        hostX = min(max(hostX, 0), CGFloat(config.width))
-        hostY = min(max(hostY, 0), CGFloat(config.height))
-        
-        currentMousePosition = CGPoint(x: hostX, y: hostY)
-        
-        LiSendMousePositionEvent(Int16(hostX), Int16(hostY), Int16(config.width), Int16(config.height))
-    }
+            guard let config = streamConfig else { return }
+            
+            // 1. Define the buffer scale used in updateStreamEntity (Must match!)
+            let inputBuffer: CGFloat = 1.15
+            
+            // 2. Normalize based on the View size (0.0 to 1.0)
+            // Since the view is physically larger, 0.0 is the far left of the buffer,
+            // and 1.0 is the far right of the buffer.
+            let rawNormX = location.x / self.bounds.width
+            let rawNormY = location.y / self.bounds.height
+            
+            // 3. Remap coordinates to account for the buffer.
+            // We shift the origin to center (-0.5), scale it up by the buffer (1.15),
+            // then shift back to origin (+0.5).
+            // This effectively "zooms in" the input so 0.0 and 1.0 match the VISIBLE video edges.
+            let correctedNormX = (rawNormX - 0.5) * inputBuffer + 0.5
+            let correctedNormY = (rawNormY - 0.5) * inputBuffer + 0.5
+            
+            // 4. Map to Host Coordinates using the corrected normalized values
+            var hostX = correctedNormX * CGFloat(config.width)
+            var hostY = correctedNormY * CGFloat(config.height)
+            
+            // 5. CLAMP the coordinates
+            // This handles the "Overscan" area. If you look at the buffer zone (outside video),
+            // this ensures we don't send pixels like -50 or 2000.
+            hostX = min(max(hostX, 0), CGFloat(config.width))
+            hostY = min(max(hostY, 0), CGFloat(config.height))
+            
+            currentMousePosition = CGPoint(x: hostX, y: hostY)
+            
+            LiSendMousePositionEvent(Int16(hostX), Int16(hostY), Int16(config.width), Int16(config.height))
+        }
     
     // MARK: - Touch Handling
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
