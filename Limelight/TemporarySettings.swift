@@ -97,133 +97,137 @@ public class TemporarySettings: NSObject {
     }
 
     // This init is used by the App when loading from the Database
-    @objc public init(fromSettings settings: MoonlightSettings) {
-        #if TARGET_OS_TV
-        self.bitrate = 0
-        self.framerate = 0
-        self.height = 0
-        self.width = 0
-        self.audioConfig = 0
-        self.uniqueId = ""
-        self.onscreenControls = .off
-        #else
+        @objc public init(fromSettings settings: MoonlightSettings) {
+            #if TARGET_OS_TV
+            self.bitrate = 0
+            self.framerate = 0
+            self.height = 0
+            self.width = 0
+            self.audioConfig = 0
+            self.uniqueId = ""
+            self.onscreenControls = .off
+            #else
 
-        // 1. Load raw values from the Database
-        let loadedBitrate = settings.bitrate?.int32Value ?? 0
-        let loadedHeight = settings.height?.int32Value ?? 0
-        let loadedWidth = settings.width?.int32Value ?? 0
-        let loadedFps = settings.framerate?.int32Value ?? 0
-        let loadedOsc = settings.onscreenControls?.intValue ?? 0
-        
-        // Initialize self with loaded values first
-        self.bitrate = loadedBitrate
-        self.framerate = loadedFps
-        self.height = loadedHeight
-        self.width = loadedWidth
-        self.onscreenControls = OnScreenControlsLevel(rawValue: loadedOsc) ?? OnScreenControlsLevel.off
+            // 1. Load raw values from the Database
+            let loadedBitrate = settings.bitrate?.int32Value ?? 0
+            let loadedHeight = settings.height?.int32Value ?? 0
+            let loadedWidth = settings.width?.int32Value ?? 0
+            let loadedFps = settings.framerate?.int32Value ?? 0
+            let loadedOsc = settings.onscreenControls?.intValue ?? 0
+            
+            // Initialize self with loaded values first
+            self.bitrate = loadedBitrate
+            self.framerate = loadedFps
+            self.height = loadedHeight
+            self.width = loadedWidth
+            self.onscreenControls = OnScreenControlsLevel(rawValue: loadedOsc) ?? OnScreenControlsLevel.off
 
-        // 2. ONE-TIME MIGRATION CHECK (Resolution/Bitrate Defaults)
-        let migrationKey = "hasMigratedToNewDefaults_v1"
-        let hasMigrated = UserDefaults.standard.bool(forKey: migrationKey)
+            // 2. ONE-TIME MIGRATION CHECK (Resolution/Bitrate Defaults)
+            let migrationKey = "hasMigratedToNewDefaults_v1"
+            let hasMigrated = UserDefaults.standard.bool(forKey: migrationKey)
 
-        if !hasMigrated {
-            let isOldDefaultBitrate = (loadedBitrate == 10000)
-            let isOldDefaultRes = (loadedHeight == 720 || loadedHeight == 1080)
-            let isOldDefaultOsc = (loadedOsc == 1) // 1 = Auto
-            let isOldDefaultFps = (loadedFps == 60)
+            if !hasMigrated {
+                let isOldDefaultBitrate = (loadedBitrate == 10000)
+                let isOldDefaultRes = (loadedHeight == 720 || loadedHeight == 1080)
+                let isOldDefaultOsc = (loadedOsc == 1) // 1 = Auto
+                let isOldDefaultFps = (loadedFps == 60)
 
-            if isOldDefaultBitrate && isOldDefaultRes && isOldDefaultOsc && isOldDefaultFps {
-                print("Detected fresh install or default settings. Applying new Vision defaults.")
+                if isOldDefaultBitrate && isOldDefaultRes && isOldDefaultOsc && isOldDefaultFps {
+                    print("Detected fresh install or default settings. Applying new Vision defaults.")
+                    
+                    self.bitrate = 30000
+                    self.height = 1440
+                    self.width = 2560
+                    self.onscreenControls = .off
+                }
                 
-                self.bitrate = 30000
-                self.height = 1440
-                self.width = 2560
-                self.onscreenControls = .off
+                UserDefaults.standard.set(true, forKey: migrationKey)
+            }
+
+            // Load remaining settings normally
+            self.audioConfig = settings.audioConfig?.int32Value ?? 0
+            self.preferredCodec = PreferredCodec(rawValue: Int(settings.preferredCodec)) ?? PreferredCodec.auto
+            self.renderer = if let ren = settings.renderer?.uint8Value { Renderer(rawValue: UInt8(ren)) ?? .classic } else { .classic }
+            self.uniqueId = settings.uniqueId ?? ""
+
+            self.useFramePacing = settings.useFramePacing
+            self.multiController = settings.multiController
+            self.swapABXYButtons = settings.swapABXYButtons
+            self.playAudioOnPC = settings.playAudioOnPC
+            self.optimizeGames = settings.optimizeGames
+            self.enableHdr = settings.enableHdr
+            self.btMouseSupport = settings.btMouseSupport
+            self.absoluteTouchMode = settings.absoluteTouchMode
+            self.statsOverlay = settings.statsOverlay
+
+            self.realitykitRendererAnimateOpening = settings.realitykitRendererAnimateOpening == 1
+            self.realitykitRendererCurvature = settings.realitykitRendererCurvature?.floatValue ?? 0
+            self.dimPassthrough = settings.dimPassthrough?.boolValue ?? false
+            
+            self.realitykitImmersiveMode = UserDefaults.standard.bool(forKey: "realitykitImmersiveMode")
+            
+            // --- HDR / COLOR SAFE LOADING ---
+            // We track if we had to repair any values (0.0 -> 1.0) using this flag
+            var valuesNeedRepair = false
+            
+            // 1. Brightness
+            let loadedBrightness = settings.brightness?.floatValue ?? 0.0
+            if loadedBrightness < 0.1 {
+                self.brightness = 2.2 // Apply boost for fresh/legacy updates
+            } else {
+                self.brightness = loadedBrightness
             }
             
-            UserDefaults.standard.set(true, forKey: migrationKey)
-        }
+            // 2. Gamma
+            // If nil or 0.0, default to 1.0
+            let loadedGamma = settings.gamma?.floatValue ?? 0.0
+            if loadedGamma < 0.01 {
+                self.gamma = 1.0
+                valuesNeedRepair = true
+            } else {
+                self.gamma = loadedGamma
+            }
+            
+            // 3. Saturation
+            // If nil or 0.0, default to 1.0
+            let loadedSat = settings.saturation?.floatValue ?? 0.0
+            if loadedSat < 0.01 {
+                self.saturation = 1.0
+                valuesNeedRepair = true
+            } else {
+                self.saturation = loadedSat
+            }
+            
+            if let storedLang = UserDefaults.standard.object(forKey: appLanguageDefaultsKey) as? Int {
+                self.appLanguageRaw = storedLang
+            } else {
+                self.appLanguageRaw = AppLanguage.english.rawValue
+            }
+            self.autoResumeStreamOnReopen = UserDefaults.standard.bool(forKey: "autoResumeStreamOnReopen")
+            self.rememberStreamSettings = UserDefaults.standard.object(forKey: "rememberStreamSettings") as? Bool ?? true
+            #endif
 
-        // Load remaining settings normally
-        self.audioConfig = settings.audioConfig?.int32Value ?? 0
-        self.preferredCodec = PreferredCodec(rawValue: Int(settings.preferredCodec)) ?? PreferredCodec.auto
-        self.renderer = if let ren = settings.renderer?.uint8Value { Renderer(rawValue: UInt8(ren)) ?? .classic } else { .classic }
-        self.uniqueId = settings.uniqueId ?? ""
-
-        self.useFramePacing = settings.useFramePacing
-        self.multiController = settings.multiController
-        self.swapABXYButtons = settings.swapABXYButtons
-        self.playAudioOnPC = settings.playAudioOnPC
-        self.optimizeGames = settings.optimizeGames
-        self.enableHdr = settings.enableHdr
-        self.btMouseSupport = settings.btMouseSupport
-        self.absoluteTouchMode = settings.absoluteTouchMode
-        self.statsOverlay = settings.statsOverlay
-
-        self.realitykitRendererAnimateOpening = settings.realitykitRendererAnimateOpening == 1
-        self.realitykitRendererCurvature = settings.realitykitRendererCurvature?.floatValue ?? 0
-        self.dimPassthrough = settings.dimPassthrough?.boolValue ?? false
-        
-        self.realitykitImmersiveMode = UserDefaults.standard.bool(forKey: "realitykitImmersiveMode")
-        
-        // --- HDR DEFAULTS MIGRATION ---
-        // 1. Brightness (Boost)
-        let storedBrightness = settings.brightness?.floatValue ?? 0.0
-        if storedBrightness < 0.1 {
-            self.brightness = 2.2 // Default Boost
-        } else {
-            self.brightness = storedBrightness
-        }
-        
-        // 2. Gamma
-        let loadedGamma = settings.gamma?.floatValue ?? 0.0
-        // If value is effectively 0 (unitialized in DB), force to 1.0 (Neutral)
-        if loadedGamma < 0.01 {
-            self.gamma = 1.0
-        } else {
-            self.gamma = loadedGamma
-        }
-        
-        // 3. Saturation
-        let loadedSat = settings.saturation?.floatValue ?? 0.0
-        // If value is effectively 0 (unitialized in DB), force to 1.0 (Neutral)
-        if loadedSat < 0.01 {
-            self.saturation = 1.0
-        } else {
-            self.saturation = loadedSat
-        }
-        
-        if let storedLang = UserDefaults.standard.object(forKey: appLanguageDefaultsKey) as? Int {
-            self.appLanguageRaw = storedLang
-        } else {
-            self.appLanguageRaw = AppLanguage.english.rawValue
-        }
-        self.autoResumeStreamOnReopen = UserDefaults.standard.bool(forKey: "autoResumeStreamOnReopen")
-        self.rememberStreamSettings = UserDefaults.standard.object(forKey: "rememberStreamSettings") as? Bool ?? true
-        #endif
-
-        super.init()
-        
-        // 3. SAVE BACK CORRECTED DEFAULTS
-        // We use a specific key for the HDR migration to ensure it happens once for existing users.
-        let hdrMigrationKey = "migrated_hdr_defaults_v1"
-        let hasMigratedHDR = UserDefaults.standard.bool(forKey: hdrMigrationKey)
-        
-        if !hasMigratedHDR {
-            print("[Settings] Migrating HDR Defaults (0.0 -> 1.0)...")
-            self.save()
-            UserDefaults.standard.set(true, forKey: hdrMigrationKey)
-        }
-        
-        // Existing migration save logic for resolution/bitrate
-        if !UserDefaults.standard.bool(forKey: "hasSavedNewDefaults_v1") {
-            if self.bitrate != loadedBitrate || self.height != loadedHeight {
+            super.init()
+            
+            // 3. SAVE BACK CORRECTED DEFAULTS
+            // We check the flag we set above. If values were missing (0.0), we save the fix immediately.
+            let hdrMigrationKey = "migrated_hdr_defaults_v1"
+            let hasMigratedHDR = UserDefaults.standard.bool(forKey: hdrMigrationKey)
+            
+            if !hasMigratedHDR || valuesNeedRepair {
+                print("[Settings] Repairing/Migrating Missing HDR Values...")
                 self.save()
-                UserDefaults.standard.set(true, forKey: "hasSavedNewDefaults_v1")
+                UserDefaults.standard.set(true, forKey: hdrMigrationKey)
+            }
+            
+            if !UserDefaults.standard.bool(forKey: "hasSavedNewDefaults_v1") {
+                if self.bitrate != loadedBitrate || self.height != loadedHeight {
+                    self.save()
+                    UserDefaults.standard.set(true, forKey: "hasSavedNewDefaults_v1")
+                }
             }
         }
-    }
-
+    
     @objc public func save() {
         UserDefaults.standard.set(self.realitykitImmersiveMode, forKey: "realitykitImmersiveMode")
         UserDefaults.standard.set(self.autoResumeStreamOnReopen, forKey: "autoResumeStreamOnReopen")
