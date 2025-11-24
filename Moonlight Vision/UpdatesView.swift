@@ -35,7 +35,21 @@ struct UpdatesView: View {
 
                 Section(header: Text(viewModel.localized("latest_updates"))) { // Section for latest updates
                     VStack(alignment: .leading) { // Original VStack for text alignment
-                        Text("Version 11.0.16 (Nov 22, 2025)")
+                        Text("Version 11.0.17 (Nov 24, 2025)")
+                                                    .font(.headline)
+                        Text("- In theory improved the av1 processing pipeline so that it no longer has perfomrance issues  but I don't have an m5 to test")
+                            .font(.body)
+                        Text("- in theory fixed av1 hdr issues but I don't have an m5 to test")
+                            .font(.body)
+                        Text("- optimizations to help reduce the shimmering effect in reality kit views")
+                            .font(.body)
+                        Text("- fixed some localization strings")
+                            .font(.body)
+                    }
+                    .padding(.vertical) // Keep vertical padding
+                    .frame(maxWidth: .infinity, alignment: .leading) // Ensure VStack takes full width and aligns content to leading
+                    VStack(alignment: .leading) { // Original VStack for text alignment
+                        Text("Version 11.0.16 (Nov 23, 2025)")
                                                     .font(.headline)
                         Text("- Added head tracked / non head tracked audio button (thanks to neo moonlight for inspiring this feature)")
                             .font(.body)
