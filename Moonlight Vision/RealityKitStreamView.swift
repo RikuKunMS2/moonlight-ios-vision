@@ -153,11 +153,18 @@ struct _RealityKitStreamView: View {
         self.needsHdr = needsHdr
         self.isImmersive = isImmersive
         self.controllerSupport = ControllerSupport(config: streamConfig.wrappedValue, delegate: DummyControllerDelegate())
-        let bytesPerPixel = needsHdr ? 8 : 4
+        
+        // MARK: - FIX: Always use rgba16Float (8 bytes per pixel)
+        // The DrawableVideoDecoder pipeline now unifies on RGBA16Float for both HDR and SDR
+        // to support the unified shader and zero-copy YUV processing.
+        // If we used bgra8Unorm_srgb here, the texture.replace() call would fail or artifact due to format mismatch.
+        let bytesPerPixel = 8 // 16-bit float * 4 channels = 64 bits = 8 bytes
+        
         let data = Data.init(count: bytesPerPixel * Int(streamConfig.wrappedValue.width) * Int(streamConfig.wrappedValue.height))
+        
         self.texture = try! TextureResource(
             dimensions: .dimensions(width: Int(streamConfig.wrappedValue.width), height: Int(streamConfig.wrappedValue.height)),
-            format: .raw(pixelFormat: needsHdr ? .rgba16Float : .bgra8Unorm_srgb),
+            format: .raw(pixelFormat: .rgba16Float), // Always 16-bit float
             contents: .init(
                 mipmapLevels: [ .mip(data: data, bytesPerRow: bytesPerPixel * Int(streamConfig.wrappedValue.width)) ]
             )
@@ -325,7 +332,7 @@ struct _RealityKitStreamView: View {
     func triggerCloseSequence() {
         // 1. Open Main Menu FIRST to ensure user has somewhere to go
         openWindow(id: "mainView")
-       
+        
         // 2. Delay the teardown slightly to allow the new window to appear
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.closeAction()
@@ -387,7 +394,7 @@ struct _RealityKitStreamView: View {
                 // Ensure controls can receive gesture touches
                 controls.components.set(InputTargetComponent())
             }
-           
+            
             // Setup Input Overlay (Immersive Only)
             if isImmersive, let inputEnt = attachments.entity(for: "input_overlay") {
                 screen.addChild(inputEnt)
@@ -956,7 +963,7 @@ struct _RealityKitStreamView: View {
     func setupStreamOnAppear() {
         safeHDRSettings.value = HDRParams(
                 boost: viewModel.streamSettings.brightness,
-                gamma: viewModel.streamSettings.gamma,           // Changed from contrast: 1.0
+                gamma: viewModel.streamSettings.gamma,          // Changed from contrast: 1.0
                 saturation: viewModel.streamSettings.saturation, // Changed from 1.0
                 brightness: 0.0
             )
@@ -1118,7 +1125,7 @@ struct _RealityKitStreamView: View {
             
             // CHECK FOR INVALID HEIGHT
             if height.isNaN || height == 0 {
-               print("🚨 [GenMesh] Calculated Height is INVALID (Width: \(width) * Ratio: \(aspectRatio))")
+                print("🚨 [GenMesh] Calculated Height is INVALID (Width: \(width) * Ratio: \(aspectRatio))")
             }
 
             let vertexCount = Int(resolution.0 * resolution.1)
@@ -1252,7 +1259,7 @@ struct RealityKitInputView: UIViewControllerRepresentable {
         let vc = RealityKitInputViewController()
         vc.streamConfig = streamConfig
         vc.controllerSupport = controllerSupport
-       
+        
         vc.keyboardDismissHandler = {
             DispatchQueue.main.async {
                 // Optional: Sync state if needed
@@ -1263,7 +1270,7 @@ struct RealityKitInputView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ vc: RealityKitInputViewController, context: Context) {
         vc.streamConfig = streamConfig
-       
+        
         // Pass the toggle state to the overlay
         if let overlay = vc.view as? RealityKitInputOverlay {
             overlay.streamConfig = streamConfig
