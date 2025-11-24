@@ -91,7 +91,8 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     private var hdrEnabled: Bool
     private var hdrMetadata: SS_HDR_METADATA = SS_HDR_METADATA()
 
-    private var copyPipelineState: MTLRenderPipelineState?
+    private var copyPipelineState: MTLRenderPipelineState? // Existing RGB pipeline
+    private var yuvPipelineState: MTLRenderPipelineState?  // NEW YUV pipeline
     private var copyPipelineFormat: MTLPixelFormat?
 
     // MARK: - Initialization
@@ -143,106 +144,159 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     // MARK: - Render Loop
     
     func decompressionOutputCallback(
-        decompressionOutputRefCon _: UnsafeMutableRawPointer?,
-        sourceFrameRefCon _: UnsafeMutableRawPointer?,
-        status _: OSStatus,
-        infoFlags _: VTDecodeInfoFlags,
-        imageBuffer: CVImageBuffer?,
-        presentationTimeStamp _: CMTime,
-        presentationDuration _: CMTime?
-    ) {
-        guard
-            let imageBuffer = imageBuffer,
-            let textureCache = textureCache,
-            let drawable = try? drawableQueue?.nextDrawable(),
-            let commandBuffer = commandQueue?.makeCommandBuffer()
-        else {
-            // Silent return on dropped frames to avoid log spam
-            return
-        }
-        
-        if hdrEnabled {
-            updateHDRMetadata()
-        }
-
-        // Lazy init pipeline
-        if self.copyPipelineState == nil || copyPipelineFormat != metalFormat {
-            self.copyPipelineState = buildCopyPipeline(metalFormat)
-            if self.copyPipelineState != nil {
-                copyPipelineFormat = metalFormat
+            decompressionOutputRefCon _: UnsafeMutableRawPointer?,
+            sourceFrameRefCon _: UnsafeMutableRawPointer?,
+            status _: OSStatus,
+            infoFlags _: VTDecodeInfoFlags,
+            imageBuffer: CVImageBuffer?,
+            presentationTimeStamp _: CMTime,
+            presentationDuration _: CMTime?
+        ) {
+            guard
+                let imageBuffer = imageBuffer,
+                let textureCache = textureCache,
+                let drawable = try? drawableQueue?.nextDrawable(),
+                let commandBuffer = commandQueue?.makeCommandBuffer()
+            else {
+                // Silent return on dropped frames or missing resources
+                return
             }
-        }
-        guard let copyPipelineState = copyPipelineState else { return }
 
-        // Create HDR buffers
-        let (displayBuffer, contentBuffer) = createHDRParameterBuffers()
+            if hdrEnabled {
+                updateHDRMetadata()
+            }
 
-        // Create Metal Texture from CVPixelBuffer
-        var imageTexture: CVMetalTexture?
-        let width = CVPixelBufferGetWidth(imageBuffer)
-        let height = CVPixelBufferGetHeight(imageBuffer)
-        
-        // Handle resolution changes
-        if width != videoWidth || height != videoHeight {
-            videoWidth = width
-            videoHeight = height
-            setupLowLevelTexture()
-        }
-        
-        // Determine format based on buffer
-        let pixelFormat = CVPixelBufferGetPixelFormatType(imageBuffer)
-        let srcMetalFormats = CVMetalHelpers.getTextureTypesForFormat(pixelFormat)
-        let srcMetalFormat = srcMetalFormats[0]
+            // 1. DETERMINE PIPELINE (RGB vs YUV)
+            // Check if we have 1 plane (BGRA/RGBA) or 2 planes (NV12/P010 YUV)
+            let planeCount = CVPixelBufferGetPlaneCount(imageBuffer)
+            let bufferPixelFormat = CVPixelBufferGetPixelFormatType(imageBuffer)
+            
+            var currentPipeline: MTLRenderPipelineState?
 
-        let result = CVMetalTextureCacheCreateTextureFromImage(
-            kCFAllocatorDefault,
-            textureCache,
-            imageBuffer,
-            nil,
-            srcMetalFormat,
-            CVPixelBufferGetWidthOfPlane(imageBuffer, 0),
-            CVPixelBufferGetHeightOfPlane(imageBuffer, 0),
-            0,
-            &imageTexture
-        )
+            if planeCount > 1 {
+                // --- YUV Pipeline (Zero-Copy Path) ---
+                if self.yuvPipelineState == nil || copyPipelineFormat != metalFormat {
+                    // Requires "copyFragmentShaderYUV" in Shaders.metal
+                    self.yuvPipelineState = buildCopyPipeline(metalFormat, fragmentFunction: "copyFragmentShaderYUV")
+                    if self.yuvPipelineState != nil { copyPipelineFormat = metalFormat }
+                }
+                currentPipeline = self.yuvPipelineState
+            } else {
+                // --- RGB Pipeline (Legacy/Fallback Path) ---
+                if self.copyPipelineState == nil || copyPipelineFormat != metalFormat {
+                    // Requires "copyFragmentShader" in Shaders.metal
+                    self.copyPipelineState = buildCopyPipeline(metalFormat, fragmentFunction: "copyFragmentShader")
+                    if self.copyPipelineState != nil { copyPipelineFormat = metalFormat }
+                }
+                currentPipeline = self.copyPipelineState
+            }
 
-        guard
-            let validImageTexture = imageTexture,
-            let mtlTexture = CVMetalTextureGetTexture(validImageTexture)
-        else {
-            return
-        }
-    
-        // --- ENCODING ---
-        
-        let renderPassDescriptor = MTLRenderPassDescriptor()
-        renderPassDescriptor.colorAttachments[0].texture = drawable.texture
-        renderPassDescriptor.colorAttachments[0].loadAction = .dontCare // Faster than clear
-        renderPassDescriptor.colorAttachments[0].storeAction = .store
+            guard let pipelineState = currentPipeline else {
+                print("Failed to acquire pipeline state")
+                return
+            }
 
-        guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
-            return
+            // 2. PREPARE HDR BUFFERS
+            let (displayBuffer, contentBuffer) = createHDRParameterBuffers()
+            
+            // 3. CREATE INPUT TEXTURES
+            var rgbTexture: CVMetalTexture?
+            var yTexture: CVMetalTexture?
+            var uvTexture: CVMetalTexture?
+            
+            let width = CVPixelBufferGetWidth(imageBuffer)
+            let height = CVPixelBufferGetHeight(imageBuffer)
+            
+            // Handle resolution changes
+            if width != videoWidth || height != videoHeight {
+                videoWidth = width
+                videoHeight = height
+                setupLowLevelTexture()
+            }
+
+            // --- ENCODING PASS 1: RENDER (Decode/HDR -> Drawable Level 0) ---
+            
+            let renderPassDescriptor = MTLRenderPassDescriptor()
+            renderPassDescriptor.colorAttachments[0].texture = drawable.texture
+            renderPassDescriptor.colorAttachments[0].loadAction = .dontCare // We overwrite everything
+            renderPassDescriptor.colorAttachments[0].storeAction = .store
+
+            guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
+                return
+            }
+            
+            renderEncoder.setRenderPipelineState(pipelineState)
+            
+            // Bind Buffers
+            if let enabledBuffer = displayBuffer {
+                renderEncoder.setFragmentBuffer(enabledBuffer, offset: 0, index: 0)
+            }
+            if let paramsBuffer = contentBuffer {
+                renderEncoder.setFragmentBuffer(paramsBuffer, offset: 0, index: 1)
+            }
+            
+            // Bind Textures based on Plane Count
+            if planeCount > 1 {
+                // Determine pixel format for planes (8-bit vs 10-bit)
+                // P010/10-bit formats are usually 'x420' or 'l10r'
+                let is10Bit = (bufferPixelFormat == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange) ||
+                              (bufferPixelFormat == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange)
+                
+                let lumaFormat: MTLPixelFormat = is10Bit ? .r16Unorm : .r8Unorm
+                let chromaFormat: MTLPixelFormat = is10Bit ? .rg16Unorm : .rg8Unorm
+
+                // Plane 0: Y (Luma)
+                let _ = CVMetalTextureCacheCreateTextureFromImage(
+                    kCFAllocatorDefault, textureCache, imageBuffer, nil, lumaFormat,
+                    CVPixelBufferGetWidthOfPlane(imageBuffer, 0),
+                    CVPixelBufferGetHeightOfPlane(imageBuffer, 0),
+                    0, &yTexture
+                )
+                
+                // Plane 1: UV (Chroma)
+                let _ = CVMetalTextureCacheCreateTextureFromImage(
+                    kCFAllocatorDefault, textureCache, imageBuffer, nil, chromaFormat,
+                    CVPixelBufferGetWidthOfPlane(imageBuffer, 1),
+                    CVPixelBufferGetHeightOfPlane(imageBuffer, 1),
+                    1, &uvTexture
+                )
+                
+                if let yTex = yTexture, let uvTex = uvTexture,
+                   let mtlY = CVMetalTextureGetTexture(yTex),
+                   let mtlUV = CVMetalTextureGetTexture(uvTex) {
+                    renderEncoder.setFragmentTexture(mtlY, index: 0)
+                    renderEncoder.setFragmentTexture(mtlUV, index: 1)
+                }
+            } else {
+                // Single Plane RGB
+                let srcMetalFormats = CVMetalHelpers.getTextureTypesForFormat(bufferPixelFormat)
+                let _ = CVMetalTextureCacheCreateTextureFromImage(
+                    kCFAllocatorDefault, textureCache, imageBuffer, nil, srcMetalFormats[0],
+                    width, height, 0, &rgbTexture
+                )
+                
+                if let rgbTex = rgbTexture, let mtlRGB = CVMetalTextureGetTexture(rgbTex) {
+                    renderEncoder.setFragmentTexture(mtlRGB, index: 0)
+                }
+            }
+            
+            renderEncoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+            renderEncoder.endEncoding()
+
+            // --- ENCODING PASS 2: BLIT (Generate Mipmaps for Shimmer Fix) ---
+            // Occurs in the same command buffer to ensure no CPU stalls.
+            
+            if let blitEncoder = commandBuffer.makeBlitCommandEncoder() {
+                blitEncoder.generateMipmaps(for: drawable.texture)
+                blitEncoder.endEncoding()
+            }
+
+            // --- SUBMISSION ---
+            
+            commandBuffer.present(drawable)
+            commandBuffer.commit()
+            // NOTE: We intentionally removed waitUntilCompleted() to prevent stutter.
         }
-        
-        renderEncoder.setRenderPipelineState(copyPipelineState)
-        renderEncoder.setFragmentTexture(mtlTexture, index: 0)
-        
-        if let enabledBuffer = displayBuffer {
-            renderEncoder.setFragmentBuffer(enabledBuffer, offset: 0, index: 0)
-        }
-        if let paramsBuffer = contentBuffer {
-            renderEncoder.setFragmentBuffer(paramsBuffer, offset: 0, index: 1)
-        }
-        
-        renderEncoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
-        renderEncoder.endEncoding()
-    
-        // --- PERFORMANCE FIXES ---
-        // Removed generateMipmaps and waitUntilCompleted to prevent queue overflows
-        
-        commandBuffer.present(drawable) // Present as soon as GPU is done
-        commandBuffer.commit()
-    }
     
     private func createHDRParameterBuffers() -> (MTLBuffer?, MTLBuffer?) {
         var hdrEnabled = self.hdrEnabled
@@ -264,24 +318,16 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             
     func setupLowLevelTexture() {
         DispatchQueue.main.sync {
-            if videoWidth == 0 || videoHeight == 0 {
-                print("Tried to set up client texture without defined dimensions (\(videoWidth), \(videoHeight)) - skipping")
-                return
-            }
+            if videoWidth == 0 || videoHeight == 0 { return }
 
             self.drawableQueue = {
                 let descriptor = TextureResource.DrawableQueue.Descriptor(
                     pixelFormat: metalFormat,
                     width: Int(videoWidth),
                     height: Int(videoHeight),
-                    usage: [.renderTarget],
-                                        // --- FIX START ---
-                                        // Change .allocateAll to .none
-                                        // Since we removed generateMipmaps() for performance,
-                                        // we must stop allocating them to prevent visual artifacts.
-                                        mipmapsMode: .none
-                                        // --- FIX END ---
-                                    )
+                    usage: [.renderTarget, .shaderRead], // .shaderRead needed for the Blit engine to read Level 0
+                    mipmapsMode: .allocateAll // <--- FIX: MUST be allocateAll to stop shimmer
+                )
                 do {
                     let queue = try TextureResource.DrawableQueue(descriptor)
                     queue.allowsNextDrawableTimeout = true
@@ -290,9 +336,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                     fatalError("Could not create DrawableQueue: \(error)")
                 }
             }()
-
             region = MTLRegionMake2D(0, 0, videoWidth, videoHeight)
-
             self.callbackToRender(self.drawableQueue!, (videoWidth, videoHeight))
         }
     }
@@ -454,15 +498,19 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 // NOTE(shinyquagsire23): Setting kCVPixelBufferPixelFormatTypeKey *at all* will trigger
                 // a VideoToolbox bug that results in the output CVPixelBuffer's underlying Metal textures
                 // being decompressed, resulting in GPU bandwidth penalties
-                var attributes: [CFString: Any] = [kCVPixelBufferMetalCompatibilityKey: true, kCVPixelBufferPoolMinimumBufferCountKey: 3]
+                var attributes: [CFString: Any] = [
+                    kCVPixelBufferMetalCompatibilityKey: true,
+                    kCVPixelBufferPoolMinimumBufferCountKey: 3
+                ]
                 
-                // --- FIX START ---
-                                // AV1 must be forced to output the requested pixel format (RGBAHalf for HDR)
-                                // because the current Metal shader does not support YCbCr input.
-                                if !forceFastSecretTextureFormats || (videoFormat & VIDEO_FORMAT_MASK_AV1) != 0 {
-                                    attributes[kCVPixelBufferPixelFormatTypeKey] = decodingFormat
-                                }
-                                // --- FIX END ---
+                // We now have a YUV Metal shader, so we do NOT need to force the pixel format.
+                // Letting VideoToolbox choose the format (P010/NV12) allows "Zero-Copy" decoding
+                // which is essential for 8K/4K AV1 performance.
+
+                // Only keep this line if 'forceFastSecretTextureFormats' is FALSE (simulator/debugging)
+                if !forceFastSecretTextureFormats {
+                    attributes[kCVPixelBufferPixelFormatTypeKey] = decodingFormat
+                }
                 
                 VTDecompressionSessionCreate(allocator: kCFAllocatorDefault, formatDescription: formatDesc, decoderSpecification: decoderConfiguration as CFDictionary, imageBufferAttributes: attributes as CFDictionary, outputCallback: &decoderCallback, decompressionSessionOut: &session)
                 
@@ -996,25 +1044,43 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     }
 
     // Builds a simple copy pipeline with no input buffers, just
-    // draw 4 vertices to copy the input texture to the output
-    private func buildCopyPipeline(_ srcColorFormat: MTLPixelFormat) -> MTLRenderPipelineState? {
-        guard
-            let library = mtlDevice.makeDefaultLibrary()
-        else {
-            return nil
-        }
-        let vertexFunction = library.makeFunction(name: "copyVertexShader")
-        let fragmentFunction = library.makeFunction(name: "copyFragmentShader")
-        let pipelineDescriptor = MTLRenderPipelineDescriptor()
-        pipelineDescriptor.label = "CopyBlitPipeline"
-        pipelineDescriptor.vertexFunction = vertexFunction
-        pipelineDescriptor.fragmentFunction = fragmentFunction
-        pipelineDescriptor.colorAttachments[0].pixelFormat = srcColorFormat
-        pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
-        pipelineDescriptor.maxVertexAmplificationCount = 1
+        // draw 4 vertices to copy the input texture to the output.
+        // Now supports dynamic fragment function selection (RGB vs YUV).
+        private func buildCopyPipeline(_ pixelFormat: MTLPixelFormat, fragmentFunction: String) -> MTLRenderPipelineState? {
+            guard
+                let library = mtlDevice.makeDefaultLibrary()
+            else {
+                print("Failed to load default Metal library")
+                return nil
+            }
+            
+            // Load the constant vertex shader and the dynamic fragment shader
+            guard let vertexFunction = library.makeFunction(name: "copyVertexShader"),
+                  let fragmentFunc = library.makeFunction(name: fragmentFunction) else {
+                print("Failed to load shader functions: copyVertexShader or \(fragmentFunction)")
+                return nil
+            }
+            
+            let pipelineDescriptor = MTLRenderPipelineDescriptor()
+            pipelineDescriptor.label = "CopyBlitPipeline_\(fragmentFunction)"
+            pipelineDescriptor.vertexFunction = vertexFunction
+            pipelineDescriptor.fragmentFunction = fragmentFunc
+            
+            // Ensure the output format matches the Drawable (usually .rgba16Float for HDR)
+            pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
+            
+            // Disable blending since we are strictly copying/overwriting pixels
+            pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
+            
+            pipelineDescriptor.maxVertexAmplificationCount = 1
 
-        return try? mtlDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-    }
+            do {
+                return try mtlDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            } catch {
+                print("Failed to create render pipeline state: \(error)")
+                return nil
+            }
+        }
 
     // Convert big endian UInt16 to host Float
     private func convertBigEndianUInt16ToFloat(_ value: UInt16) -> Float {

@@ -84,3 +84,57 @@ fragment half4 copyFragmentShader(CopyVertexOut in [[stage_in]],
     
     return half4(half3(rgb), color.a);
 }
+
+// BT.2020 to RGB Conversion Constants (Limited Range)
+constant float3 kYUVToR = float3(1.0,  0.0000,  1.4746);
+constant float3 kYUVToG = float3(1.0, -0.1645, -0.5714);
+constant float3 kYUVToB = float3(1.0,  1.8814,  0.0000);
+
+// NEW: Fragment shader for Bi-Planar YUV inputs (NV12/P010)
+fragment half4 copyFragmentShaderYUV(CopyVertexOut in [[stage_in]],
+                                     texture2d<float> luma_tex [[texture(0)]],  // Plane 0 (Y)
+                                     texture2d<float> chroma_tex [[texture(1)]], // Plane 1 (CbCr)
+                                     constant bool& hdrEnabled [[buffer(0)]],
+                                     constant HDRParams& hdrParams [[buffer(1)]])
+{
+    constexpr sampler colorSampler(coord::normalized,
+                                   address::clamp_to_edge,
+                                   filter::linear);
+
+    // 1. Sample Y and CbCr planes
+    float y = luma_tex.sample(colorSampler, in.uv).r;
+    float2 uv = chroma_tex.sample(colorSampler, in.uv).rg;
+
+    // 2. Adjust for Limited Video Range (16-235 for 8-bit, scaled)
+    // Y is offset by 16/255 (approx 0.0625)
+    // UV is offset by 0.5 (center bias)
+    float y_adj = max(y - 0.062745, 0.0); // 16/255
+    float u_adj = uv.r - 0.5;
+    float v_adj = uv.g - 0.5;
+
+    // 3. Convert YUV to RGB (BT.2020)
+    float r = dot(float3(y_adj, u_adj, v_adj), kYUVToR);
+    float g = dot(float3(y_adj, u_adj, v_adj), kYUVToG);
+    float b = dot(float3(y_adj, u_adj, v_adj), kYUVToB);
+
+    float3 rgb = float3(r, g, b);
+
+    // --- HDR LOGIC ---
+    if (hdrEnabled) {
+        rgb = PQtoLinear(rgb);
+        
+        float luminance = dot(rgb, float3(0.2126, 0.7152, 0.0722));
+        rgb = mix(float3(luminance), rgb, hdrParams.saturation);
+
+        if (hdrParams.gamma != 1.0) {
+            rgb = pow(max(rgb, 0.0), float3(hdrParams.gamma));
+        }
+        
+        float boost = max(hdrParams.boost, 0.1);
+        rgb = (rgb / 100.0) * 1.6 * boost;
+
+        rgb = rgb + float3(hdrParams.brightness);
+    }
+    
+    return half4(half3(rgb), 1.0);
+}
