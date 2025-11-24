@@ -113,8 +113,8 @@ struct _RealityKitStreamView: View {
     @State private var blackOutSphere: ModelEntity = ModelEntity()
     
     @State private var safeHDRSettings = ThreadSafeHDRSettings(
-            params: HDRParams(boost: 2.0, contrast: 1.0, saturation: 1.0, brightness: 0.0)
-        )
+        params: HDRParams(boost: 2.0, gamma: 1.0, saturation: 1.0, brightness: 0.0)
+    )
     
     @State var shouldClose: Bool = false
     @State var hasPerformedTeardown = false
@@ -184,11 +184,20 @@ struct _RealityKitStreamView: View {
             .volumeBaseplateVisibility(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
             .supportedVolumeViewpoints(.front)
 
+        func updateHDRParams() {
+            safeHDRSettings.value = HDRParams(
+                boost: viewModel.streamSettings.brightness,
+                gamma: viewModel.streamSettings.gamma,
+                saturation: viewModel.streamSettings.saturation,
+                brightness: 0.0
+            )
+        }
+        
         // 3. Apply Logic/Lifecycle Modifiers and Return
         return visualContent
-            .onChange(of: viewModel.streamSettings.brightness) { _, newValue in
-                safeHDRSettings.value = HDRParams(boost: newValue, contrast: 1.0, saturation: 1.0, brightness: 0.0)
-            }
+            .onChange(of: viewModel.streamSettings.brightness) { _, _ in updateHDRParams() }
+            .onChange(of: viewModel.streamSettings.gamma) { _, _ in updateHDRParams() }
+            .onChange(of: viewModel.streamSettings.saturation) { _, _ in updateHDRParams() }
             .onAppear {
                 setupStreamOnAppear()
             }
@@ -582,17 +591,43 @@ struct _RealityKitStreamView: View {
     @ViewBuilder
     var settingsControls: some View {
         if needsHdr || viewModel.streamSettings.enableHdr {
-            HStack {
-                Image(systemName: "sun.max.fill")
-                Text(viewModel.localized("boost_luminance"))
-                Slider(value: $viewModel.streamSettings.brightness, in: 1.0...5.0, step: 0.1)
-                    .frame(width: 220)
-                .onChange(of: viewModel.streamSettings.brightness) { _, _ in
-                    if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                // --- Luminance Boost ---
+                HStack {
+                    Image(systemName: "sun.max.fill")
+                        .help("Luminance Boost")
+                    // Text(viewModel.localized("boost")) // Optional label
+                    Slider(value: $viewModel.streamSettings.brightness, in: 1.0...5.0, step: 0.1)
+                        .frame(width: 220)
+                        .onChange(of: viewModel.streamSettings.brightness) { _, _ in
+                             if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                        }
                 }
+                .padding(.top, 5)
+
+                // --- Gamma Slider ---
+                HStack {
+                    Image(systemName: "circle.lefthalf.filled") // Icon for Contrast/Gamma
+                        .help("Gamma")
+                    Slider(value: $viewModel.streamSettings.gamma, in: 0.5...2.5, step: 0.05)
+                        .frame(width: 220)
+                        .onChange(of: viewModel.streamSettings.gamma) { _, _ in
+                             if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                        }
+                }
+
+                // --- Saturation Slider ---
+                HStack {
+                    Image(systemName: "paintpalette.fill") // Icon for Color/Saturation
+                        .help("Saturation")
+                    Slider(value: $viewModel.streamSettings.saturation, in: 0.0...2.0, step: 0.05)
+                        .frame(width: 220)
+                        .onChange(of: viewModel.streamSettings.saturation) { _, _ in
+                             if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() }
+                        }
+                }
+                
+                Divider().padding(.vertical, 5)
             }
-            .padding(.vertical, 5)
-        }
         
         HStack {
             Button(viewModel.localized("flatten"), systemImage: viewModel.streamSettings.realitykitRendererCurvature == 0 ? "light.panel" : "pano.fill") {
@@ -725,8 +760,13 @@ struct _RealityKitStreamView: View {
     }
     
     func setupStreamOnAppear() {
-            safeHDRSettings.value = HDRParams(boost: viewModel.streamSettings.brightness, contrast: 1.0, saturation: 1.0, brightness: 0.0)
-            
+        safeHDRSettings.value = HDRParams(
+                boost: viewModel.streamSettings.brightness,
+                gamma: viewModel.streamSettings.gamma,           // Changed from contrast: 1.0
+                saturation: viewModel.streamSettings.saturation, // Changed from 1.0
+                brightness: 0.0
+            )
+        
             if !viewModel.activelyStreaming {
                 print("[RealityKitStreamView] Zombie state detected. Restoring main view.")
                 triggerCloseSequence()
@@ -851,11 +891,19 @@ struct _RealityKitStreamView: View {
             immersivePosition = SIMD3<Float>(savedPosX, savedPosY, savedPosZ)
         }
         if let savedImmersion = defaults.object(forKey: "realitykitImmersionAmount") as? Float { immersionAmount = savedImmersion }
+        if let savedGamma = defaults.object(forKey: "realitykitGamma") as? Float {
+                viewModel.streamSettings.gamma = savedGamma
+            }
+            if let savedSat = defaults.object(forKey: "realitykitSaturation") as? Float {
+                viewModel.streamSettings.saturation = savedSat
+            }
     }
     
     private func saveRealityKitSettings() {
         guard viewModel.streamSettings.rememberStreamSettings else { return }
         let defaults = UserDefaults.standard
+        defaults.set(viewModel.streamSettings.gamma, forKey: "realitykitGamma")
+        defaults.set(viewModel.streamSettings.saturation, forKey: "realitykitSaturation")
         defaults.set(height, forKey: "realitykitHeight")
         defaults.set(depthOffset, forKey: "realitykitDepthOffset")
         defaults.set(immersiveScale, forKey: "realitykitImmersiveScale")

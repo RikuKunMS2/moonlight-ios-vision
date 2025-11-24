@@ -18,7 +18,7 @@
                        framerate:(NSInteger)framerate
                           height:(NSInteger)height
                            width:(NSInteger)width
-                audioConfig:(NSInteger)audioConfig
+                     audioConfig:(NSInteger)audioConfig
                 onscreenControls:(NSInteger)onscreenControls
                    optimizeGames:(BOOL)optimizeGames
                  multiController:(BOOL)multiController
@@ -34,7 +34,10 @@
 realitykitRendererAnimateOpening:(BOOL)realitykitRendererAnimateOpening
      realitykitRendererCurvature:(NSNumber*)realitykitRendererCurvature
                   dimPassthrough:(BOOL)dimPassthrough
-                        brightness:(float)brightness; // <--- ADD THIS
+                      brightness:(float)brightness
+                           gamma:(float)gamma       // <--- ADD THIS
+                      saturation:(float)saturation; // <--- ADD THIS
+
 - (NSArray<TemporaryHost*>*) getHosts;
 - (void) updateHost:(TemporaryHost*)host;
 - (void) updateAppsForExistingHost:(TemporaryHost *)host;

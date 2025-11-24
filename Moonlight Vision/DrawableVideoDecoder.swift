@@ -22,10 +22,10 @@ let kCVPixelBufferColorPrimariesKey = "ColorPrimaries" as CFString
 let kCVPixelBufferTransferFunctionKey = "TransferFunction" as CFString
 
 struct HDRParams {
-    var boost: Float      // Default: 2.0 (Gain)
-    var contrast: Float   // Default: 1.0
+    var boost: Float      // Default: 2.0
+    var gamma: Float      // Renamed from contrast. Default: 1.0
     var saturation: Float // Default: 1.0
-    var brightness: Float // Default: 0.0 (Offset)
+    var brightness: Float // Default: 0.0
 }
 
 let kCVImageBufferYCbCrMatrix_ITU_R_2020 = "ITU_R_2020" as CFString
@@ -455,9 +455,14 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 // a VideoToolbox bug that results in the output CVPixelBuffer's underlying Metal textures
                 // being decompressed, resulting in GPU bandwidth penalties
                 var attributes: [CFString: Any] = [kCVPixelBufferMetalCompatibilityKey: true, kCVPixelBufferPoolMinimumBufferCountKey: 3]
-                if !forceFastSecretTextureFormats {
-                    attributes[kCVPixelBufferPixelFormatTypeKey] = decodingFormat
-                }
+                
+                // --- FIX START ---
+                                // AV1 must be forced to output the requested pixel format (RGBAHalf for HDR)
+                                // because the current Metal shader does not support YCbCr input.
+                                if !forceFastSecretTextureFormats || (videoFormat & VIDEO_FORMAT_MASK_AV1) != 0 {
+                                    attributes[kCVPixelBufferPixelFormatTypeKey] = decodingFormat
+                                }
+                                // --- FIX END ---
                 
                 VTDecompressionSessionCreate(allocator: kCFAllocatorDefault, formatDescription: formatDesc, decoderSpecification: decoderConfiguration as CFDictionary, imageBufferAttributes: attributes as CFDictionary, outputCallback: &decoderCallback, decompressionSessionOut: &session)
                 

@@ -72,7 +72,10 @@
 realitykitRendererAnimateOpening:(BOOL)realitykitRendererAnimateOpening
      realitykitRendererCurvature:(NSNumber*)realitykitRendererCurvature
                   dimPassthrough:(BOOL)dimPassthrough
-                      brightness:(float)brightness {  // <--- ADD THIS LINE HERE{
+                           gamma:(float)gamma
+                      saturation:(float)saturation
+                      brightness:(float)brightness
+{
     [_managedObjectContext performBlockAndWait:^{
         MoonlightSettings* settingsToSave = [self retrieveSettings];
         settingsToSave.framerate = [NSNumber numberWithInteger:framerate];
@@ -96,6 +99,10 @@ realitykitRendererAnimateOpening:(BOOL)realitykitRendererAnimateOpening
         settingsToSave.realitykitRendererCurvature = realitykitRendererCurvature;
         settingsToSave.dimPassthrough = [NSNumber numberWithBool: dimPassthrough];
         settingsToSave.brightness = [NSNumber numberWithFloat:brightness];
+        // HDR Settings
+                settingsToSave.brightness = [NSNumber numberWithFloat:brightness];
+                settingsToSave.gamma = [NSNumber numberWithFloat:gamma];           // <--- SAVE
+                settingsToSave.saturation = [NSNumber numberWithFloat:saturation];  // <--- SAVE
         [self saveData];
     }];
 }

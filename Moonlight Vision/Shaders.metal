@@ -17,10 +17,10 @@ struct CopyVertexOut {
 
 // Ensure this matches the Swift struct exactly in order and types
 struct HDRParams {
-    float boost;      // Gain (Make brights brighter)
-    float contrast;   // Contrast curve application
+    float boost;      // Luminance Boost / Gain
+    float gamma;      // Was "contrast" - applied as Power function
     float saturation; // Color intensity
-    float brightness; // Offset (Lift blacks/shadows)
+    float brightness; // Brightness Offset
 };
 
 vertex CopyVertexOut copyVertexShader(ushort vertexID [[vertex_id]]) {
@@ -61,22 +61,24 @@ fragment half4 copyFragmentShader(CopyVertexOut in [[stage_in]],
         // 1. Decode PQ Curve to Linear Light (Nits)
         rgb = PQtoLinear(rgb);
         
-        // 2. Apply Saturation (Linear space)
+        // 2. Apply Saturation
+        // (0.0 = Grayscale, 1.0 = Normal, >1.0 = Oversaturated)
         float luminance = dot(rgb, float3(0.2126, 0.7152, 0.0722));
         rgb = mix(float3(luminance), rgb, hdrParams.saturation);
 
-        // 3. Apply Contrast (Optional, centered around mid-tone)
-        // rgb = pow(rgb, float3(hdrParams.contrast));
+        // 3. Apply Gamma
+        // 1.0 is neutral.
+        // > 1.0 makes midtones darker (higher contrast look)
+        // < 1.0 lifts shadows (flatter look)
+        if (hdrParams.gamma != 1.0) {
+             rgb = pow(max(rgb, 0.0), float3(hdrParams.gamma));
+        }
         
         // 4. Apply EDR Scaling / Boost (Gain)
-        // The slider value comes in as hdrParams.boost
         float boost = max(hdrParams.boost, 0.1);
-
-        // Multiplication (*) keeps black at 0, but scales up brights
         rgb = (rgb / 100.0) * 1.6 * boost;
 
-        // 5. Apply Brightness (Offset)
-        // Add hdrParams.brightness (which we just set to 0.0 in Swift)
+        // 5. Apply Brightness Offset
         rgb = rgb + float3(hdrParams.brightness);
     }
     
