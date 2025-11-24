@@ -73,6 +73,13 @@
 
 // RealityKit Controls
 "boost_luminance" = "Boost / Luminance";
+"boost" = "Boost";
+"gamma" = "Gamma";
+"saturation" = "Saturation";
+"curvature" = "Curvature";
+"depth" = "Depth";
+"immersion" = "Immersion";
+"scale" = "Scale";
 "flatten" = "Flatten";
 "reset_depth" = "Reset Depth";
 "height" = "Height";

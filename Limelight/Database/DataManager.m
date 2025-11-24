@@ -72,9 +72,9 @@
 realitykitRendererAnimateOpening:(BOOL)realitykitRendererAnimateOpening
      realitykitRendererCurvature:(NSNumber*)realitykitRendererCurvature
                   dimPassthrough:(BOOL)dimPassthrough
-                           gamma:(float)gamma
-                      saturation:(float)saturation
                       brightness:(float)brightness
+                           gamma:(float)gamma
+                      saturation:(float)saturation  
 {
     [_managedObjectContext performBlockAndWait:^{
         MoonlightSettings* settingsToSave = [self retrieveSettings];

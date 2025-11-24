@@ -99,7 +99,13 @@ public class TemporarySettings: NSObject {
     // This init is used by the App when loading from the Database
     @objc public init(fromSettings settings: MoonlightSettings) {
         #if TARGET_OS_TV
-        // ... (TVOS code omitted for brevity, logic remains unchanged) ...
+        self.bitrate = 0
+        self.framerate = 0
+        self.height = 0
+        self.width = 0
+        self.audioConfig = 0
+        self.uniqueId = ""
+        self.onscreenControls = .off
         #else
 
         // 1. Load raw values from the Database
@@ -116,7 +122,7 @@ public class TemporarySettings: NSObject {
         self.width = loadedWidth
         self.onscreenControls = OnScreenControlsLevel(rawValue: loadedOsc) ?? OnScreenControlsLevel.off
 
-        // 2. ONE-TIME MIGRATION CHECK
+        // 2. ONE-TIME MIGRATION CHECK (Resolution/Bitrate Defaults)
         let migrationKey = "hasMigratedToNewDefaults_v1"
         let hasMigrated = UserDefaults.standard.bool(forKey: migrationKey)
 
@@ -160,16 +166,32 @@ public class TemporarySettings: NSObject {
         
         self.realitykitImmersiveMode = UserDefaults.standard.bool(forKey: "realitykitImmersiveMode")
         
+        // --- HDR DEFAULTS MIGRATION ---
+        // 1. Brightness (Boost)
         let storedBrightness = settings.brightness?.floatValue ?? 0.0
         if storedBrightness < 0.1 {
-            self.brightness = 2.2
+            self.brightness = 2.2 // Default Boost
         } else {
             self.brightness = storedBrightness
         }
         
-        // --- Load Gamma/Saturation with Defaults ---
-        self.gamma = settings.gamma?.floatValue ?? 1.0
-        self.saturation = settings.saturation?.floatValue ?? 1.0
+        // 2. Gamma
+        let loadedGamma = settings.gamma?.floatValue ?? 0.0
+        // If value is effectively 0 (unitialized in DB), force to 1.0 (Neutral)
+        if loadedGamma < 0.01 {
+            self.gamma = 1.0
+        } else {
+            self.gamma = loadedGamma
+        }
+        
+        // 3. Saturation
+        let loadedSat = settings.saturation?.floatValue ?? 0.0
+        // If value is effectively 0 (unitialized in DB), force to 1.0 (Neutral)
+        if loadedSat < 0.01 {
+            self.saturation = 1.0
+        } else {
+            self.saturation = loadedSat
+        }
         
         if let storedLang = UserDefaults.standard.object(forKey: appLanguageDefaultsKey) as? Int {
             self.appLanguageRaw = storedLang
@@ -182,6 +204,18 @@ public class TemporarySettings: NSObject {
 
         super.init()
         
+        // 3. SAVE BACK CORRECTED DEFAULTS
+        // We use a specific key for the HDR migration to ensure it happens once for existing users.
+        let hdrMigrationKey = "migrated_hdr_defaults_v1"
+        let hasMigratedHDR = UserDefaults.standard.bool(forKey: hdrMigrationKey)
+        
+        if !hasMigratedHDR {
+            print("[Settings] Migrating HDR Defaults (0.0 -> 1.0)...")
+            self.save()
+            UserDefaults.standard.set(true, forKey: hdrMigrationKey)
+        }
+        
+        // Existing migration save logic for resolution/bitrate
         if !UserDefaults.standard.bool(forKey: "hasSavedNewDefaults_v1") {
             if self.bitrate != loadedBitrate || self.height != loadedHeight {
                 self.save()
@@ -220,7 +254,7 @@ public class TemporarySettings: NSObject {
                 dimPassthrough: dimPassthrough,
                 brightness: brightness,
                 gamma: gamma,            // <--- Pass Gamma
-                saturation: saturation  // <--- Pass Saturation
+                saturation: saturation   // <--- Pass Saturation
         )
         UserDefaults.standard.set(appLanguageRaw, forKey: appLanguageDefaultsKey)
     }
