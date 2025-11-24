@@ -220,7 +220,7 @@ public class TemporarySettings: NSObject {
                 dimPassthrough: dimPassthrough,
                 brightness: brightness,
                 gamma: gamma,            // <--- Pass Gamma
-                saturation: saturation,  // <--- Pass Saturation
+                saturation: saturation  // <--- Pass Saturation
         )
         UserDefaults.standard.set(appLanguageRaw, forKey: appLanguageDefaultsKey)
     }

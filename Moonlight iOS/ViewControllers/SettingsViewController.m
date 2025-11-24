@@ -572,7 +572,9 @@ BOOL isCustomResolution(CGSize res) {
     realitykitRendererAnimateOpening:currentSettings.realitykitRendererAnimateOpening
          realitykitRendererCurvature:@(currentSettings.realitykitRendererCurvature)
                       dimPassthrough:currentSettings.dimPassthrough
-                          brightness:currentSettings.brightness];
+                          brightness:currentSettings.brightness
+                               gamma:currentSettings.gamma        // <--- ADDED
+                                                         saturation:currentSettings.saturation]; // <--- ADDED
 }
 
 - (void)didReceiveMemoryWarning {
