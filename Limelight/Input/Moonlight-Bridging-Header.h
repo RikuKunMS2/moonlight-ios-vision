@@ -25,6 +25,9 @@
 #import "KeyboardSupport.h"
 #import "ControllerSupport.h"
 
+#import "AnyVideoDecoderRenderer.h"
+
+
 #import "MoonlightApp+CoreDataClass.h"
 #import "MoonlightHost+CoreDataClass.h"
 #import "MoonlightSettings+CoreDataClass.h"

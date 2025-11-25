@@ -22,10 +22,10 @@ let kCVPixelBufferColorPrimariesKey = "ColorPrimaries" as CFString
 let kCVPixelBufferTransferFunctionKey = "TransferFunction" as CFString
 
 struct HDRParams {
-    var boost: Float      // Default: 2.0
-    var gamma: Float      // Renamed from contrast. Default: 1.0
+    var boost: Float      // Default: 2.0 (Gain)
+    var contrast: Float   // Default: 1.0
     var saturation: Float // Default: 1.0
-    var brightness: Float // Default: 0.0
+    var brightness: Float // Default: 0.0 (Offset)
 }
 
 let kCVImageBufferYCbCrMatrix_ITU_R_2020 = "ITU_R_2020" as CFString
@@ -91,8 +91,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     private var hdrEnabled: Bool
     private var hdrMetadata: SS_HDR_METADATA = SS_HDR_METADATA()
 
-    private var copyPipelineState: MTLRenderPipelineState? // Existing RGB pipeline
-    private var yuvPipelineState: MTLRenderPipelineState?  // NEW YUV pipeline
+    private var copyPipelineState: MTLRenderPipelineState?
     private var copyPipelineFormat: MTLPixelFormat?
 
     // MARK: - Initialization
@@ -154,80 +153,84 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         ) {
             guard
                 let imageBuffer = imageBuffer,
-                let textureCache = textureCache,
-                let drawable = try? drawableQueue?.nextDrawable(),
-                let commandBuffer = commandQueue?.makeCommandBuffer()
+                let commandBuffer = commandQueue?.makeCommandBuffer(),
+                let textureCache = textureCache
             else {
-                // Silent return on dropped frames or missing resources
+                print("ERROR")
                 return
             }
 
+    //        print("\n=== Decompression Output ===")
+    //        printBufferAttributes(imageBuffer)
+
+            guard
+                let drawable = try? drawableQueue?.nextDrawable()
+            else {
+                print("ERROR")
+                return
+            }
+            
             if hdrEnabled {
                 updateHDRMetadata()
             }
 
-            // 1. DETERMINE PIPELINE (RGB vs YUV)
-            // Check if we have 1 plane (BGRA/RGBA) or 2 planes (NV12/P010 YUV)
-            let planeCount = CVPixelBufferGetPlaneCount(imageBuffer)
-            let bufferPixelFormat = CVPixelBufferGetPixelFormatType(imageBuffer)
-            
-            var currentPipeline: MTLRenderPipelineState?
-
-            if planeCount > 1 {
-                // --- YUV Pipeline (Zero-Copy Path) ---
-                if self.yuvPipelineState == nil || copyPipelineFormat != metalFormat {
-                    // Requires "copyFragmentShaderYUV" in Shaders.metal
-                    self.yuvPipelineState = buildCopyPipeline(metalFormat, fragmentFunction: "copyFragmentShaderYUV")
-                    if self.yuvPipelineState != nil { copyPipelineFormat = metalFormat }
+            // The copy pipeline relines on a fixed output pixel format,
+            // so we have to make sure that matches the render target.
+            if self.copyPipelineState == nil || copyPipelineFormat != metalFormat {
+                self.copyPipelineState = buildCopyPipeline(metalFormat)
+                if self.copyPipelineState != nil {
+                    copyPipelineFormat = metalFormat
                 }
-                currentPipeline = self.yuvPipelineState
-            } else {
-                // --- RGB Pipeline (Legacy/Fallback Path) ---
-                if self.copyPipelineState == nil || copyPipelineFormat != metalFormat {
-                    // Requires "copyFragmentShader" in Shaders.metal
-                    self.copyPipelineState = buildCopyPipeline(metalFormat, fragmentFunction: "copyFragmentShader")
-                    if self.copyPipelineState != nil { copyPipelineFormat = metalFormat }
-                }
-                currentPipeline = self.copyPipelineState
             }
-
-            guard let pipelineState = currentPipeline else {
-                print("Failed to acquire pipeline state")
+            guard let copyPipelineState = copyPipelineState else {
+                print("Failed to set up copy render pipeline!")
                 return
             }
 
-            // 2. PREPARE HDR BUFFERS
+            // Create HDR parameter buffers
             let (displayBuffer, contentBuffer) = createHDRParameterBuffers()
-            
-            // 3. CREATE INPUT TEXTURES
-            var rgbTexture: CVMetalTexture?
-            var yTexture: CVMetalTexture?
-            var uvTexture: CVMetalTexture?
-            
+
+            // Figure out the Metal pixel format
+            let pixelFormat = CVPixelBufferGetPixelFormatType(imageBuffer)
+            let srcMetalFormats = CVMetalHelpers.getTextureTypesForFormat(pixelFormat)
+            if srcMetalFormats[1] != MTLPixelFormat.invalid {
+                print("TODO split planes")
+                return
+            }
+            let srcMetalFormat = srcMetalFormats[0]
+
+            var imageTexture: CVMetalTexture?
             let width = CVPixelBufferGetWidth(imageBuffer)
             let height = CVPixelBufferGetHeight(imageBuffer)
-            
-            // Handle resolution changes
+            let planeWidth = CVPixelBufferGetWidthOfPlane(imageBuffer, 0)
+            let planeHeight = CVPixelBufferGetHeightOfPlane(imageBuffer, 0)
+
             if width != videoWidth || height != videoHeight {
+                print("Got video frame with mismatching dimensions \(width)x\(height) (client texture dimensions \(videoWidth)x\(videoHeight)) - correcting")
                 videoWidth = width
                 videoHeight = height
                 setupLowLevelTexture()
             }
 
-            // --- ENCODING PASS 1: RENDER (Decode/HDR -> Drawable Level 0) ---
-            
+            let result = CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault, textureCache, imageBuffer, nil, srcMetalFormat, planeWidth, planeHeight, 0, &imageTexture)
+            if result != 0 {
+                print("CVMetalTextureCacheCreateTextureFromImage \(result)")
+                return
+            }
+            let mtlTexture = CVMetalTextureGetTexture(imageTexture!)!
+
             let renderPassDescriptor = MTLRenderPassDescriptor()
             renderPassDescriptor.colorAttachments[0].texture = drawable.texture
-            renderPassDescriptor.colorAttachments[0].loadAction = .dontCare // We overwrite everything
+            renderPassDescriptor.colorAttachments[0].loadAction = .clear
             renderPassDescriptor.colorAttachments[0].storeAction = .store
 
             guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
-                return
+                fatalError("Failed to create render command encoder")
             }
+            renderEncoder.setRenderPipelineState(copyPipelineState)
+            renderEncoder.setFragmentTexture(mtlTexture, index: 0)
             
-            renderEncoder.setRenderPipelineState(pipelineState)
-            
-            // Bind Buffers
+            // Set HDR parameter buffers
             if let enabledBuffer = displayBuffer {
                 renderEncoder.setFragmentBuffer(enabledBuffer, offset: 0, index: 0)
             }
@@ -235,67 +238,29 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 renderEncoder.setFragmentBuffer(paramsBuffer, offset: 0, index: 1)
             }
             
-            // Bind Textures based on Plane Count
-            if planeCount > 1 {
-                // Determine pixel format for planes (8-bit vs 10-bit)
-                // P010/10-bit formats are usually 'x420' or 'l10r'
-                let is10Bit = (bufferPixelFormat == kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange) ||
-                              (bufferPixelFormat == kCVPixelFormatType_420YpCbCr10BiPlanarFullRange)
-                
-                let lumaFormat: MTLPixelFormat = is10Bit ? .r16Unorm : .r8Unorm
-                let chromaFormat: MTLPixelFormat = is10Bit ? .rg16Unorm : .rg8Unorm
-
-                // Plane 0: Y (Luma)
-                let _ = CVMetalTextureCacheCreateTextureFromImage(
-                    kCFAllocatorDefault, textureCache, imageBuffer, nil, lumaFormat,
-                    CVPixelBufferGetWidthOfPlane(imageBuffer, 0),
-                    CVPixelBufferGetHeightOfPlane(imageBuffer, 0),
-                    0, &yTexture
-                )
-                
-                // Plane 1: UV (Chroma)
-                let _ = CVMetalTextureCacheCreateTextureFromImage(
-                    kCFAllocatorDefault, textureCache, imageBuffer, nil, chromaFormat,
-                    CVPixelBufferGetWidthOfPlane(imageBuffer, 1),
-                    CVPixelBufferGetHeightOfPlane(imageBuffer, 1),
-                    1, &uvTexture
-                )
-                
-                if let yTex = yTexture, let uvTex = uvTexture,
-                   let mtlY = CVMetalTextureGetTexture(yTex),
-                   let mtlUV = CVMetalTextureGetTexture(uvTex) {
-                    renderEncoder.setFragmentTexture(mtlY, index: 0)
-                    renderEncoder.setFragmentTexture(mtlUV, index: 1)
-                }
-            } else {
-                // Single Plane RGB
-                let srcMetalFormats = CVMetalHelpers.getTextureTypesForFormat(bufferPixelFormat)
-                let _ = CVMetalTextureCacheCreateTextureFromImage(
-                    kCFAllocatorDefault, textureCache, imageBuffer, nil, srcMetalFormats[0],
-                    width, height, 0, &rgbTexture
-                )
-                
-                if let rgbTex = rgbTexture, let mtlRGB = CVMetalTextureGetTexture(rgbTex) {
-                    renderEncoder.setFragmentTexture(mtlRGB, index: 0)
-                }
-            }
-            
             renderEncoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
             renderEncoder.endEncoding()
 
-            // --- ENCODING PASS 2: BLIT (Generate Mipmaps for Shimmer Fix) ---
-            // Occurs in the same command buffer to ensure no CPU stalls.
-            
-            if let blitEncoder = commandBuffer.makeBlitCommandEncoder() {
-                blitEncoder.generateMipmaps(for: drawable.texture)
-                blitEncoder.endEncoding()
+            commandBuffer.commit()
+            commandBuffer.waitUntilCompleted()
+
+            // I'm not sure why I can't encode these into the same command buffer to be honest
+            // (Maybe I need a fence?)
+            guard let commandBufferBlit = commandQueue?.makeCommandBuffer(),
+                  let blits = commandBufferBlit.makeBlitCommandEncoder()
+            else {
+                print("ERROR")
+                return
             }
 
-            // --- SUBMISSION ---
-            
-            commandBuffer.present(drawable)
-            commandBuffer.commit()
-            // NOTE: We intentionally removed waitUntilCompleted() to prevent stutter.
+            // blits.copy(from: mtlTexture, to: drawable.texture)
+            blits.generateMipmaps(for: drawable.texture)
+            blits.endEncoding()
+
+            commandBufferBlit.commit()
+            commandBufferBlit.waitUntilCompleted()
+
+            drawable.present()
         }
     
     private func createHDRParameterBuffers() -> (MTLBuffer?, MTLBuffer?) {
@@ -317,29 +282,34 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     }
             
     func setupLowLevelTexture() {
-        DispatchQueue.main.sync {
-            if videoWidth == 0 || videoHeight == 0 { return }
-
-            self.drawableQueue = {
-                let descriptor = TextureResource.DrawableQueue.Descriptor(
-                    pixelFormat: metalFormat,
-                    width: Int(videoWidth),
-                    height: Int(videoHeight),
-                    usage: [.renderTarget], // .shaderRead needed for the Blit engine to read Level 0
-                    mipmapsMode: .allocateAll // <--- FIX: MUST be allocateAll to stop shimmer
-                )
-                do {
-                    let queue = try TextureResource.DrawableQueue(descriptor)
-                    queue.allowsNextDrawableTimeout = true
-                    return queue
-                } catch {
-                    fatalError("Could not create DrawableQueue: \(error)")
+            DispatchQueue.main.sync {
+                if videoWidth == 0 || videoHeight == 0 {
+                    print("Tried to set up client texture without defined dimensions (\(videoWidth), \(videoHeight)) - skipping")
+                    return
                 }
-            }()
-            region = MTLRegionMake2D(0, 0, videoWidth, videoHeight)
-            self.callbackToRender(self.drawableQueue!, (videoWidth, videoHeight))
+
+                self.drawableQueue = {
+                    let descriptor = TextureResource.DrawableQueue.Descriptor(
+                        pixelFormat: metalFormat,
+                        width: Int(videoWidth),
+                        height: Int(videoHeight),
+                        usage: [.renderTarget], // .renderTarget only, so that we get framebuffer compression
+                        mipmapsMode: .allocateAll // shinyquagsire23: Wasteful bc we probably only need like 2, but we don't have a choice here.
+                    )
+                    do {
+                        let queue = try TextureResource.DrawableQueue(descriptor)
+                        queue.allowsNextDrawableTimeout = true
+                        return queue
+                    } catch {
+                        fatalError("Could not create DrawableQueue: \(error)")
+                    }
+                }()
+
+                region = MTLRegionMake2D(0, 0, videoWidth, videoHeight)
+
+                self.callbackToRender(self.drawableQueue!, (videoWidth, videoHeight))
+            }
         }
-    }
 
     /// Basic setup for the decoder
     func setup(withVideoFormat videoFormat: Int32, width videoWidth: Int32, height videoHeight: Int32, frameRate: Int32) {
@@ -498,24 +468,14 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 // NOTE(shinyquagsire23): Setting kCVPixelBufferPixelFormatTypeKey *at all* will trigger
                 // a VideoToolbox bug that results in the output CVPixelBuffer's underlying Metal textures
                 // being decompressed, resulting in GPU bandwidth penalties
-                var attributes: [CFString: Any] = [
-                    kCVPixelBufferMetalCompatibilityKey: true,
-                    kCVPixelBufferPoolMinimumBufferCountKey: 3
-                ]
-                
-                // We now have a YUV Metal shader, so we do NOT need to force the pixel format.
-                // Letting VideoToolbox choose the format (P010/NV12) allows "Zero-Copy" decoding
-                // which is essential for 8K/4K AV1 performance.
-
-                // Only keep this line if 'forceFastSecretTextureFormats' is FALSE (simulator/debugging)
+                var attributes: [CFString: Any] = [kCVPixelBufferMetalCompatibilityKey: true, kCVPixelBufferPoolMinimumBufferCountKey: 3]
                 if !forceFastSecretTextureFormats {
                     attributes[kCVPixelBufferPixelFormatTypeKey] = decodingFormat
                 }
                 
                 VTDecompressionSessionCreate(allocator: kCFAllocatorDefault, formatDescription: formatDesc, decoderSpecification: decoderConfiguration as CFDictionary, imageBufferAttributes: attributes as CFDictionary, outputCallback: &decoderCallback, decompressionSessionOut: &session)
                 
-                // Use exclusive audio mode (microphone not active in this context)
-                AudioHelpers.fixAudioForSurroundForCurrentWindow(exclusive: false) // TODO(shinyquagsire23): Make this configurable?
+                AudioHelpers.fixAudioForSurroundForCurrentWindow() // TODO(shinyquagsire23): Make this configurable?
             } else {
                 // Couldn't create format description yet
 //                free(dataPtr)
@@ -653,75 +613,44 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     }
 
     /// Creates an AV1 `CMVideoFormatDescription` from the data for an IDR frame.
-        private func createAV1FormatDescriptionForIDRFrame(_ frameData: Data) -> CMVideoFormatDescription? {
-            // We must parse the bitstream to find the Sequence Header OBU
-            // and generate the 'av1C' atom required by VideoToolbox.
-            
-            guard let (sequenceHeader, config) = AV1Parser.parseSequenceHeader(from: frameData) else {
-                print("Failed to parse AV1 Sequence Header from IDR frame.")
-                return nil
-            }
+    private func createAV1FormatDescriptionForIDRFrame(_ frameData: Data) -> CMVideoFormatDescription? {
+        // Ported logic from your createAV1FormatDescriptionForIDRFrame:
+        // 1) Parse the bitstream with ff_cbs_* calls
+        // 2) Build up an extension dictionary
+        // 3) Make the format description
+        // ...
+        // This is just a skeleton that you'd fill with your ff_cbs usage
+        // or any other approach to parse AV1 configuration.
 
-            let extensions = buildAV1Extensions(config: config, sequenceHeader: sequenceHeader)
-
-            var newDesc: CMVideoFormatDescription?
-            let status = CMVideoFormatDescriptionCreate(
-                allocator: kCFAllocatorDefault,
-                codecType: kCMVideoCodecType_AV1,
-                width: Int32(self.videoWidth), // Use the session width/height
-                height: Int32(self.videoHeight),
-                extensions: extensions,
-                formatDescriptionOut: &newDesc
-            )
-            
-            if status != noErr {
-                print("Failed to create AV1 format description: \(status)")
-                return nil
-            }
-            
-            return newDesc
+        // For demonstration, we'll just return nil or a placeholder:
+        // (In real code, you'd port your entire AV1 reading logic here.)
+        guard let av1Extensions = buildAV1Extensions(for: frameData) else {
+            return nil
         }
 
-        private func buildAV1Extensions(config: AV1Config, sequenceHeader: Data) -> CFDictionary {
-            // Construct the av1C atom
-            // https://aomediacodec.github.io/av1-isobmff/#av1c-box
-            
-            var av1C = Data()
-            
-            // Marker (1 bit) = 1, Version (7 bits) = 1 -> 0x81
-            av1C.append(0x81)
-            
-            // seq_profile (3 bits), seq_level_idx_0 (5 bits)
-            let profileLevel = (UInt8(config.seqProfile & 0x7) << 5) | (UInt8(config.seqLevelIdx0 & 0x1F))
-            av1C.append(profileLevel)
-            
-            // seq_tier_0 (1), high_bitdepth (1), twelve_bit (1), monochrome (1),
-            // chroma_subsampling_x (1), chroma_subsampling_y (1), chroma_sample_position (2)
-            var flags: UInt8 = 0
-            flags |= (config.seqTier0 != 0 ? 1 : 0) << 7
-            flags |= (config.highBitdepth != 0 ? 1 : 0) << 6
-            flags |= (config.twelveBit != 0 ? 1 : 0) << 5
-            flags |= (config.monochrome != 0 ? 1 : 0) << 4
-            flags |= (config.chromaSubsamplingX != 0 ? 1 : 0) << 3
-            flags |= (config.chromaSubsamplingY != 0 ? 1 : 0) << 2
-            flags |= (UInt8(config.chromaSamplePosition & 0x3))
-            av1C.append(flags)
-            
-            // reserved (3) = 0, initial_presentation_delay_present (1), initial_presentation_delay_minus_one (4)
-            // We usually assume no special delay for realtime streaming
-            av1C.append(0x00)
-            
-            // configOBUs (The full sequence header OBU)
-            av1C.append(sequenceHeader)
-            
-            var extensions: [CFString: Any] = [:]
-            extensions[kCMFormatDescriptionExtension_FormatName] = "av01"
-            extensions[kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms] = [
-                "av1C": av1C
-            ] as [String: Any]
-            
-            return extensions as CFDictionary
+        var newDesc: CMVideoFormatDescription?
+        let status = CMVideoFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            codecType: kCMVideoCodecType_AV1,
+            width: 1920, // You'd parse from the sequence header
+            height: 1080,
+            extensions: av1Extensions,
+            formatDescriptionOut: &newDesc
+        )
+        if status != noErr {
+            print("Failed to create AV1 format description: \(status)")
+            return nil
         }
+        return newDesc
+    }
+
+    /// Example placeholder building an AV1 extension dictionary
+    private func buildAV1Extensions(for _: Data) -> CFDictionary? {
+        var extensions: [CFString: Any] = [:]
+        extensions[kCMFormatDescriptionExtension_FormatName] = "av01"
+        // Add more color info if you parsed it from ff_cbs, etc.
+        return extensions as CFDictionary
+    }
 
     // MARK: - Creating a Sample Buffer
 
@@ -1044,43 +973,25 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     }
 
     // Builds a simple copy pipeline with no input buffers, just
-        // draw 4 vertices to copy the input texture to the output.
-        // Now supports dynamic fragment function selection (RGB vs YUV).
-        private func buildCopyPipeline(_ pixelFormat: MTLPixelFormat, fragmentFunction: String) -> MTLRenderPipelineState? {
-            guard
-                let library = mtlDevice.makeDefaultLibrary()
-            else {
-                print("Failed to load default Metal library")
-                return nil
-            }
-            
-            // Load the constant vertex shader and the dynamic fragment shader
-            guard let vertexFunction = library.makeFunction(name: "copyVertexShader"),
-                  let fragmentFunc = library.makeFunction(name: fragmentFunction) else {
-                print("Failed to load shader functions: copyVertexShader or \(fragmentFunction)")
-                return nil
-            }
-            
-            let pipelineDescriptor = MTLRenderPipelineDescriptor()
-            pipelineDescriptor.label = "CopyBlitPipeline_\(fragmentFunction)"
-            pipelineDescriptor.vertexFunction = vertexFunction
-            pipelineDescriptor.fragmentFunction = fragmentFunc
-            
-            // Ensure the output format matches the Drawable (usually .rgba16Float for HDR)
-            pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-            
-            // Disable blending since we are strictly copying/overwriting pixels
-            pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
-            
-            pipelineDescriptor.maxVertexAmplificationCount = 1
-
-            do {
-                return try mtlDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-            } catch {
-                print("Failed to create render pipeline state: \(error)")
-                return nil
-            }
+    // draw 4 vertices to copy the input texture to the output
+    private func buildCopyPipeline(_ srcColorFormat: MTLPixelFormat) -> MTLRenderPipelineState? {
+        guard
+            let library = mtlDevice.makeDefaultLibrary()
+        else {
+            return nil
         }
+        let vertexFunction = library.makeFunction(name: "copyVertexShader")
+        let fragmentFunction = library.makeFunction(name: "copyFragmentShader")
+        let pipelineDescriptor = MTLRenderPipelineDescriptor()
+        pipelineDescriptor.label = "CopyBlitPipeline"
+        pipelineDescriptor.vertexFunction = vertexFunction
+        pipelineDescriptor.fragmentFunction = fragmentFunction
+        pipelineDescriptor.colorAttachments[0].pixelFormat = srcColorFormat
+        pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
+        pipelineDescriptor.maxVertexAmplificationCount = 1
+
+        return try? mtlDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+    }
 
     // Convert big endian UInt16 to host Float
     private func convertBigEndianUInt16ToFloat(_ value: UInt16) -> Float {
@@ -1172,365 +1083,6 @@ let BUFFER_TYPE_PPS = 3
 // Example decode results
 let DR_OK: Int32 = 0
 let DR_NEED_IDR: Int32 = -1
-
-// MARK: - AV1 Parsing Helpers
-
-struct AV1Config {
-    let seqProfile: Int
-    let seqLevelIdx0: Int
-    let seqTier0: Int
-    let highBitdepth: Int
-    let twelveBit: Int
-    let monochrome: Int
-    let chromaSubsamplingX: Int
-    let chromaSubsamplingY: Int
-    let chromaSamplePosition: Int
-}
-
-class AV1Parser {
-    static func parseSequenceHeader(from data: Data) -> (Data, AV1Config)? {
-        let bytes = [UInt8](data)
-        var offset = 0
-        let len = bytes.count
-        
-        // Iterate over OBUs
-        while offset < len {
-            let startIndex = offset
-            
-            // 1. Parse OBU Header
-            if offset >= len { break }
-            let headerByte = bytes[offset]
-            offset += 1
-            
-            let forbiddenBit = (headerByte >> 7) & 1
-            if forbiddenBit != 0 { return nil } // Valid OBU must have 0 here
-            
-            let obuType = (headerByte >> 3) & 0xF
-            let extensionFlag = (headerByte >> 2) & 1
-            let hasSizeField = (headerByte >> 1) & 1
-            
-            if extensionFlag == 1 {
-                // We skip the extension byte if present
-                if offset >= len { break }
-                offset += 1
-            }
-            
-            // 2. Parse OBU Size
-            var obuSize = 0
-            if hasSizeField == 1 {
-                var value: Int = 0
-                var leb128bytes = 0
-                while offset < len {
-                    let b = bytes[offset]
-                    offset += 1
-                    value |= (Int(b & 0x7F) << (leb128bytes * 7))
-                    leb128bytes += 1
-                    if (b & 0x80) == 0 { break }
-                }
-                obuSize = value
-            } else {
-                obuSize = len - offset
-            }
-            
-            let payloadOffset = offset
-            let nextOBU = payloadOffset + obuSize
-            
-            // 3. Check if this is the Sequence Header (OBU Type 1)
-            if obuType == 1 {
-                // Extract the raw OBU data (Header + Size + Payload) for the av1C box
-                let obuData = data.subdata(in: startIndex..<nextOBU)
-                
-                // Parse the payload to get config details
-                let reader = BitReader(data: bytes, offset: payloadOffset)
-                
-                // seq_profile (3)
-                let seqProfile = reader.read(bits: 3)
-                // still_picture (1)
-                let stillPicture = reader.read(bits: 1)
-                // reduced_still_picture_header (1)
-                let reducedStillPictureHeader = reader.read(bits: 1)
-                
-                var seqLevelIdx0 = 0
-                var seqTier0 = 0
-                var highBitdepth = 0
-                var twelveBit = 0
-                var monochrome = 0
-                var chromaSubsamplingX = 1
-                var chromaSubsamplingY = 1
-                var chromaSamplePosition = 0
-                
-                if reducedStillPictureHeader == 1 {
-                    seqLevelIdx0 = reader.read(bits: 5)
-                } else {
-                    // timing_info_present_flag (1)
-                    if reader.read(bits: 1) == 1 {
-                        // num_units_in_display_tick (32)
-                        _ = reader.read(bits: 32)
-                        // time_scale (32)
-                        _ = reader.read(bits: 32)
-                        // equal_picture_interval (1)
-                        if reader.read(bits: 1) == 1 {
-                            // num_ticks_per_picture_minus_1 (uvlc)
-                            _ = reader.readUVLC()
-                        }
-                        // decoder_model_info_present_flag (1)
-                        if reader.read(bits: 1) == 1 {
-                            // buffer_delay_length_minus_1 (5)
-                            _ = reader.read(bits: 5)
-                            // num_units_in_decoding_tick (32)
-                            _ = reader.read(bits: 32)
-                            // buffer_removal_time_length_minus_1 (5)
-                            _ = reader.read(bits: 5)
-                            // frame_presentation_time_length_minus_1 (5)
-                            _ = reader.read(bits: 5)
-                        }
-                    }
-                    
-                    // initial_display_delay_present_flag (1)
-                    if reader.read(bits: 1) == 1 {
-                         // initial_display_delay_minus_1 (4)
-                        _ = reader.read(bits: 4)
-                    }
-                    
-                    // operating_points_cnt_minus_1 (5)
-                    let operatingPointsCntMinus1 = reader.read(bits: 5)
-                    
-                    for _ in 0...operatingPointsCntMinus1 {
-                        // operating_point_idc (12)
-                        _ = reader.read(bits: 12)
-                        // seq_level_idx (5)
-                        let level = reader.read(bits: 5)
-                        if level > 7 {
-                            // seq_tier (1)
-                            let tier = reader.read(bits: 1)
-                            if seqTier0 == 0 { seqTier0 = tier }
-                        }
-                        if seqLevelIdx0 == 0 { seqLevelIdx0 = level }
-                        // decoder_model_present_for_this_op (1) -> if true, reads more...
-                        // We assume moonlight doesn't send complex decoder models in standard stream.
-                        // Parsing skipped to keep simple, assuming standard stream.
-                    }
-                }
-                
-                // frame_width_bits_minus_1 (4)
-                let frameWidthBits = reader.read(bits: 4) + 1
-                // frame_height_bits_minus_1 (4)
-                let frameHeightBits = reader.read(bits: 4) + 1
-                // max_frame_width_minus_1 (frameWidthBits)
-                _ = reader.read(bits: frameWidthBits)
-                // max_frame_height_minus_1 (frameHeightBits)
-                _ = reader.read(bits: frameHeightBits)
-                
-                // frame_id_numbers_present_flag (1)
-                let frameIdNumbersPresent = reader.read(bits: 1)
-                if frameIdNumbersPresent == 1 {
-                    // delta_frame_id_length_minus_2 (4)
-                    _ = reader.read(bits: 4)
-                    // additional_frame_id_length_minus_1 (3)
-                    _ = reader.read(bits: 3)
-                }
-                
-                // use_128x128_superblock (1)
-                _ = reader.read(bits: 1)
-                // enable_filter_intra (1)
-                _ = reader.read(bits: 1)
-                // enable_intra_edge_filter (1)
-                _ = reader.read(bits: 1)
-                
-                if reducedStillPictureHeader == 0 {
-                    // enable_interintra_compound (1)
-                    _ = reader.read(bits: 1)
-                    // enable_masked_compound (1)
-                    _ = reader.read(bits: 1)
-                    // enable_warped_motion (1)
-                    _ = reader.read(bits: 1)
-                    // enable_dual_filter (1)
-                    _ = reader.read(bits: 1)
-                    // enable_order_hint (1)
-                    let enableOrderHint = reader.read(bits: 1)
-                    if enableOrderHint == 1 {
-                        // enable_jnt_comp (1)
-                        _ = reader.read(bits: 1)
-                        // enable_ref_frame_mvs (1)
-                        _ = reader.read(bits: 1)
-                    }
-                    
-                    // seq_choose_screen_content_tools (1)
-                    let seqChooseScreenContentTools = reader.read(bits: 1)
-                    if seqChooseScreenContentTools == 0 {
-                        // seq_force_screen_content_tools (1)
-                        _ = reader.read(bits: 1)
-                    }
-                    
-                    if seqChooseScreenContentTools > 0 {
-                        // seq_choose_integer_mv (1)
-                        _ = reader.read(bits: 1)
-                    } else {
-                        // seq_force_integer_mv (1)
-                        _ = reader.read(bits: 1)
-                    }
-                    
-                    if enableOrderHint == 1 {
-                        // order_hint_bits_minus_1 (3)
-                        _ = reader.read(bits: 3)
-                    }
-                }
-                
-                // enable_superres (1)
-                _ = reader.read(bits: 1)
-                // enable_cdef (1)
-                _ = reader.read(bits: 1)
-                // enable_restoration (1)
-                _ = reader.read(bits: 1)
-                
-                // Color Config
-                highBitdepth = reader.read(bits: 1)
-                if seqProfile == 2 && highBitdepth == 1 {
-                    twelveBit = reader.read(bits: 1)
-                    monochrome = reader.read(bits: 1)
-                } else {
-                    twelveBit = 0
-                    monochrome = 0
-                }
-                
-                // BitDepth = 8 + (highBitdepth * 2) + (twelveBit * 2) -> 8, 10, 12
-                
-                if seqProfile == 1 {
-                    monochrome = 0
-                }
-                
-                if monochrome == 1 {
-                    chromaSubsamplingX = 1
-                    chromaSubsamplingY = 1
-                } else {
-                    if seqProfile == 0 && highBitdepth == 1 {
-                        chromaSubsamplingX = 1
-                        chromaSubsamplingY = 1
-                    } else {
-                        // color_primaries_original (1)
-                        // transfer_characteristics_original (1)
-                        // matrix_coefficients_original (1)
-                        // We assume standard so we don't read full color description here to avoid complexity
-                        
-                        // Actually we MUST read subsampling to form valid av1C
-                        // color_description_present_flag (1)
-                        let colorDescriptionPresent = reader.read(bits: 1)
-                        if colorDescriptionPresent == 1 {
-                            // color_primaries (8)
-                            _ = reader.read(bits: 8)
-                            // transfer_characteristics (8)
-                            _ = reader.read(bits: 8)
-                            // matrix_coefficients (8)
-                            _ = reader.read(bits: 8)
-                        } else {
-                            // defaults
-                        }
-                        
-                        if monochrome == 1 {
-                            // already set
-                        } else if seqProfile == 0 && highBitdepth == 1 {
-                             // 4:4:4 -> x=0, y=0? No profile 0 high is 4:2:0 10-bit usually.
-                             // Actually Logic:
-                             // if ( seq_profile == 0 )
-                             //   subsampling_x = 1
-                             //   subsampling_y = 1
-                             chromaSubsamplingX = 1
-                             chromaSubsamplingY = 1
-                        } else if seqProfile == 1 {
-                             chromaSubsamplingX = 0
-                             chromaSubsamplingY = 0
-                        } else {
-                            if seqProfile == 2 {
-                                if highBitdepth == 1 {
-                                    if twelveBit == 1 {
-                                        chromaSubsamplingX = reader.read(bits: 1)
-                                        if chromaSubsamplingX == 1 {
-                                            chromaSubsamplingY = reader.read(bits: 1)
-                                        } else {
-                                            chromaSubsamplingY = 0
-                                        }
-                                    } else {
-                                        chromaSubsamplingX = 0
-                                        chromaSubsamplingY = 0
-                                    }
-                                } else {
-                                    chromaSubsamplingX = 0
-                                    chromaSubsamplingY = 0
-                                }
-                            }
-                        }
-                        
-                        if chromaSubsamplingX == 1 && chromaSubsamplingY == 1 {
-                            chromaSamplePosition = reader.read(bits: 2)
-                        }
-                    }
-                }
-                
-                // separate_uv_delta_q (1)
-                _ = reader.read(bits: 1)
-                
-                let config = AV1Config(
-                    seqProfile: seqProfile,
-                    seqLevelIdx0: seqLevelIdx0,
-                    seqTier0: seqTier0,
-                    highBitdepth: highBitdepth,
-                    twelveBit: twelveBit,
-                    monochrome: monochrome,
-                    chromaSubsamplingX: chromaSubsamplingX,
-                    chromaSubsamplingY: chromaSubsamplingY,
-                    chromaSamplePosition: chromaSamplePosition
-                )
-                
-                return (obuData, config)
-            }
-            
-            offset = nextOBU
-        }
-        
-        return nil
-    }
-}
-
-class BitReader {
-    let data: [UInt8]
-    var byteOffset: Int
-    var bitOffset: Int
-    
-    init(data: [UInt8], offset: Int) {
-        self.data = data
-        self.byteOffset = offset
-        self.bitOffset = 0
-    }
-    
-    func read(bits: Int) -> Int {
-        var value = 0
-        for _ in 0..<bits {
-            if byteOffset >= data.count { return 0 }
-            let byte = data[byteOffset]
-            let bit = (byte >> (7 - bitOffset)) & 1
-            value = (value << 1) | Int(bit)
-            
-            bitOffset += 1
-            if bitOffset == 8 {
-                bitOffset = 0
-                byteOffset += 1
-            }
-        }
-        return value
-    }
-    
-    func readUVLC() -> Int {
-        var leadingZeros = 0
-        while true {
-            let bit = read(bits: 1)
-            if bit == 1 { break }
-            leadingZeros += 1
-        }
-        if leadingZeros >= 32 { return (1 << 32) - 1 }
-        let value = read(bits: leadingZeros)
-        return (1 << leadingZeros) - 1 + value
-    }
-}
 
 // Example placeholder for your C struct
 // struct DECODE_UNIT {
