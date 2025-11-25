@@ -6,11 +6,21 @@ It also supports a Sunshine fork called [Apollo](https://github.com/ClassicOldSo
 
 Moonlight also has a [PC client](https://github.com/moonlight-stream/moonlight-qt) and [Android client](https://github.com/moonlight-stream/moonlight-android).
 
-Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-docs/wiki) for more detailed project information, setup guide, or troubleshooting steps. Also check out the [discord](https://moonlight-stream.org/discord)
+Check out [the Moonlight wiki](https://github.com/moonlight-stream/moonlight-docs/wiki) for more detailed project information, setup guide, or troubleshooting steps. Also check out the [discord](https://moonlight-stream.org/discord).
+
+### Credits
+Special thanks to the all contributors for their work on Moonlight XrOS:
+**tht7, linggan-ua, shinyquagsire23, alexhaugland, sinkingsugar, JFuellem, liu547161153, dereklucas, Razorub**
+
+And to the **Moonlight Streaming team and contributors**:
+[https://moonlight-stream.org/](https://moonlight-stream.org/)
+[https://github.com/moonlight-stream/moonlight-ios/graphs/contributors](https://github.com/moonlight-stream/moonlight-ios/graphs/contributors)
+
+---
 
 [![Moonlight for iOS and tvOS](https://moonlight-stream.org/images/App_Store_Badge_135x40.svg)](https://apps.apple.com/us/app/moonlight-game-streaming/id1000551566) 
 
-The Vision OS Version is not available in the App Store, to download the latest stable-ish build please install it via Testflight
+The Vision OS Version is not available in the App Store. To download the latest stable-ish build, please install it via Testflight:
 
 [![Moonlight XrOS](https://i.imgur.com/DHhfmmK.png)](https://testflight.apple.com/join/poWcaME5) 
 
@@ -18,97 +28,126 @@ The Vision OS Version is not available in the App Store, to download the latest 
 
 * **Curved Screen Support (Reality Kit Mode)**:
     * To activate, change the Renderer in settings to Reality Kit.
-    * *Update:* distortion math has been redone for better accuracy.
+    * Distortion math has been redone for better accuracy and reduced stretching.
+* **Immersive View**: Now you can use the reality kit stream view in a much larger size.
+    * **Lock/Unlock**: Click the lock icon to lock its position, move the screen, and lock it again. We will add tilt control to the immersive view soon.
+* **Mouse & Keyboard Support**: Now available in Reality Kit mode via Bluetooth paired to the Vision Pro.
+* **SBS 3D Support**: Available in Reality Kit Mode. We are looking into support for uikit sbs.
+* **HDR Support**: Includes a luminance value slider to calibrate for battery levels and environment.
+    * *New:* Gamma and Saturation sliders added in v11.0.16.
+* **AV1 Support**: Confirmed working (including AV1 HDR) on M5 hardware.
+* **Audio Control**: Toggle between Head-Tracked and Non-Head-Tracked audio.
+* **Localization**: Support for Chinese added (Thanks **linggan-ua**).
 
 ![Curved Screen Support](https://preview.redd.it/moonlight-xros-1-year-anniversary-update-curved-screen-v0-xyro5aozeyge1.jpg?width=2254&format=pjpg&auto=webp&s=df631301423de93f161111df41543154e8fd5b04)
 
-* **Immersive View Resizing**: Change stream view to any size; use the lock and unlock feature to reposition easily.
-* **SBS 3D Support**: Available in Reality Kit Mode (toggle button in side bar).
-* **HDR Support**: Includes a luminance value slider to calibrate for battery levels and environment.
-* **AV1 Support**: Now supported in Reality Kit mode (Note: untested on M5).
+## ChangeLog (Latest: v11.0.17 - Nov 25, 2025)
 
-## ChangeLog (Version 11.0.14 - Nov 19, 2025)
+> **⚠️ IMPORTANT UPGRADE NOTE:**
+> If you are coming from an older version (pre-11.0.15), please **Uninstall and Reinstall** the app via TestFlight. There are significant code changes regarding settings and localization that may cause crashes if you simply update over the old version.
 
-* **AV1 Support:** AV1 is now supported in Reality Kit mode.
-* **Bitrate:** Added support for higher bitrate configurations (untestedâ€”performance depends on network and M2/M5 limits).
-* **Immersive View:** Added option to setup an immersive view and change stream view to any size (use lock/unlock to reposition).
-* **Settings Fix:** Fixed an issue where settings weren't saving on window dismissal/force quit.
-* **Curved Screen:** Redid the math for curved screens to eliminate distortion and stretching.
-* **Volume Controls:** Reduced jank in volume position controls; they now set limits to avoid clipping the stream view.
-* **HDR:** * Fixed color space transform for more accurate colors.
-    * Added a **Luminance Value Slider** to help calibrate the image for different battery levels and environments.
-* **Input:** * Added a **Virtual Keyboard Button**. In UIKit mode, touch screen to pop up. In Reality Kit mode, it should appear automatically.
-    * Added an invisible layer in front of the UIKit volume to capture mouse/keyboard for Reality Kit (Work in progress).
+> *** I RECOMEND USING APOLLO OVER SUNSHINE**
+> [RikuKunMS2/Lumanaire](https://ko-fi.com/lumanaire) tests all builds using Apollo. Apollo is a Sunshine fork called [Apollo](https://github.com/ClassicOldSong/Apollo) which on Windows supports a Built-in Virtual Display with HDR support that matches the resolution/framerate config of your client automatically. 
+>* **Apollo Permissions:** *Critical Note* — If using Apollo, you **must** ensure all permissions are enabled after pairing (Click the "Edit" button in Apollo). The developer primarily tests on Apollo.
 
-### Previous Updates Highlights
-* **v11.0.12:** Added Low Latency Streaming Entitlement (AWDL) to improve network performance on non-standard WiFi channels.
-* **v11.0.11:** Fixed memory resumption bugs, controller crashes, and added a HOME button to help recover the connection menu.
-* **v11.0.6:** Major network discovery overhaul to reduce crashes.
 
-## Noted Bugs
+### v11.0.17 (Expected Release: Nov 25, 2025)
+* **AV1 & HDR Confirmation:** Confirmed that AV1 and AV1 HDR are working correctly on M5 devices. Special thanks to **u/webheadVR** for testing.
+* **Localization:** Fixed various localization strings (Thanks **linggan-ua**).
+* **Shimmering:** Fixed the shimmering issue in Reality Kit.
+* **Apollo Permissions:** *Critical Note* — If using Apollo, you **must** ensure all permissions are enabled after pairing (Click the "Edit" button in Apollo). The developer primarily tests on Apollo.
+* **Audio Stutter:** Observed audio stutter when using Mac Virtual Display + Moonlight in Reality Kit.
+    * *Workaround:* Using a **Developer Strap** eliminates the stutter.
 
-* **Empty Spinning Volume on Resume:** Sometimes resuming a volume causes a weird empty object screen. If this happens, force quit the app (Hold Crown + Capture buttons). Also sometimes the main menu doesn't come back up, I think this has to do with a race condtiion between app backgrounding/closing before the flag can update that it was closed or something, a fix for this should be coming soon but its hard because we don't know exactly what's causing this issue
-* **HDR:** Doesn't work super well on UIKit. Colors might not be perfect on Reality Kit (use the new Luminance slider to adjust).
-* **Computer Status:** Moonlight XrOS does not strictly know when a computer is ONLINE, only that it has been saved/paired.
-* **Controller Vibration:** Currently not working; under investigation.
-* **PS4 Touch Pad:** Does not work (SDL issue).
-* **General Jank:** Deleting a PC while scanning *should* be fixed, but if issues persist, force quit and relaunch. Eye position mouse moving is weird that's an OS level thing I don't think I can fix how the cursor pointer snaps when you let go of your mouse / lift your finger off the trackpad
+### v11.0.16
+* **UI Updates:**
+    * Changed icons to text labels for clarity.
+    * Added ability to hide immersive stream controls.
+* **Image Adjustments:** Added **Gamma** and **Saturation** sliders.
+* **Mouse Handling:** Improved mouse handling at the edges of the screen.
+* **AV1 HDR:** Includes fixes for AV1 when HDR is enabled.
+
+### v11.0.15 Highlights
+* **Mouse & Keyboard:** Added input capture layer to enable Bluetooth keyboard and mouse in Reality Kit.
+* **Immersive View:** Resizable and movable screens
+* **Fixes:**
+    * Fixed curved screen distortion math.
+    * Fixed settings saving and updated defaults.
+    * Fixed volume object clipping (position is now clamped).
+    * Improved Home/Resume button reliability.
+
+## Noted Bugs & Known Issues
+
+* **MVD Audio Stutter:** If you run Mac Virtual Display alongside Moonlight in Reality Kit, audio may stutter. This does not happen if you are connected via a Developer Strap.
+* **UI/UX:** The interface is currently "Function over Form." We are working on a better UI, but for now, we are prioritizing features and stability.
+* **Controller Issues:**
+    * PS4 Touchpad does not work (SDL3 issue).
+    * PS5 Controllers may have general issues.
+    * Controller vibration is currently not working.
+* **Touchscreen Mode** Moonlight XrOS does not send touch events like it does on the iOS / iPadOS version to windows.
+* **General Jank:** Eye position mouse moving is an OS-level behavior; cursor pointer snapping when lifting fingers off the trackpad cannot currently be fixed.
+* **Tap to Click in Reality Kit** Moonlight XrOS does not allow for tap to click and tap to drag in realitykit mode
+* **The virtual keyboard button is not working in reality kit** We are looking into fixing this.
+* **Dimming Button in UIKit** The dimming button does not function in UIKit mode, we are looking into this
+
+
 
 ## FAQ
+* **I'm using Apollo and it won't connect/launch?**
+    * **CRITICAL:** After pairing, click the **EDIT** button in Apollo and make sure **ALL PERMISSIONS** are turned ON.
+* **How do I fix the audio or mouse stutter?**
+    * If you are multitasking with Mac Virtual Display, this is a known issue. Connecting via a Developer Strap seems to resolve the interference.
+* **How do I move the Immersive Screen?**
+    * Click the **Lock** button to "Unlock" the position. You can then move/recenter the screen. Click Lock again to set it.
+* **Why does the UI look basic?**
+    * We are a volunteer team prioritizing functionality (AV1, HDR, 120fps) over visual polish right now. A UI overhaul is planned for the future.
+* **How do I fix HDR color?**
+    * We recomend looking at a [video](https://www.youtube.com/watch?v=LXb3EKWsInQ) or [image](https://depositphotos.com/vector/printer-marks-printing-cutting-and-calibration-109759386.html) to calibrate against to calibrate 
 * **UIKit vs Reality Kit?**
-    * Use **UIKit** if you need reliable Mouse + Keyboard support.
-    * Use **Reality Kit** for Curved Screens, 3D SBS, and AR features. (Note: Mouse/Keyboard in Reality Kit is experimental).
-* **How do I activate Curved Screens?**
-    * In settings, change the renderer to Reality Kit Mode then connect to your host.
-* **How do I Pair?**
-    * Use the `+` button, or toggle the "Scan for Hosts" text in the computers list.
-    * *Tip:* If you have performance issues, try not to leave scanning on constantly.
-* **How do I use SBS?**
-    * In Reality Kit mode, use the rectangle button toggle above the height adjust.
+    * Use **UIKit** if you need 100% reliable Mouse + Keyboard support (though Reality Kit support is now available and improved).
+    * Use **Reality Kit** for Curved Screens, 3D SBS, and AR features.
 * **How do I use Ultrawide Mode?**
     * In settings set the resolution to 5120x1440, then set up [Apollo](https://github.com/ClassicOldSong/Apollo) or a virtual display driver on Windows.
-	* also like, make sure in apollo after pairing your client has full permissions, otherwise you'll get a launch issue
-    * In UIKit: Use the aspect ratio button to fix black bars.
-    * In Reality Kit: Should be automatic.
 * **Why is my connection choppy?**
-    * it has the new entitlement to kill awdl but if you're doing something like... i dunno say air dropping in the background or maybe using hand off instead of directly connecting your mouse and keyboard you may have issues, so use ch 149 5ghz in us 
+    * While the app has entitlements to suppress AWDL, using features like AirDrop or Handoff in the background may cause interference. Use 5GHz Ch 149 (US) / Ch 44 (EU) / Ch 6 (2.4GHz) for best results.
 * **Recommended Settings:**
     * **Resolution:** 4K
     * **Aspect Ratio:** 16:9
     * **Framerate:** 60fps (120fps is tested)
-    * **Bitrate:** 50mbps (Higher is supported now but untested)
+    * **Bitrate:** 50mbps (Higher is supported but requires M2/M5 and strong network)
     * **Renderer:** Reality Kit
 
 ## Feature Requests / Planned Features:
 * Microphone Support.
-* 7.1 Audio + Ability to toggle immersive audio.
+* 7.1 Audio.
 * Updates to SDL3 (to fix PS4 touchpad issues).
+* Unpin immersive settings (to allow reset if window becomes too far/small).
 
 # Donations
-* Some people expressed interest in donations so I set up a ko-fi:
-https://ko-fi.com/lumanaire
+Some people expressed interest in donations so I set up a Ko-fi (this will help me get an m5 vision pro):
+[https://ko-fi.com/lumanaire](https://ko-fi.com/lumanaire)
 
 Thanks again for your support :)
 
 # Building From Source
 
 ## Requirements
-* Latest XCode 
-* Tested on Vision OS 26.2 Beta
+* Latest Xcode
+* Tested on Vision OS 2.2 Beta (26.2)
   
 ## Build Instructions
-* Install the latest version of Xcode
-* Run `git clone -b vision-testflight --recursive https://github.com/RikuKunMS2/moonlight-ios-vision.git`
-  * If you've already cloned the repo without `--recursive`, run `git submodule update --init --recursive`
-  * If you are building someone else's fork replace the part after the -b and the user name in the github link.
-* Open Moonlight.xcodeproj in Xcode
-* To run on a real device, you will need to locally modify the signing options and add your device:
-    * Go to 'Window' -> Devices and Simulators
-    * Add your Vision Pro
-    * Click on "Moonlight" at the top of the left sidebar
-    * Under "Targets", select "Moonlight Vision"
-    * Click on the "Signing & Capabilities" tab
-    * Select your Team (Sign into Apple account if needed)
+1. Install the latest version of Xcode.
+2. Run `git clone -b vision-testflight --recursive https://github.com/RikuKunMS2/moonlight-ios-vision.git`
+    * If you've already cloned the repo without `--recursive`, run `git submodule update --init --recursive`
+    * If you are building someone else's fork replace the part after the `-b` and the user name in the GitHub link.
+3. Open `Moonlight.xcodeproj` in Xcode.
+4. To run on a real device, you will need to locally modify the signing options and add your device:
+    * Go to 'Window' -> Devices and Simulators.
+    * Add your Vision Pro.
+    * Click on "Moonlight" at the top of the left sidebar.
+    * Under "Targets", select "Moonlight Vision".
+    * Click on the "Signing & Capabilities" tab.
+    * Select your Team (Sign into Apple account if needed).
     * Change the "Bundle Identifier" to something unique.
-	* Remove the low latency entitlement from signing and capabilities because otherwise you'll need to manually enable it in the apple developer certificates section of a paid developer account for the bundle you chose above. 
-    * Select your registered Vision Pro in the target bar and click Play.
+    * **Crucial:** Remove the "Low Latency Streaming" entitlement from signing and capabilities if you do not have a paid developer account with this entitlement enabled.
+    * Select your registered Vision Pro in the target bar and click Play for logging, or profile to for not logging.

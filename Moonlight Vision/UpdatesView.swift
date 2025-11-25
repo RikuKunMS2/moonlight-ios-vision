@@ -39,7 +39,7 @@ struct UpdatesView: View {
                                                     .font(.headline)
                         Text("- In theory improved the av1 processing pipeline so that it no longer has perfomrance issues  but I don't have an m5 to test")
                             .font(.body)
-                        Text("- in theory fixed av1 hdr issues but I don't have an m5 to test")
+                        Text("- special thanks to u/webheadVR for helping me test av1 and av1 hdr, along with logging data from an m5 device. AV1 should now be working and m5 devices in general should have everything working now, but please contact https://ko-fi.com/lumanaire to report issues")
                             .font(.body)
                         Text("- optimizations to help reduce the shimmering effect in reality kit views")
                             .font(.body)
