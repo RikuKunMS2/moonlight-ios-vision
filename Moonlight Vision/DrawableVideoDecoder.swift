@@ -613,45 +613,54 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     }
 
     /// Creates an AV1 `CMVideoFormatDescription` from the data for an IDR frame.
-    private func createAV1FormatDescriptionForIDRFrame(_ frameData: Data) -> CMVideoFormatDescription? {
-        // Ported logic from your createAV1FormatDescriptionForIDRFrame:
-        // 1) Parse the bitstream with ff_cbs_* calls
-        // 2) Build up an extension dictionary
-        // 3) Make the format description
-        // ...
-        // This is just a skeleton that you'd fill with your ff_cbs usage
-        // or any other approach to parse AV1 configuration.
+        private func createAV1FormatDescriptionForIDRFrame(_ frameData: Data) -> CMVideoFormatDescription? {
+            // Build extensions with HDR hints
+            guard let av1Extensions = buildAV1Extensions(for: frameData) else {
+                return nil
+            }
 
-        // For demonstration, we'll just return nil or a placeholder:
-        // (In real code, you'd port your entire AV1 reading logic here.)
-        guard let av1Extensions = buildAV1Extensions(for: frameData) else {
-            return nil
+            var newDesc: CMVideoFormatDescription?
+            let status = CMVideoFormatDescriptionCreate(
+                allocator: kCFAllocatorDefault,
+                codecType: kCMVideoCodecType_AV1,
+                width: Int32(self.videoWidth), // FIX: Use dynamic video width
+                height: Int32(self.videoHeight), // FIX: Use dynamic video height
+                extensions: av1Extensions,
+                formatDescriptionOut: &newDesc
+            )
+            
+            if status != noErr {
+                print("Failed to create AV1 format description: \(status)")
+                return nil
+            }
+            return newDesc
         }
-
-        var newDesc: CMVideoFormatDescription?
-        let status = CMVideoFormatDescriptionCreate(
-            allocator: kCFAllocatorDefault,
-            codecType: kCMVideoCodecType_AV1,
-            width: 1920, // You'd parse from the sequence header
-            height: 1080,
-            extensions: av1Extensions,
-            formatDescriptionOut: &newDesc
-        )
-        if status != noErr {
-            print("Failed to create AV1 format description: \(status)")
-            return nil
+    
+    
+    /// Builds an AV1 extension dictionary with HDR metadata hints
+        private func buildAV1Extensions(for _: Data) -> CFDictionary? {
+            var extensions: [CFString: Any] = [:]
+            extensions[kCMFormatDescriptionExtension_FormatName] = "av01"
+            
+            // Inject HDR metadata if enabled.
+            // Even though we force the output transfer function in the session config,
+            // it is best practice to tag the source description correctly for AV1.
+            if hdrEnabled {
+                extensions[kCMFormatDescriptionExtension_ColorPrimaries] = kCVImageBufferColorPrimaries_ITU_R_2020
+                extensions[kCMFormatDescriptionExtension_TransferFunction] = kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ
+                extensions[kCMFormatDescriptionExtension_YCbCrMatrix] = kCVImageBufferYCbCrMatrix_ITU_R_2020
+                
+                if let mastering = masteringDisplayColorVolume {
+                    extensions[kCMFormatDescriptionExtension_MasteringDisplayColorVolume] = mastering
+                }
+                if let lightLevel = contentLightLevelInfo {
+                    extensions[kCMFormatDescriptionExtension_ContentLightLevelInfo] = lightLevel
+                }
+            }
+            
+            return extensions as CFDictionary
         }
-        return newDesc
-    }
-
-    /// Example placeholder building an AV1 extension dictionary
-    private func buildAV1Extensions(for _: Data) -> CFDictionary? {
-        var extensions: [CFString: Any] = [:]
-        extensions[kCMFormatDescriptionExtension_FormatName] = "av01"
-        // Add more color info if you parsed it from ff_cbs, etc.
-        return extensions as CFDictionary
-    }
-
+    
     // MARK: - Creating a Sample Buffer
 
     private func printFormatDescription(_ formatDesc: CMFormatDescription) {
