@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import VideoToolbox // Added to check for hardware AV1 support
 
 struct SettingsView: View {
     @Binding public var settings: TemporarySettings
@@ -184,7 +185,12 @@ struct SettingsView: View {
                 Picker(viewModel.localized("preferred_codec"), selection: $settings.preferredCodec) {
                     Text(viewModel.localized("h264")).tag(PreferredCodec.h264)
                     Text(viewModel.localized("hevc")).tag(PreferredCodec.hevc)
-                    Text(viewModel.localized("av1")).tag(PreferredCodec.av1)
+                    
+                    // Only show AV1 option if the hardware explicitly supports it
+                    if VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1) {
+                        Text(viewModel.localized("av1")).tag(PreferredCodec.av1)
+                    }
+                    
                     Text(viewModel.localized("auto")).tag(PreferredCodec.auto)
                 }
                 .onChange(of: settings.preferredCodec) { _, _ in settings.save() }
@@ -220,6 +226,13 @@ struct SettingsView: View {
             .onAppear {
                 selectedAspectRatio = settings.resolution.aspectRatio
                 isCustomAspectRatio = !Self.resolutionTable.contains(settings.resolution)
+                
+                // If the user has AV1 selected (e.g. from sync or previous device) but it's not supported here,
+                // fall back to Auto to prevent issues.
+                if settings.preferredCodec == .av1 && !VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1) {
+                    settings.preferredCodec = .auto
+                    settings.save()
+                }
             }
         }
     }
