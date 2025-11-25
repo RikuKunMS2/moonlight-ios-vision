@@ -408,110 +408,130 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
     // MARK: - Decoding & Sample Buffer Handling
 
-    /**
-     * Replaces the old `AVSampleBufferDisplayLayer` usage.
-     * Instead of enqueuing to a display layer, we create a `CMSampleBuffer`
-     * and forward it to your own rendering path (e.g., a Metal texture queue).
-     */
-    @discardableResult
-    func submitDecodeBuffer(
-        _ dataPtr: UnsafeMutablePointer<UInt8>!,
-        length: Int32,
-        bufferType: Int32,
-        decode du: PDECODE_UNIT!
-    ) -> Int32 {
-        // Example bridging of FRAME_TYPE_IDR check:
-        if du.pointee.frameType == FRAME_TYPE_IDR {
-            // Parameter sets or AV1 config logic...
-            // Recreate formatDesc, etc.
-            if bufferType != BUFFER_TYPE_PICDATA {
-                if bufferType == BUFFER_TYPE_VPS
-                    || bufferType == BUFFER_TYPE_SPS
-                    || bufferType == BUFFER_TYPE_PPS
-                {
-                    // Strip the NAL start and store it
-                    let startLen = (dataPtr[2] == 0x01) ? 3 : 4
-                    let newData = Data(bytes: dataPtr + startLen, count: Int(length) - startLen)
-                    parameterSetBuffers.append([UInt8](newData))
-                }
-                // Freed by someone else, presumably
-                return DR_OK
-            }
-
-            // If we're handling an IDR frame with actual picture data
-            if let formatDesc = recreateFormatDescriptionForIDR(
-                dataPtr: dataPtr, length: length
-            ) {
-                self.formatDesc = formatDesc
+        /**
+         * Replaces the old `AVSampleBufferDisplayLayer` usage.
+         * Instead of enqueuing to a display layer, we create a `CMSampleBuffer`
+         * and forward it to your own rendering path (e.g., a Metal texture queue).
+         */
+        @discardableResult
+        func submitDecodeBuffer(
+            _ dataPtr: UnsafeMutablePointer<UInt8>!,
+            length: Int32,
+            bufferType: Int32,
+            decode du: PDECODE_UNIT!
+        ) -> Int32 {
+            
+            // 1. Handle IDR Frames (Initialization/Re-initialization)
+            if du.pointee.frameType == FRAME_TYPE_IDR {
                 
-                let decoderConfiguration: [String: Any] = {
-                    var config: [String: Any] = [
-                        kVTVideoDecoderSpecification_EnableHardwareAcceleratedVideoDecoder as String: true,
-                    ]
+                // A. Handle Parameter Sets (H.264/HEVC separate NALs)
+                if bufferType != BUFFER_TYPE_PICDATA {
+                    if bufferType == BUFFER_TYPE_VPS || bufferType == BUFFER_TYPE_SPS || bufferType == BUFFER_TYPE_PPS {
+                        let startLen = (dataPtr[2] == 0x01) ? 3 : 4
+                        let newData = Data(bytes: dataPtr + startLen, count: Int(length) - startLen)
+                        parameterSetBuffers.append([UInt8](newData))
+                    }
+                    // Parameter sets don't contain pixel data to decode
+                    return DR_OK
+                }
 
-                    if hdrEnabled {
-                        config[kVTDecompressionPropertyKey_PixelTransferProperties as String] = [
-                            // 1. Convert Colors to Display P3 (Fixes the "Washed Out" pale colors)
-                            kVTPixelTransferPropertyKey_DestinationColorPrimaries: kCMFormatDescriptionColorPrimaries_P3_D65,
-
-                            // 2. Keep Brightness as PQ (Fixes the "Black Screen" / conversion error)
-                            // We will decode this raw curve manually in the Metal shader.
-                            kVTPixelTransferPropertyKey_DestinationTransferFunction: kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ,
-                            
-                            // 3. Standard Matrix
-                            kVTPixelTransferPropertyKey_DestinationYCbCrMatrix: kCMFormatDescriptionYCbCrMatrix_ITU_R_2020,
+                // B. Recreate Format Description (Parses AV1 Seq Header or uses accumulated H.264/HEVC params)
+                if let newFormatDesc = recreateFormatDescriptionForIDR(dataPtr: dataPtr, length: length) {
+                    self.formatDesc = newFormatDesc
+                    
+                    // C. Configure Decoder
+                    let decoderConfiguration: [String: Any] = {
+                        var config: [String: Any] = [
+                            kVTVideoDecoderSpecification_EnableHardwareAcceleratedVideoDecoder as String: true
                         ]
+                        
+                        if hdrEnabled {
+                            config[kVTDecompressionPropertyKey_PixelTransferProperties as String] = [
+                                // 1. Convert Colors to Display P3 (Fixes the "Washed Out" pale colors)
+                                kVTPixelTransferPropertyKey_DestinationColorPrimaries: kCMFormatDescriptionColorPrimaries_P3_D65,
+
+                                // 2. Keep Brightness as PQ (Fixes the "Black Screen" / conversion error)
+                                // We will decode this raw curve manually in the Metal shader.
+                                kVTPixelTransferPropertyKey_DestinationTransferFunction: kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ,
+                                
+                                // 3. Standard Matrix
+                                kVTPixelTransferPropertyKey_DestinationYCbCrMatrix: kCMFormatDescriptionYCbCrMatrix_ITU_R_2020
+                            ]
+                        }
+                        return config
+                    }()
+                    
+                    // Note: kCVPixelBufferPixelFormatTypeKey is omitted to allow the decoder to choose the optimal format
+                    // (usually YCbCr) which we handle in the Metal shader.
+                    let attributes: [CFString: Any] = [
+                        kCVPixelBufferMetalCompatibilityKey: true,
+                        kCVPixelBufferPoolMinimumBufferCountKey: 3
+                    ]
+                    
+                    var status = VTDecompressionSessionCreate(
+                        allocator: kCFAllocatorDefault,
+                        formatDescription: newFormatDesc,
+                        decoderSpecification: decoderConfiguration as CFDictionary,
+                        imageBufferAttributes: attributes as CFDictionary,
+                        outputCallback: &decoderCallback,
+                        decompressionSessionOut: &session
+                    )
+                    
+                    if status != noErr {
+                        print("Failed to create decompression session: \(status)")
+                        // Don't free dataPtr here, let the fallback logic below handle it or return error
+                        free(dataPtr)
+                        return DR_NEED_IDR
                     }
 
-                    return config
-                }()
-                // NOTE(shinyquagsire23): Setting kCVPixelBufferPixelFormatTypeKey *at all* will trigger
-                // a VideoToolbox bug that results in the output CVPixelBuffer's underlying Metal textures
-                // being decompressed, resulting in GPU bandwidth penalties
-                var attributes: [CFString: Any] = [kCVPixelBufferMetalCompatibilityKey: true, kCVPixelBufferPoolMinimumBufferCountKey: 3]
-                if !forceFastSecretTextureFormats {
-                    attributes[kCVPixelBufferPixelFormatTypeKey] = decodingFormat
+                    AudioHelpers.fixAudioForSurroundForCurrentWindow()
+                } else {
+                    // Failed to create format desc (bad header?), drop frame
+                    free(dataPtr)
+                    return DR_NEED_IDR
                 }
-                
-                VTDecompressionSessionCreate(allocator: kCFAllocatorDefault, formatDescription: formatDesc, decoderSpecification: decoderConfiguration as CFDictionary, imageBufferAttributes: attributes as CFDictionary, outputCallback: &decoderCallback, decompressionSessionOut: &session)
-                
-                AudioHelpers.fixAudioForSurroundForCurrentWindow() // TODO(shinyquagsire23): Make this configurable?
-            } else {
-                // Couldn't create format description yet
-//                free(dataPtr)
+            }
+            
+            // 2. Pre-Decode Checks
+            // FIX: Check self.formatDesc instead of calling recreateFormatDescriptionForIDR again
+            guard let formatDesc = self.formatDesc else {
+                // We received a P-frame before an IDR frame processed successfully
+                free(dataPtr)
                 return DR_NEED_IDR
             }
+            
+            // 3. Create Sample Buffer
+            // This takes ownership of dataPtr (via CMBlockBuffer) so we don't free it anymore on success
+            guard let sampleBuffer = createSampleBuffer(
+                dataPtr: dataPtr,
+                length: Int(length),
+                formatDesc: formatDesc,
+                decodeUnit: du
+            ) else {
+                free(dataPtr)
+                return DR_NEED_IDR
+            }
+            
+            // 4. Decode
+            guard let session = self.session else {
+                return DR_NEED_IDR
+            }
+
+            VTDecompressionSessionDecodeFrame(
+                session,
+                sampleBuffer: sampleBuffer,
+                flags: [._EnableAsynchronousDecompression],
+                frameRefcon: nil,
+                infoFlagsOut: nil
+            )
+
+            // 5. Notify Visibility
+            if du.pointee.frameType == FRAME_TYPE_IDR {
+                callbacks.videoContentShown()
+            }
+
+            return DR_OK
         }
-
-        guard let formatDesc = formatDesc else {
-            // We don't have our format yet
-//            free(dataPtr)
-            return DR_NEED_IDR
-        }
-
-        // Now create a CMSampleBuffer and pass it to your rendering pipeline
-        guard let sampleBuffer = createSampleBuffer(
-            dataPtr: dataPtr,
-            length: Int(length),
-            formatDesc: formatDesc,
-            decodeUnit: du
-        ) else {
-            // If creation fails, free and request IDR
-            free(dataPtr)
-            return DR_NEED_IDR
-        }
-
-        // Instead of displayLayer.enqueueSampleBuffer(...),
-        // we do our own custom rendering:
-        VTDecompressionSessionDecodeFrame(session!, sampleBuffer: sampleBuffer, flags: [._EnableAsynchronousDecompression], frameRefcon: nil, infoFlagsOut: nil)
-
-        // If's an IDR, notify that video content is visible
-        if du.pointee.frameType == FRAME_TYPE_IDR {
-            callbacks.videoContentShown()
-        }
-
-        return DR_OK
-    }
 
     // MARK: - Helper: Recreate Format Description for IDR
 
@@ -614,28 +634,15 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
     /// Creates an AV1 `CMVideoFormatDescription` from the data for an IDR frame.
         private func createAV1FormatDescriptionForIDRFrame(_ frameData: Data) -> CMVideoFormatDescription? {
-            // Build extensions with HDR hints
-            guard let av1Extensions = buildAV1Extensions(for: frameData) else {
-                return nil
-            }
-
-            var newDesc: CMVideoFormatDescription?
-            let status = CMVideoFormatDescriptionCreate(
-                allocator: kCFAllocatorDefault,
-                codecType: kCMVideoCodecType_AV1,
-                width: Int32(self.videoWidth), // FIX: Use dynamic video width
-                height: Int32(self.videoHeight), // FIX: Use dynamic video height
-                extensions: av1Extensions,
-                formatDescriptionOut: &newDesc
-            )
-            
-            if status != noErr {
-                print("Failed to create AV1 format description: \(status)")
-                return nil
-            }
-            return newDesc
+            // Use the Objective-C helper to parse the bitstream using FFmpeg.
+            // We use .takeRetainedValue() because the Objective-C helper returns a +1 retained object
+            // (via CMVideoFormatDescriptionCreate) that Swift needs to take ownership of.
+            return AV1Helper.createFormatDescription(
+                fromIDR: frameData,
+                masteringDisplayColorVolume: self.masteringDisplayColorVolume,
+                contentLightLevelInfo: self.contentLightLevelInfo
+            )?.takeRetainedValue()
         }
-    
     
     /// Builds an AV1 extension dictionary with HDR metadata hints
         private func buildAV1Extensions(for _: Data) -> CFDictionary? {

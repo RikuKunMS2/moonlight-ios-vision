@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		3E3791CA2ED2A4F5004B22A2 /* RealityKitStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E3791C92ED2A4F5004B22A2 /* RealityKitStreamView.swift */; };
 		3E4F94692DC2E2D6006CF0C1 /* ComputerViewWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E4F94682DC2E2D6006CF0C1 /* ComputerViewWrapper.swift */; };
+		3E8100A72ED5666B0011CB9F /* AV1Helper.m in Sources */ = {isa = PBXBuildFile; fileRef = 3E8100A62ED5666B0011CB9F /* AV1Helper.m */; };
 		3E86FC1D2D4FFDF20016BB8E /* UpdatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */; };
 		3E9440F62D4EB9ED0047E0C2 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = 3E9440F52D4EB9ED0047E0C2 /* OpenSSL */; };
 		6581B5F12D5434100022400F /* VideoTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6581B5F02D5434100022400F /* VideoTypes.swift */; };
@@ -285,6 +286,8 @@
 		3E0863FF2ECD6BB7006549CB /* Moonlight XrOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Moonlight XrOS.entitlements"; sourceTree = "<group>"; };
 		3E3791C92ED2A4F5004B22A2 /* RealityKitStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealityKitStreamView.swift; sourceTree = "<group>"; };
 		3E4F94682DC2E2D6006CF0C1 /* ComputerViewWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerViewWrapper.swift; sourceTree = "<group>"; };
+		3E8100A52ED566510011CB9F /* AV1Helper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AV1Helper.h; sourceTree = "<group>"; };
+		3E8100A62ED5666B0011CB9F /* AV1Helper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AV1Helper.m; sourceTree = "<group>"; };
 		3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatesView.swift; sourceTree = "<group>"; };
 		566E9D2B2770B23A00EF7BFE /* Moonlight v1.7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.7.xcdatamodel"; sourceTree = "<group>"; };
 		6581B5F02D5434100022400F /* VideoTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTypes.swift; sourceTree = "<group>"; };
@@ -673,6 +676,8 @@
 				E77582CE2D54020300948545 /* CVMetalHelpers.swift */,
 				B1EDB1302D4D95A700EB1839 /* DrawableVideoDecoder.swift */,
 				B1EDB1312D4D95A700EB1839 /* ObservableConnectionManager.swift */,
+				3E8100A52ED566510011CB9F /* AV1Helper.h */,
+				3E8100A62ED5666B0011CB9F /* AV1Helper.m */,
 				3E3791C92ED2A4F5004B22A2 /* RealityKitStreamView.swift */,
 				B1EDB1332D4D95A700EB1839 /* StreamControls.swift */,
 				B1EDB1342D4D95A700EB1839 /* UIKitStreamView.swift */,
@@ -1338,6 +1343,7 @@
 				F7A119272B5DDF73001E8686 /* Logger.m in Sources */,
 				F7A1192A2B5DDF73001E8686 /* HapticContext.m in Sources */,
 				F7A4A4D62B61E2F2001591F3 /* TemporaryHost.swift in Sources */,
+				3E8100A72ED5666B0011CB9F /* AV1Helper.m in Sources */,
 				F7A1192C2B5DDF73001E8686 /* TemporarySettings.m in Sources */,
 				F71801442B654D9100A9336B /* TemporaryApp.swift in Sources */,
 				F7A1192D2B5DDF73001E8686 /* CryptoManager.m in Sources */,
