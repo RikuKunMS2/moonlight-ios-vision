@@ -14,28 +14,34 @@ struct StreamControls<Additions: View>: View {
     
     let horizontal: Bool
     @Binding var streamConfig: StreamConfiguration
-    
+
     let isKeyboardActive: Bool
+    let isStatsOverlayActive: Bool
     let closeAction: () -> Void
     let toggleKeyboardAction: (() -> Void)?
+    let toggleStatsAction: (() -> Void)?
 
     @State private var spatialAudioMode: Bool = true // From Razorub
     @State private var volumeBeforeMute: Float = 127
-    
+
     @ViewBuilder var additions: () -> Additions
     
     // Initializer
     init(horizontal: Bool,
          streamConfig: Binding<StreamConfiguration>,
          isKeyboardActive: Bool = false,
+         isStatsOverlayActive: Bool = false,
          closeAction: @escaping () -> Void,
          toggleKeyboardAction: (() -> Void)? = nil,
+         toggleStatsAction: (() -> Void)? = nil,
          @ViewBuilder additions: @escaping () -> Additions) {
         self.horizontal = horizontal
         self._streamConfig = streamConfig
         self.isKeyboardActive = isKeyboardActive
+        self.isStatsOverlayActive = isStatsOverlayActive
         self.closeAction = closeAction
         self.toggleKeyboardAction = toggleKeyboardAction
+        self.toggleStatsAction = toggleStatsAction
         self.additions = additions
     }
 
@@ -81,7 +87,16 @@ struct StreamControls<Additions: View>: View {
                 Text(spatialAudioMode ? viewModel.localized("spatial_audio") : viewModel.localized("direct_audio"))
             }
             // -------------------------------------
-            
+
+            // Stats Overlay Toggle
+            if let toggleAction = toggleStatsAction {
+                Button(action: toggleAction) {
+                    Text(viewModel.localized("statistics_overlay"))
+                }
+                .background(isStatsOverlayActive ? Color.white.opacity(0.2) : Color.clear)
+                .clipShape(Capsule())
+            }
+
             // Virtual Keyboard Toggle
             if let toggleAction = toggleKeyboardAction {
                 Button(action: toggleAction) {

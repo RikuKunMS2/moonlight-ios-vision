@@ -23,9 +23,11 @@
 typedef void (^noargCallbackType)(void);
 @property (nonatomic, strong) noargCallbackType connectedCallback;
 @property (nonatomic, strong) noargCallbackType disconnectedCallback;
+@property (nonatomic, strong) void (^statsUpdateCallback)(NSString* statsText);
 
 -(void)updatePreferredDisplayMode:(BOOL)streamActive;
 - (void)stopStream;
-- (void)toggleKeyboard; // <-- ADD THIS
+- (void)toggleKeyboard;
+- (void)toggleStatsOverlay;
 
 @end

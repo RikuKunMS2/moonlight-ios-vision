@@ -22,18 +22,20 @@ struct UIKitStreamView: View {
     @State private var backgroundTask: Task<Void, Never>?
     @State private var windowSizeMonitorTask: Task<Void, Never>? = nil
     @State private var lastSavedWindowSize: CGSize? = nil
+    @State private var statsOverlayText: String = ""
 
     var body: some View {
         Group {
             if viewModel.activelyStreaming,
                let configBinding = Binding($streamConfig) {
-                _UIKitStreamView(streamConfig: configBinding)
+                _UIKitStreamView(streamConfig: configBinding, statsOverlayText: $statsOverlayText)
                     .id(reloadToken)
                     .ornament(attachmentAnchor: .scene(.top), contentAlignment: .bottom) {
                         StreamControls(
                             horizontal: true,
                             streamConfig: configBinding,
                             isKeyboardActive: false,
+                            isStatsOverlayActive: viewModel.streamSettings.statsOverlay,
                             closeAction: {
                                 handleHomeButtonClose()
                             },
@@ -41,10 +43,25 @@ struct UIKitStreamView: View {
                                 if let streamVC = _UIKitStreamView.controllerReference.object {
                                     streamVC.toggleKeyboard()
                                 }
+                            },
+                            toggleStatsAction: {
+                                viewModel.streamSettings.statsOverlay.toggle()
+                                viewModel.streamSettings.save()
+
+                                if let streamVC = _UIKitStreamView.controllerReference.object {
+                                    streamVC.toggleStatsOverlay()
+                                }
                             }
                         ) {
                             _UIKitStreamViewWindowButton(streamConfig: configBinding, controllerReference: _UIKitStreamView.controllerReference)
                         }
+                    }
+                    .ornament(
+                        visibility: viewModel.streamSettings.statsOverlay ? .visible : .hidden,
+                        attachmentAnchor: .scene(.topTrailing),
+                        contentAlignment: .topLeading
+                    ) {
+                        StatsOverlayView(statsText: statsOverlayText)
                     }
                     .onAppear {
                         hasPerformedTeardown = false
@@ -345,10 +362,23 @@ struct _UIKitStreamView: UIViewControllerRepresentable {
     typealias UIViewControllerType = StreamFrameViewController
 
     @Binding var streamConfig: StreamConfiguration
+    @Binding var statsOverlayText: String
     static let controllerReference = Reference<UIViewControllerType>()
 
     static var reference: Reference<UIViewControllerType> {
         return controllerReference
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(statsOverlayText: $statsOverlayText)
+    }
+
+    class Coordinator {
+        var statsOverlayText: Binding<String>
+
+        init(statsOverlayText: Binding<String>) {
+            self.statsOverlayText = statsOverlayText
+        }
     }
 
     func makeUIViewController(context: Context) -> UIViewControllerType {
@@ -366,6 +396,11 @@ struct _UIKitStreamView: UIViewControllerRepresentable {
         };
         streamView.disconnectedCallback = {
             print("Disconnected in Swift!")
+        };
+        streamView.statsUpdateCallback = { [weak coordinator = context.coordinator] statsText in
+            DispatchQueue.main.async {
+                coordinator?.statsOverlayText.wrappedValue = statsText ?? ""
+            }
         };
         _UIKitStreamView.controllerReference.object = streamView
         return streamView
@@ -441,4 +476,17 @@ func applyAspectRatioLock(streamConfig: StreamConfiguration, targetWindow: UIWin
     )
 
     windowScene.requestGeometryUpdate(geometryRequest)
+}
+
+struct StatsOverlayView: View {
+    let statsText: String
+
+    var body: some View {
+        Text(statsText)
+            .font(.system(size: 12, design: .monospaced))
+            .foregroundColor(.gray)
+            .padding(8)
+            .background(.black.opacity(0.7))
+            .cornerRadius(4)
+    }
 }

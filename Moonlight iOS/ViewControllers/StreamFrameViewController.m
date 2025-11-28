@@ -320,9 +320,9 @@
 - (void)updateStatsOverlay {
     NSString* overlayText = [self->_streamMan getStatsOverlayText];
     
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self updateOverlayText:overlayText];
-    });
+    if (self.statsUpdateCallback) {
+        self.statsUpdateCallback(overlayText);
+    }
 }
 
 - (void)updateOverlayText:(NSString*)text {
@@ -449,6 +449,7 @@
                                                                      selector:@selector(updateStatsOverlay)
                                                                      userInfo:nil
                                                                       repeats:YES];
+            [self updateStatsOverlay];
         }
         
         if (self->_connectedCallback) {
@@ -783,6 +784,35 @@
 
 - (void)toggleKeyboard {
     [_streamView toggleKeyboard];
+}
+
+- (void)toggleStatsOverlay {
+    // Toggle the setting
+    _settings.statsOverlay = !_settings.statsOverlay;
+    [_settings save];
+
+    if (_settings.statsOverlay) {
+        // Start the stats timer
+        if (_statsUpdateTimer == nil) {
+            _statsUpdateTimer = [NSTimer scheduledTimerWithTimeInterval:1.0f
+                                                                 target:self
+                                                               selector:@selector(updateStatsOverlay)
+                                                               userInfo:nil
+                                                                repeats:YES];
+            // Update immediately
+            [self updateStatsOverlay];
+        }
+    } else {
+        // Stop the stats timer
+        if (_statsUpdateTimer != nil) {
+            [_statsUpdateTimer invalidate];
+            _statsUpdateTimer = nil;
+        }
+        // Clear the overlay
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self updateOverlayText:@""];
+        });
+    }
 }
 
 
