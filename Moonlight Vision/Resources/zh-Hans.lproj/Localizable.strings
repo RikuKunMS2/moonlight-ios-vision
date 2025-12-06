@@ -78,18 +78,25 @@
 "tap_video_to_type" = "点击屏幕以输入";
 
 // RealityKit Controls
-"boost_luminance" = "亮度增强";
-"flatten" = "扁平化";
+"boost_luminance" = "亮度增强 / 亮度";
+"boost" = "增强";
+"gamma" = "伽马";
+"saturation" = "饱和度";
+"curvature" = "曲率";
+"depth" = "深度";
+"immersion" = "沉浸式模式";
+"scale" = "缩放";
+"flatten" = "曲面屏";
 "reset_depth" = "重置深度";
 "height" = "高度";
 "spatial" = "空间";
 "black_sphere_opacity" = "环境透明度";
 "size" = "大小";
 "distance" = "距离";
-"screen_locked" = "屏幕锁定（固定屏幕）";
-"screen_unlocked" = "屏幕解锁（可移动屏幕）";
+"screen_locked" = "屏幕锁定（输入激活）";
+"screen_unlocked" = "屏幕解锁（可移动屏幕激活）";
 "3d_mode" = "3D 模式";
-"main_button" = "返回主页";
+"main_button" = "主按钮";
 "starting_stream" = "正在启动 %@...";
 
 // Settings
