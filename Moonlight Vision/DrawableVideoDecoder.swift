@@ -51,6 +51,9 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
     private var metalFormat: MTLPixelFormat
     private var decodingFormat: OSType
+    
+    // [CHANGE] New property to track if we are in the specific AV1 HDR fix mode
+    private var isAv1Hdr: Bool = false
 
     /// If true, we'll do pacing logic in displayLink
     private var framePacing: Bool = false
@@ -108,10 +111,10 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         self.hdrSettingsProvider = hdrSettingsProvider
         metalFormat = .rgba16Float
 
-        // Format setup based on HDR
-        decodingFormat = enableHDR ?
-            kCVPixelFormatType_64RGBAHalf :
-            kCVPixelFormatType_Lossless_32BGRA
+        // [CHANGE] Default to SDR format initially.
+        // We will determine the actual HDR format (P010 vs RGBAHalf) in setup()
+        // once we know the video codec.
+        decodingFormat = kCVPixelFormatType_Lossless_32BGRA
 
         self.texture = texture
         self.callbacks = callbacks
@@ -169,7 +172,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 print("ERROR")
                 return
             }
-            
+           
             if hdrEnabled {
                 updateHDRMetadata()
             }
@@ -229,7 +232,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             }
             renderEncoder.setRenderPipelineState(copyPipelineState)
             renderEncoder.setFragmentTexture(mtlTexture, index: 0)
-            
+           
             // Set HDR parameter buffers
             if let enabledBuffer = displayBuffer {
                 renderEncoder.setFragmentBuffer(enabledBuffer, offset: 0, index: 0)
@@ -237,7 +240,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             if let paramsBuffer = contentBuffer {
                 renderEncoder.setFragmentBuffer(paramsBuffer, offset: 0, index: 1)
             }
-            
+           
             renderEncoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
             renderEncoder.endEncoding()
 
@@ -266,8 +269,8 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     private func createHDRParameterBuffers() -> (MTLBuffer?, MTLBuffer?) {
         var hdrEnabled = self.hdrEnabled
         let enabledBuffer = mtlDevice.makeBuffer(bytes: &hdrEnabled,
-                                               length: MemoryLayout<Bool>.size,
-                                               options: .storageModeShared)
+                                                 length: MemoryLayout<Bool>.size,
+                                                 options: .storageModeShared)
         
         // --- FIX: Read directly (Thread-Safe) ---
         // We no longer dispatch to Main. We assume the provider is thread-safe.
@@ -275,12 +278,12 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         // ----------------------------------------
         
         let paramsBuffer = mtlDevice.makeBuffer(bytes: &hdrParams,
-                                              length: MemoryLayout<HDRParams>.size,
-                                              options: .storageModeShared)
+                                                length: MemoryLayout<HDRParams>.size,
+                                                options: .storageModeShared)
         
         return (enabledBuffer, paramsBuffer)
     }
-            
+          
     func setupLowLevelTexture() {
             DispatchQueue.main.sync {
                 if videoWidth == 0 || videoHeight == 0 {
@@ -318,6 +321,29 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         self.videoWidth = Int(videoWidth)
         self.videoHeight = Int(videoHeight)
 
+        // [CHANGE] Dynamic Format Logic
+        let isAV1 = (videoFormat & VIDEO_FORMAT_MASK_AV1) != 0
+        
+        if hdrEnabled {
+            if isAV1 {
+                // AV1 HDR: Use the "Fix" (Raw YUV 10-bit).
+                // We do this because 64RGBAHalf system conversion is unstable for AV1 on VisionOS.
+                decodingFormat = kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange
+                isAv1Hdr = true
+                print("DrawableVideoDecoder: AV1 HDR Detected. Using P010 YUV + Manual Shader.")
+            } else {
+                // HEVC/H264 HDR: Use Apple Standard (RGBA Half Float).
+                // VideoToolbox handles the P3/PQ conversion automatically here.
+                decodingFormat = kCVPixelFormatType_64RGBAHalf
+                isAv1Hdr = false
+                print("DrawableVideoDecoder: HEVC/H264 HDR Detected. Using RGBAHalf + System Conversion.")
+            }
+        } else {
+            // SDR: Standard BGRA
+            decodingFormat = kCVPixelFormatType_Lossless_32BGRA
+            isAv1Hdr = false
+        }
+
         // Configure cache attributes with HDR support if enabled
         let cacheAttributes: [String: Any] = [
             kCVMetalTextureCacheMaximumTextureAgeKey as String: 1,
@@ -331,7 +357,9 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 kCVPixelBufferPixelFormatTypeKey as String: decodingFormat,
             ]
 
-            if hdrEnabled {
+            // [CHANGE] Only apply manual CV attachment overrides for the AV1 Fix path.
+            // For HEVC/RGBAHalf, we let VideoToolbox handle the container.
+            if hdrEnabled && isAv1Hdr {
                 attrs[kCVPixelBufferYCbCrMatrixKey as String] = kCVImageBufferYCbCrMatrix_ITU_R_2020
                 attrs[kCVPixelBufferColorPrimariesKey as String] = kCVImageBufferColorPrimaries_ITU_R_2020
                 attrs[kCVPixelBufferTransferFunctionKey as String] = kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ
@@ -409,10 +437,10 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     // MARK: - Decoding & Sample Buffer Handling
 
         /**
-         * Replaces the old `AVSampleBufferDisplayLayer` usage.
-         * Instead of enqueuing to a display layer, we create a `CMSampleBuffer`
-         * and forward it to your own rendering path (e.g., a Metal texture queue).
-         */
+        * Replaces the old `AVSampleBufferDisplayLayer` usage.
+        * Instead of enqueuing to a display layer, we create a `CMSampleBuffer`
+        * and forward it to your own rendering path (e.g., a Metal texture queue).
+        */
         @discardableResult
         func submitDecodeBuffer(
             _ dataPtr: UnsafeMutablePointer<UInt8>!,
@@ -420,10 +448,10 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             bufferType: Int32,
             decode du: PDECODE_UNIT!
         ) -> Int32 {
-            
+           
             // 1. Handle IDR Frames (Initialization/Re-initialization)
             if du.pointee.frameType == FRAME_TYPE_IDR {
-                
+              
                 // A. Handle Parameter Sets (H.264/HEVC separate NALs)
                 if bufferType != BUFFER_TYPE_PICDATA {
                     if bufferType == BUFFER_TYPE_VPS || bufferType == BUFFER_TYPE_SPS || bufferType == BUFFER_TYPE_PPS {
@@ -438,14 +466,17 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 // B. Recreate Format Description (Parses AV1 Seq Header or uses accumulated H.264/HEVC params)
                 if let newFormatDesc = recreateFormatDescriptionForIDR(dataPtr: dataPtr, length: length) {
                     self.formatDesc = newFormatDesc
-                    
+                   
                     // C. Configure Decoder
                     let decoderConfiguration: [String: Any] = {
                         var config: [String: Any] = [
                             kVTVideoDecoderSpecification_EnableHardwareAcceleratedVideoDecoder as String: true
                         ]
                         
-                        if hdrEnabled {
+                        // [CHANGE] Dual Pipeline Check:
+                        // 1. For HEVC/H264 HDR (!isAv1Hdr), we use PixelTransferProperties to ask the OS to convert to Linear P3.
+                        // 2. For AV1 HDR (isAv1Hdr), we want RAW P010 YUV. We do NOT want the OS to touch the colors.
+                        if hdrEnabled && !isAv1Hdr {
                             config[kVTDecompressionPropertyKey_PixelTransferProperties as String] = [
                                 // 1. Convert Colors to Display P3 (Fixes the "Washed Out" pale colors)
                                 kVTPixelTransferPropertyKey_DestinationColorPrimaries: kCMFormatDescriptionColorPrimaries_P3_D65,
@@ -453,21 +484,21 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                                 // 2. Keep Brightness as PQ (Fixes the "Black Screen" / conversion error)
                                 // We will decode this raw curve manually in the Metal shader.
                                 kVTPixelTransferPropertyKey_DestinationTransferFunction: kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ,
-                                
+                               
                                 // 3. Standard Matrix
                                 kVTPixelTransferPropertyKey_DestinationYCbCrMatrix: kCMFormatDescriptionYCbCrMatrix_ITU_R_2020
                             ]
                         }
                         return config
                     }()
-                    
+                   
                     // Note: kCVPixelBufferPixelFormatTypeKey is omitted to allow the decoder to choose the optimal format
                     // (usually YCbCr) which we handle in the Metal shader.
                     let attributes: [CFString: Any] = [
                         kCVPixelBufferMetalCompatibilityKey: true,
                         kCVPixelBufferPoolMinimumBufferCountKey: 3
                     ]
-                    
+                   
                     var status = VTDecompressionSessionCreate(
                         allocator: kCFAllocatorDefault,
                         formatDescription: newFormatDesc,
@@ -476,7 +507,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                         outputCallback: &decoderCallback,
                         decompressionSessionOut: &session
                     )
-                    
+                   
                     if status != noErr {
                         print("Failed to create decompression session: \(status)")
                         // Don't free dataPtr here, let the fallback logic below handle it or return error
@@ -491,7 +522,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                     return DR_NEED_IDR
                 }
             }
-            
+           
             // 2. Pre-Decode Checks
             // FIX: Check self.formatDesc instead of calling recreateFormatDescriptionForIDR again
             guard let formatDesc = self.formatDesc else {
@@ -499,7 +530,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 free(dataPtr)
                 return DR_NEED_IDR
             }
-            
+           
             // 3. Create Sample Buffer
             // This takes ownership of dataPtr (via CMBlockBuffer) so we don't free it anymore on success
             guard let sampleBuffer = createSampleBuffer(
@@ -511,7 +542,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 free(dataPtr)
                 return DR_NEED_IDR
             }
-            
+           
             // 4. Decode
             guard let session = self.session else {
                 return DR_NEED_IDR
@@ -648,7 +679,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         private func buildAV1Extensions(for _: Data) -> CFDictionary? {
             var extensions: [CFString: Any] = [:]
             extensions[kCMFormatDescriptionExtension_FormatName] = "av01"
-            
+           
             // Inject HDR metadata if enabled.
             // Even though we force the output transfer function in the session config,
             // it is best practice to tag the source description correctly for AV1.
@@ -656,7 +687,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 extensions[kCMFormatDescriptionExtension_ColorPrimaries] = kCVImageBufferColorPrimaries_ITU_R_2020
                 extensions[kCMFormatDescriptionExtension_TransferFunction] = kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ
                 extensions[kCMFormatDescriptionExtension_YCbCrMatrix] = kCVImageBufferYCbCrMatrix_ITU_R_2020
-                
+               
                 if let mastering = masteringDisplayColorVolume {
                     extensions[kCMFormatDescriptionExtension_MasteringDisplayColorVolume] = mastering
                 }
@@ -664,7 +695,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                     extensions[kCMFormatDescriptionExtension_ContentLightLevelInfo] = lightLevel
                 }
             }
-            
+           
             return extensions as CFDictionary
         }
     
@@ -691,7 +722,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             print("\nBuffer attachments:")
             for (key, value) in attachments {
                 print("\(key): \(value)")
-                
+               
                 // Parse MasteringDisplayColorVolume if present
                 if key == kCMFormatDescriptionExtension_MasteringDisplayColorVolume as String,
                    let masteringData = value as? Data {
@@ -1047,16 +1078,16 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 4, as: UInt16.self) })) / 50000.0,
             Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 8, as: UInt16.self) })) / 50000.0
         ]
-        
+       
         let displayPrimariesY = [
             Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 2, as: UInt16.self) })) / 50000.0,
             Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 6, as: UInt16.self) })) / 50000.0,
             Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 10, as: UInt16.self) })) / 50000.0
         ]
-        
+       
         let whitePointX = Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 12, as: UInt16.self) })) / 50000.0
         let whitePointY = Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 14, as: UInt16.self) })) / 50000.0
-        
+       
         let maxDisplayLuminance = Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 16, as: UInt16.self) }))
         let minDisplayLuminance = Float(CFSwapInt16BigToHost(data.withUnsafeBytes { $0.load(fromByteOffset: 18, as: UInt16.self) })) / 10000.0
 
@@ -1099,34 +1130,3 @@ let BUFFER_TYPE_PPS = 3
 // Example decode results
 let DR_OK: Int32 = 0
 let DR_NEED_IDR: Int32 = -1
-
-// Example placeholder for your C struct
-// struct DECODE_UNIT {
-//    var frameType: Int32
-//    var presentationTimeMs: Int64
-// }
-
-//// Example placeholder for C function
-// @_silgen_name("DrSubmitDecodeUnit")
-// func DrSubmitDecodeUnit(_ du: UnsafeMutablePointer<DECODE_UNIT>) -> Int32 {
-//    // Replace with real logic
-//    return 0
-// }
-
-// Example for HDR metadata
-// struct SS_HDR_METADATA {
-//    // Add your fields, e.g.:
-//    var displayPrimaries: (vector_ushort2, vector_ushort2, vector_ushort2) = (.zero, .zero, .zero)
-//    var whitePoint: vector_ushort2 = .zero
-//    var minDisplayLuminance: UInt32 = 0
-//    var maxDisplayLuminance: UInt32 = 0
-//    var maxContentLightLevel: UInt16 = 0
-//    var maxFrameAverageLightLevel: UInt16 = 0
-// }
-
-//// Example bridging
-// @_silgen_name("LiGetHdrMetadata")
-// func LiGetHdrMetadata(_ hdr: UnsafeMutablePointer<SS_HDR_METADATA>) -> Bool {
-//    // Stub, return false for now
-//    return false
-// }

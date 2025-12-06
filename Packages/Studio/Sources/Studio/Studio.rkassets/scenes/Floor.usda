@@ -1,0 +1,555 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "Reality Composer Pro Version 1.0 (418)"
+    }
+    defaultPrim = "Root"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "Root" (
+    references = None
+)
+{
+    reorder nameChildren = ["Studio_floor_2_Lightspill", "Studio_floor_2", "Studio_floor_2_2_Lightspill", "Studio_floor_2_2"]
+    def "Studio_floor_2_2_Lightspill" (
+        active = true
+        references = @../meshes/Studio_floor_2_2_Lightspill.usdc@</root>
+    )
+    {
+        reorder nameChildren = ["Studio_2_2", "Material"]
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        over "Studio_2_2" (
+            references = None
+        )
+        {
+            over "Mesh_010" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                references = None
+            )
+            {
+            }
+        }
+    }
+
+    def "Studio_floor_2_Lightspill" (
+        active = true
+        references = @../meshes/Studio_floor_2_Lightspill.usdc@</root>
+    )
+    {
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        over "Studio_2" (
+            references = None
+        )
+        {
+            over "Mesh_009" (
+                prepend apiSchemas = ["MaterialBindingAPI"]
+                references = None
+            )
+            {
+            }
+        }
+    }
+
+    def Material "Studio_floor_2" (
+        references = None
+    )
+    {
+        asset inputs:Texture = @@ (
+            customData = {
+                dictionary realitykit = {
+                    float2 positionInSubgraph = (-996.7243, 476.19012)
+                    int stackingOrderInSubgraph = 4713
+                }
+            }
+        )
+        token outputs:mtlx:surface.connect = </Root/Studio_floor_2/UnlitSurface.outputs:out>
+        token outputs:realitykit:vertex
+        float2 ui:nodegraph:realitykit:subgraphOutputs:pos = (341.25, 106.5)
+
+        def Shader "Multiply" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_multiply_color3"
+            color3f inputs:in1.connect = </Root/Studio_floor_2/Constant.outputs:out>
+            color3f inputs:in2.connect = </Root/Studio_floor_2/Combine3_1.outputs:out>
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-557.81885, 158.30847)
+            int ui:nodegraph:node:stackingOrder = 4713
+        }
+
+        def Shader "Swizzle_1" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_swizzle_color4_color3"
+            string inputs:channels = "rgb"
+            color4f inputs:in.connect = </Root/Studio_floor_2/RealitykitReflectionDiffuse_1.outputs:out>
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-589.7189, -79.19628)
+            int ui:nodegraph:node:stackingOrder = 4713
+        }
+
+        def Shader "RealitykitReflectionSpecular" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_realitykit_light_spill_specular"
+            float2 inputs:antialiasingStrength
+            float3 inputs:normal.connect = </Root/Studio_floor_2/Normal_1.outputs:out>
+            float3 inputs:reflection_origin
+            float3 inputs:unreflected_direction.connect = </Root/Studio_floor_2/ViewDirection_1.outputs:out>
+            color4f outputs:out
+            float2 ui:nodegraph:node:pos = (-1265.8586, 172.63564)
+            int ui:nodegraph:node:stackingOrder = 4713
+        }
+
+        def Shader "Normal_1" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_normal_vector3"
+            string inputs:space = "world"
+            float3 outputs:out
+            float2 ui:nodegraph:node:pos = (-1520.3969, 219.3036)
+            int ui:nodegraph:node:stackingOrder = 4713
+        }
+
+        def Shader "Image" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_image_color3"
+            color3f inputs:default
+            asset inputs:file.connect = </Root/Studio_floor_2.inputs:Texture>
+            string inputs:filtertype
+            float2 inputs:texcoord.connect = </Root/Studio_floor_2/UsdPrimvarReader_5.outputs:out>
+            string inputs:uaddressmode
+            string inputs:vaddressmode
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-716.46423, 512.229)
+            int ui:nodegraph:node:stackingOrder = 4713
+        }
+
+        def Shader "UsdPrimvarReader_5" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_UsdPrimvarReader_vector2"
+            float2 inputs:fallback
+            string inputs:varname = "UVChannel_1"
+            float2 outputs:out
+            float2 ui:nodegraph:node:pos = (-1020.0098, 586.65924)
+            int ui:nodegraph:node:stackingOrder = 4713
+            string[] ui:nodegraph:realitykit:node:attributesShowingChildren = ["inputs:varname"]
+        }
+
+        def Shader "Constant" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_constant_color3"
+            color3f inputs:value = (0.023529412, 0.023529412, 0.023529412) (
+                colorSpace = "lin_srgb"
+            )
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-755.0701, 118.9159)
+            int ui:nodegraph:node:stackingOrder = 4718
+        }
+
+        def Shader "ViewDirection_1" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_realitykit_viewdirection_vector3"
+            float3 outputs:out
+            float2 ui:nodegraph:node:pos = (-1564.654, 151.66467)
+            int ui:nodegraph:node:stackingOrder = 4713
+        }
+
+        def Shader "UsdPrimvarReader_3" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_UsdPrimvarReader_vector2"
+            float2 inputs:fallback
+            string inputs:varname = "attenuationUVs"
+            float2 outputs:out
+            float2 ui:nodegraph:node:pos = (-1205.6144, -86.79345)
+            int ui:nodegraph:node:stackingOrder = 4713
+        }
+
+        def Shader "RealitykitReflectionDiffuse_1" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_realitykit_light_spill_diffuse"
+            asset inputs:attenuationMap = @../textures/common/DefaultAttenuationMap.exr@
+            float2 inputs:attenuationUV.connect = </Root/Studio_floor_2/UsdPrimvarReader_3.outputs:out>
+            float2 inputs:emitterUV.connect = </Root/Studio_floor_2/UsdPrimvarReader_4.outputs:out>
+            color4f outputs:out
+            float2 ui:nodegraph:node:pos = (-867.3927, -137.85753)
+            int ui:nodegraph:node:stackingOrder = 4715
+        }
+
+        def Shader "Add_2" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_add_color3"
+            color3f inputs:in1.connect = </Root/Studio_floor_2/Multiply_2.outputs:out>
+            color3f inputs:in2.connect = </Root/Studio_floor_2/Plus.outputs:out>
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-152.03864, 76.672005)
+            int ui:nodegraph:node:stackingOrder = 4713
+        }
+
+        def Shader "UnlitSurface" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_realitykit_unlit_surfaceshader"
+            bool inputs:applyPostProcessToneMap = 0
+            color3f inputs:color.connect = </Root/Studio_floor_2/Add_2.outputs:out>
+            bool inputs:hasPremultipliedAlpha
+            float inputs:opacity
+            float inputs:opacityThreshold
+            token outputs:out
+            float2 ui:nodegraph:node:pos = (36.607483, 99.819954)
+            int ui:nodegraph:node:stackingOrder = 4713
+            string[] ui:nodegraph:realitykit:node:attributesShowingChildren = ["inputs:opacityThreshold"]
+        }
+
+        def Shader "Combine3_1" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_combine3_color3"
+            float inputs:in1.connect = </Root/Studio_floor_2/Separate4_1.outputs:outr>
+            float inputs:in2.connect = </Root/Studio_floor_2/Separate4_1.outputs:outg>
+            float inputs:in3.connect = </Root/Studio_floor_2/Separate4_1.outputs:outb>
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-753.2741, 202.13002)
+            int ui:nodegraph:node:stackingOrder = 4713
+        }
+
+        def Shader "Constant_2" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_constant_color3"
+            color3f inputs:value = (0.29411766, 0.29411766, 0.29411766) (
+                colorSpace = "lin_srgb"
+            )
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-596.8414, -2.2888107)
+            int ui:nodegraph:node:stackingOrder = 4717
+        }
+
+        def Shader "Multiply_2" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_multiply_color3"
+            color3f inputs:in1.connect = </Root/Studio_floor_2/Swizzle_1.outputs:out>
+            color3f inputs:in2.connect = </Root/Studio_floor_2/Constant_2.outputs:out>
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-402.79825, -43.70446)
+            int ui:nodegraph:node:stackingOrder = 4713
+        }
+
+        def Shader "Plus" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_plus_color3"
+            color3f inputs:bg.connect = </Root/Studio_floor_2/Image.outputs:out>
+            color3f inputs:fg.connect = </Root/Studio_floor_2/Multiply.outputs:out>
+            float inputs:mix.connect = </Root/Studio_floor_2/Separate4_1.outputs:outa>
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-355.96445, 221.08522)
+            int ui:nodegraph:node:stackingOrder = 4713
+        }
+
+        def Shader "Separate4_1" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_separate4_color4"
+            color4f inputs:in.connect = </Root/Studio_floor_2/RealitykitReflectionSpecular.outputs:out>
+            float outputs:outa
+            float outputs:outb
+            float outputs:outg
+            float outputs:outr
+            float2 ui:nodegraph:node:pos = (-984.3259, 226.73366)
+            int ui:nodegraph:node:stackingOrder = 4713
+        }
+
+        def Shader "UsdPrimvarReader_4" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_UsdPrimvarReader_vector2"
+            float2 inputs:fallback
+            string inputs:varname = "emitterUVs"
+            float2 outputs:out
+            float2 ui:nodegraph:node:pos = (-1205.4513, -247.09924)
+            int ui:nodegraph:node:stackingOrder = 4713
+            string[] ui:nodegraph:realitykit:node:attributesShowingChildren = ["inputs:fallback"]
+        }
+    }
+
+    def Material "Studio_floor_2_2" (
+        references = None
+    )
+    {
+        asset inputs:Texture = @@ (
+            customData = {
+                dictionary realitykit = {
+                    float2 positionInSubgraph = (-990.95703, 405.70312)
+                    int stackingOrderInSubgraph = 4697
+                }
+            }
+        )
+        token outputs:mtlx:surface.connect = </Root/Studio_floor_2_2/UnlitSurface.outputs:out>
+        token outputs:realitykit:vertex
+        float2 ui:nodegraph:realitykit:subgraphOutputs:pos = (335.25, 100.5)
+
+        def Shader "Constant_2" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_constant_color3"
+            color3f inputs:value = (0.29411766, 0.29411766, 0.29411766) (
+                colorSpace = "lin_srgb"
+            )
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-616.8414, -22.28881)
+            int ui:nodegraph:node:stackingOrder = 4702
+        }
+
+        def Shader "Image" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_image_color3"
+            color3f inputs:default
+            asset inputs:file.connect = </Root/Studio_floor_2_2.inputs:Texture>
+            string inputs:filtertype
+            float2 inputs:texcoord.connect = </Root/Studio_floor_2_2/UsdPrimvarReader_5.outputs:out>
+            string inputs:uaddressmode
+            string inputs:vaddressmode
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-736.46423, 492.229)
+            int ui:nodegraph:node:stackingOrder = 4610
+        }
+
+        def Shader "UsdPrimvarReader_4" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_UsdPrimvarReader_vector2"
+            float2 inputs:fallback
+            string inputs:varname = "emitterUVs"
+            float2 outputs:out
+            float2 ui:nodegraph:node:pos = (-1225.4513, -267.09924)
+            int ui:nodegraph:node:stackingOrder = 4609
+            string[] ui:nodegraph:realitykit:node:attributesShowingChildren = ["inputs:fallback"]
+        }
+
+        def Shader "UsdPrimvarReader_5" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_UsdPrimvarReader_vector2"
+            float2 inputs:fallback
+            string inputs:varname = "UVChannel_1"
+            float2 outputs:out
+            float2 ui:nodegraph:node:pos = (-1029.0518, 526.82983)
+            int ui:nodegraph:node:stackingOrder = 4697
+            string[] ui:nodegraph:realitykit:node:attributesShowingChildren = ["inputs:varname"]
+        }
+
+        def Shader "RealitykitReflectionSpecular" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_realitykit_light_spill_specular"
+            float2 inputs:antialiasingStrength
+            float3 inputs:normal.connect = </Root/Studio_floor_2_2/Normal_1.outputs:out>
+            float3 inputs:reflection_origin
+            float3 inputs:unreflected_direction.connect = </Root/Studio_floor_2_2/ViewDirection_1.outputs:out>
+            color4f outputs:out
+            float2 ui:nodegraph:node:pos = (-1285.8586, 152.63564)
+            int ui:nodegraph:node:stackingOrder = 4609
+        }
+
+        def Shader "Plus" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_plus_color3"
+            color3f inputs:bg.connect = </Root/Studio_floor_2_2/Image.outputs:out>
+            color3f inputs:fg.connect = </Root/Studio_floor_2_2/Multiply.outputs:out>
+            float inputs:mix.connect = </Root/Studio_floor_2_2/Separate4_1.outputs:outa>
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-375.96445, 201.08522)
+            int ui:nodegraph:node:stackingOrder = 4609
+        }
+
+        def Shader "Combine3_1" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_combine3_color3"
+            float inputs:in1.connect = </Root/Studio_floor_2_2/Separate4_1.outputs:outr>
+            float inputs:in2.connect = </Root/Studio_floor_2_2/Separate4_1.outputs:outg>
+            float inputs:in3.connect = </Root/Studio_floor_2_2/Separate4_1.outputs:outb>
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-773.2741, 182.13002)
+            int ui:nodegraph:node:stackingOrder = 4609
+        }
+
+        def Shader "ViewDirection_1" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_realitykit_viewdirection_vector3"
+            float3 outputs:out
+            float2 ui:nodegraph:node:pos = (-1584.654, 131.66467)
+            int ui:nodegraph:node:stackingOrder = 4609
+        }
+
+        def Shader "Multiply" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_multiply_color3"
+            color3f inputs:in1.connect = </Root/Studio_floor_2_2/Constant.outputs:out>
+            color3f inputs:in2.connect = </Root/Studio_floor_2_2/Combine3_1.outputs:out>
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-577.81885, 138.30847)
+            int ui:nodegraph:node:stackingOrder = 4609
+        }
+
+        def Shader "Normal_1" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_normal_vector3"
+            string inputs:space = "world"
+            float3 outputs:out
+            float2 ui:nodegraph:node:pos = (-1540.3969, 199.3036)
+            int ui:nodegraph:node:stackingOrder = 4609
+        }
+
+        def Shader "Constant" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_constant_color3"
+            color3f inputs:value = (0.023529412, 0.023529412, 0.023529412) (
+                colorSpace = "lin_srgb"
+            )
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-775.0701, 98.9159)
+            int ui:nodegraph:node:stackingOrder = 4700
+        }
+
+        def Shader "Multiply_2" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_multiply_color3"
+            color3f inputs:in1.connect = </Root/Studio_floor_2_2/Swizzle_1.outputs:out>
+            color3f inputs:in2.connect = </Root/Studio_floor_2_2/Constant_2.outputs:out>
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-422.79825, -63.70446)
+            int ui:nodegraph:node:stackingOrder = 4609
+        }
+
+        def Shader "Swizzle_1" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_swizzle_color4_color3"
+            string inputs:channels = "rgb"
+            color4f inputs:in.connect = </Root/Studio_floor_2_2/RealitykitReflectionDiffuse_1.outputs:out>
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-609.7189, -99.19628)
+            int ui:nodegraph:node:stackingOrder = 4609
+        }
+
+        def Shader "UnlitSurface" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_realitykit_unlit_surfaceshader"
+            bool inputs:applyPostProcessToneMap = 0
+            color3f inputs:color.connect = </Root/Studio_floor_2_2/Add_2.outputs:out>
+            bool inputs:hasPremultipliedAlpha
+            float inputs:opacity
+            float inputs:opacityThreshold
+            token outputs:out
+            float2 ui:nodegraph:node:pos = (16.607483, 79.819954)
+            int ui:nodegraph:node:stackingOrder = 4609
+            string[] ui:nodegraph:realitykit:node:attributesShowingChildren = ["inputs:opacityThreshold"]
+        }
+
+        def Shader "RealitykitReflectionDiffuse_1" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_realitykit_light_spill_diffuse"
+            asset inputs:attenuationMap = @../textures/common/DefaultAttenuationMap.exr@
+            float2 inputs:attenuationUV.connect = </Root/Studio_floor_2_2/UsdPrimvarReader_3.outputs:out>
+            float2 inputs:emitterUV.connect = </Root/Studio_floor_2_2/UsdPrimvarReader_4.outputs:out>
+            color4f outputs:out
+            float2 ui:nodegraph:node:pos = (-887.3927, -157.85753)
+            int ui:nodegraph:node:stackingOrder = 4609
+        }
+
+        def Shader "Separate4_1" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_separate4_color4"
+            color4f inputs:in.connect = </Root/Studio_floor_2_2/RealitykitReflectionSpecular.outputs:out>
+            float outputs:outa
+            float outputs:outb
+            float outputs:outg
+            float outputs:outr
+            float2 ui:nodegraph:node:pos = (-1004.3259, 206.73366)
+            int ui:nodegraph:node:stackingOrder = 4609
+        }
+
+        def Shader "Add_2" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_add_color3"
+            color3f inputs:in1.connect = </Root/Studio_floor_2_2/Multiply_2.outputs:out>
+            color3f inputs:in2.connect = </Root/Studio_floor_2_2/Plus.outputs:out>
+            color3f outputs:out
+            float2 ui:nodegraph:node:pos = (-172.03864, 56.672005)
+            int ui:nodegraph:node:stackingOrder = 4609
+        }
+
+        def Shader "UsdPrimvarReader_3" (
+            references = None
+        )
+        {
+            uniform token info:id = "ND_UsdPrimvarReader_vector2"
+            float2 inputs:fallback
+            string inputs:varname = "attenuationUVs"
+            float2 outputs:out
+            float2 ui:nodegraph:node:pos = (-1225.6144, -106.79345)
+            int ui:nodegraph:node:stackingOrder = 4609
+        }
+    }
+}
+

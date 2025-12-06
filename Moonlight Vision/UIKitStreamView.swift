@@ -29,11 +29,14 @@ struct UIKitStreamView: View {
                let configBinding = Binding($streamConfig) {
                 _UIKitStreamView(streamConfig: configBinding)
                     .id(reloadToken)
+                    .clipShape(RoundedRectangle(cornerRadius: CGFloat(viewModel.streamSettings.uikitWindowCornerRadius), style: .continuous))
+                    .preferredSurroundingsEffect(
+                        // Apply dimming effect when dimPassthrough is enabled
+                        viewModel.streamSettings.dimPassthrough ? .systemDark : nil
+                    )
+                    .persistentSystemOverlays(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
                     .ornament(attachmentAnchor: .scene(.top), contentAlignment: .bottom) {
-                        StreamControls(
-                            horizontal: true,
-                            streamConfig: configBinding,
-                            isKeyboardActive: false,
+                        StandardControlPanelView(
                             closeAction: {
                                 handleHomeButtonClose()
                             },
@@ -41,10 +44,20 @@ struct UIKitStreamView: View {
                                 if let streamVC = _UIKitStreamView.controllerReference.object {
                                     streamVC.toggleKeyboard()
                                 }
+                            },
+                            isKeyboardActive: false,
+                            needsHdr: viewModel.streamSettings.enableHdr,
+                            isRealityKit: false,
+                            windowButtonAction: {
+                                if let streamVC = _UIKitStreamView.controllerReference.object,
+                                   let window = streamVC.view.window ?? streamVC.view?.superview?.window {
+                                    applyAspectRatioLock(streamConfig: configBinding.wrappedValue, targetWindow: window, useSavedSize: false)
+                                    AudioHelpers.fixAudioForSurroundForUIKitWindow(window)
+                                }
                             }
-                        ) {
-                            _UIKitStreamViewWindowButton(streamConfig: configBinding, controllerReference: _UIKitStreamView.controllerReference)
-                        }
+                        )
+                        .environmentObject(viewModel)
+                        .padding(.bottom, 20)
                     }
                     .onAppear {
                         hasPerformedTeardown = false

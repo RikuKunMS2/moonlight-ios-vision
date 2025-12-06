@@ -10,6 +10,9 @@ import Foundation
 import OrderedCollections
 import VideoToolbox
 import AVFoundation
+#if os(visionOS)
+import SwiftUI
+#endif
 
 @MainActor
 class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback, AppAssetCallback {
@@ -23,11 +26,14 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     @Published var errorAddingHost = false
     @Published var addHostErrorMessage = ""
-
+    
     @Published var currentStreamConfig = StreamConfiguration()
     @Published var activelyStreaming = false
     @Published var showLanguagePrompt = false
     @Published var streamSettings: TemporarySettings
+    
+    // VisionOS Immersion Style Control
+    @Published var currentImmersionStyle: ImmersionStyle = .mixed
     
     // Store saved window size for aspect ratio lock restoration
     @Published var savedStreamWindowSize: CGSize? = nil
@@ -40,6 +46,10 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     @Published var showActiveStreamAlert = false
     @Published var showClassicWindowCloseAlert = false
     @Published var showRealityWindowCloseAlert = false
+    
+#if os(visionOS)
+    @Published var immersiveImmersionStyle: ImmersionStyle = .mixed
+#endif
     
     private let languagePromptDefaultsKey = "didCompleteLanguagePrompt"
 

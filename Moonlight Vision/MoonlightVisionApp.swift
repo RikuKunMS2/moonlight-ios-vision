@@ -10,6 +10,8 @@ import SwiftUI
 
 struct MoonlightVisionApp: SwiftUI.App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var immersionManager = ImmersionStyleManager.shared
+    @StateObject private var streamControlState = StreamControlState.shared
     
     @Environment(\.pushWindow) private var pushWindow
     
@@ -36,6 +38,7 @@ struct MoonlightVisionApp: SwiftUI.App {
                          isImmersive: false // Explicitly false
                      )
                      .environmentObject(appDelegate.mainViewModel)
+                     .environmentObject(streamControlState)
                      .task {
                          // Auto-resume: if we have a saved config and current config is nil, restore it
                          if let savedConfig = appDelegate.mainViewModel.savedStreamConfigForResume,
@@ -69,6 +72,7 @@ struct MoonlightVisionApp: SwiftUI.App {
                          isImmersive: true // Explicitly true
                      )
                      .environmentObject(appDelegate.mainViewModel)
+                     .environmentObject(streamControlState)
                      .task {
                          // Auto-resume: if we have a saved config and current config is nil, restore it
                          if let savedConfig = appDelegate.mainViewModel.savedStreamConfigForResume,
@@ -91,7 +95,7 @@ struct MoonlightVisionApp: SwiftUI.App {
                          streamConfig.wrappedValue = nil
                      }
                 }
-                .immersionStyle(selection: .constant(.mixed), in: .mixed) // Mixed allows passthrough
+                .immersionStyle(selection: $immersionManager.currentStyle, in: .mixed, .progressive, .full)
 
                 // 3. UIKit Window
                 WindowGroup(id: "classicStreamingWindow", for: StreamConfiguration.self) { streamConfig in

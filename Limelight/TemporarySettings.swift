@@ -46,6 +46,7 @@ public class TemporarySettings: NSObject {
     @objc public var realitykitRendererAnimateOpening: Bool = false
     @objc public var realitykitRendererCurvature: Float = 0.0
     @objc public var realitykitImmersiveMode: Bool = false
+    @objc public var realitykitHighResPinnedScreen: Bool = false // Increase mesh resolution when pinned for better clarity (may affect performance)
 
     @objc public var useFramePacing = false
     @objc public var multiController = false
@@ -57,6 +58,9 @@ public class TemporarySettings: NSObject {
     @objc public var absoluteTouchMode = false
     @objc public var statsOverlay = false
     @objc public var dimPassthrough = true
+    
+    // UIKit window corner radius (default: 0, may affect clarity)
+    @objc public var uikitWindowCornerRadius: Float = 0.0
     
     // --- HDR / Color Settings ---
     @objc public var brightness: Float = 0.0
@@ -81,6 +85,7 @@ public class TemporarySettings: NSObject {
         self.renderer = .classic
         self.realitykitRendererAnimateOpening = false
         self.realitykitRendererCurvature = 0.0
+        self.realitykitHighResPinnedScreen = false
         self.dimPassthrough = false
         
         // Defaults
@@ -165,6 +170,7 @@ public class TemporarySettings: NSObject {
             self.dimPassthrough = settings.dimPassthrough?.boolValue ?? false
             
             self.realitykitImmersiveMode = UserDefaults.standard.bool(forKey: "realitykitImmersiveMode")
+            self.realitykitHighResPinnedScreen = UserDefaults.standard.bool(forKey: "realitykitHighResPinnedScreen")
             
             // --- HDR / COLOR SAFE LOADING ---
             // We track if we had to repair any values (0.0 -> 1.0) using this flag
@@ -205,6 +211,7 @@ public class TemporarySettings: NSObject {
             }
             self.autoResumeStreamOnReopen = UserDefaults.standard.bool(forKey: "autoResumeStreamOnReopen")
             self.rememberStreamSettings = UserDefaults.standard.object(forKey: "rememberStreamSettings") as? Bool ?? true
+            self.uikitWindowCornerRadius = UserDefaults.standard.object(forKey: "uikitWindowCornerRadius") as? Float ?? 0.0
             #endif
 
             super.init()
@@ -230,8 +237,10 @@ public class TemporarySettings: NSObject {
     
     @objc public func save() {
         UserDefaults.standard.set(self.realitykitImmersiveMode, forKey: "realitykitImmersiveMode")
+        UserDefaults.standard.set(self.realitykitHighResPinnedScreen, forKey: "realitykitHighResPinnedScreen")
         UserDefaults.standard.set(self.autoResumeStreamOnReopen, forKey: "autoResumeStreamOnReopen")
         UserDefaults.standard.set(self.rememberStreamSettings, forKey: "rememberStreamSettings")
+        UserDefaults.standard.set(self.uikitWindowCornerRadius, forKey: "uikitWindowCornerRadius")
 
         // save settings to parent via DataManager
         let dataManager = DataManager()
@@ -261,6 +270,114 @@ public class TemporarySettings: NSObject {
                 saturation: saturation   // <--- Pass Saturation
         )
         UserDefaults.standard.set(appLanguageRaw, forKey: appLanguageDefaultsKey)
+    }
+    
+    // Reset only stream settings (slider parameters) to their default values
+    // This resets HDR/Color settings, RealityKit display settings, and immersive screen parameters
+    // System settings (resolution, framerate, bitrate, etc.) are preserved
+    @objc public func resetStreamSettingsOnly() {
+        // HDR / Color settings - reset to slider defaults
+        self.brightness = 4.0  // Default from slider
+        self.gamma = 2.0       // Default from slider (contrast)
+        self.saturation = 1.70 // Default from slider
+        
+        // RealityKit display settings
+        self.realitykitRendererCurvature = 0.0  // Default from slider
+        
+        // Reset UserDefaults for immersive screen parameters
+        let defaults = UserDefaults.standard
+        
+        // Reset immersive screen parameters to defaults
+        defaults.set(1.0, forKey: "realitykitImmersiveScale")      // Default: 1.0
+        defaults.set(0.0, forKey: "realitykitImmersivePosX")        // Default: 0.0
+        defaults.set(1.0, forKey: "realitykitImmersivePosY")        // Default: 1.0
+        defaults.set(-1.5, forKey: "realitykitImmersivePosZ")       // Default: -1.5 (viewing distance 1.5m)
+        defaults.set(0.0, forKey: "realitykitImmersionAmount")     // Default: 0.0
+        defaults.set(5.0, forKey: "realitykitPinnedStageScale")    // Default: 5.0
+        defaults.set(0.75, forKey: "realitykitPinnedStageHeight") // Default: 0.75
+        
+        // Reset RealityKit non-immersive mode settings (will use defaults when loaded)
+        defaults.removeObject(forKey: "realitykitHeight")
+        defaults.removeObject(forKey: "realitykitDepthOffset")
+        
+        // Reset saved gamma and saturation values
+        defaults.set(2.0, forKey: "realitykitGamma")
+        defaults.set(1.70, forKey: "realitykitSaturation")
+        
+        // Save the reset values
+        self.save()
+    }
+    
+    // Reset all settings to default values
+    // This includes video settings, RealityKit settings, stream settings, HDR/Color settings, and app settings
+    @objc public func resetAllSettings() {
+        // Video settings
+        self.bitrate = 30000
+        self.framerate = 60
+        self.height = 1440
+        self.width = 2560
+        self.audioConfig = 0
+        self.onscreenControls = OnScreenControlsLevel.off
+        self.renderer = .classic
+        
+        // RealityKit settings
+        self.realitykitRendererAnimateOpening = false
+        self.realitykitRendererCurvature = 0.0
+        self.realitykitImmersiveMode = false
+        self.realitykitHighResPinnedScreen = false
+        
+        // Stream settings
+        self.useFramePacing = false
+        self.multiController = false
+        self.swapABXYButtons = false
+        self.playAudioOnPC = false
+        self.optimizeGames = false
+        self.enableHdr = false
+        self.btMouseSupport = false
+        self.absoluteTouchMode = false
+        self.statsOverlay = false
+        self.dimPassthrough = true
+        self.preferredCodec = PreferredCodec.auto
+        self.uikitWindowCornerRadius = 0.0
+        
+        // HDR / Color settings
+        self.brightness = 0.0
+        self.gamma = 1.0
+        self.saturation = 1.0
+        
+        // App settings (keep language, reset others)
+        self.autoResumeStreamOnReopen = false
+        self.rememberStreamSettings = true
+        
+        // Reset UserDefaults for RealityKit settings
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey: "realitykitImmersiveMode")
+        defaults.set(false, forKey: "realitykitHighResPinnedScreen")
+        defaults.set(false, forKey: "autoResumeStreamOnReopen")
+        defaults.set(true, forKey: "rememberStreamSettings")
+        
+        // Reset immersive screen parameters in UserDefaults
+        defaults.removeObject(forKey: "realitykitImmersiveScale")
+        defaults.removeObject(forKey: "realitykitImmersivePosX")
+        defaults.removeObject(forKey: "realitykitImmersivePosY")
+        defaults.removeObject(forKey: "realitykitImmersivePosZ")
+        defaults.removeObject(forKey: "realitykitImmersionAmount")
+        defaults.removeObject(forKey: "realitykitPinnedStageScale")
+        defaults.removeObject(forKey: "realitykitPinnedStageHeight")
+        
+        // Reset RealityKit non-immersive mode settings
+        defaults.removeObject(forKey: "realitykitHeight")
+        defaults.removeObject(forKey: "realitykitDepthOffset")
+        
+        // Reset saved gamma and saturation values
+        defaults.removeObject(forKey: "realitykitGamma")
+        defaults.removeObject(forKey: "realitykitSaturation")
+        
+        // Reset UIKit window corner radius
+        defaults.set(0.0, forKey: "uikitWindowCornerRadius")
+        
+        // Save the reset values
+        self.save()
     }
 }
 
