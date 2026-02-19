@@ -57,11 +57,14 @@
 // Stream Controls
 "home" = "Home";
 "toggle_dimming" = "Toggle Dimming";
+"toggle_dimming_short" = "Dimming";
 "keyboard" = "Keyboard";
 "volume" = "Volume";
 "fix_aspect_ratio" = "Fix Aspect Ratio";
 "spatial_audio" = "Spatial Audio";
+"spatial_audio_short" = "Spatial";
 "direct_audio" = "Direct Audio";
+"stereo_audio_short" = "Stereo";
 
 // Stream Status
 "stream_stopped" = "Stream stopped";
@@ -106,6 +109,8 @@
 "uikit_classic" = "UIKit (classic)";
 "realitykit_native" = "RealityKit (native)";
 "custom" = "Custom";
+"custom_framerate" = "Custom Framerate";
+"custom_bitrate" = "Custom Bitrate";
 "width" = "Width";
 "by" = "by";
 "realitykit_settings" = "RealityKit Renderer Settings (Experimental)";
@@ -113,7 +118,11 @@
 "immersive_mode" = "Immersive Mode (Movable Screen)";
 "animate_screen_curve" = "Animate screen curve";
 "screen_curvature" = "Screen curvature";
+"high_res_pinned_screen" = "High Resolution Pinned Screen";
+"high_res_pinned_screen_footer" = "⚠️ May impact performance. Improves clarity when screen is pinned to stage.";
 "uikit_settings" = "UIKit (Classic) Renderer Settings";
+"window_corner_radius" = "Window Corner Radius";
+"corner_radius_clarity_warning" = "This may affect stream clarity";
 "touch_mode" = "Touch Mode";
 "touchpad" = "Touchpad";
 "touchscreen" = "Touchscreen";
@@ -142,6 +151,10 @@
 "remember_realitykit_settings" = "Remember RealityKit settings";
 "stream_settings" = "Stream Settings";
 "remember_stream_settings" = "Remember stream settings";
+"reset_to_defaults" = "Reset to Defaults";
+"reset_to_defaults_message" = "Please select the type of settings to reset:";
+"reset_all_settings" = "Reset All Settings";
+"reset_stream_settings_only" = "Reset Stream Settings Only";
 
 // Apps View
 "unknown" = "Unknown";
@@ -163,4 +176,38 @@
 "feature_requests" = "Feature Requests";
 "more_information" = "More Information";
 "official_website" = "Official Website:";
+
+// Control Panel
+"environment" = "Environment";
+"passthrough" = "Passthrough";
+"light" = "Studio Light";
+"dark" = "Studio Dark";
+"semi_immersion_mode" = "Semi-Immersion";
+"quick_actions" = "Quick Actions";
+"restore_brightness" = "Restore Brightness";
+"restore_brightness_short" = "Brightness";
+"stereo_audio" = "Stereo Audio";
+"virtual_keyboard" = "Virtual Keyboard";
+"virtual_keyboard_short" = "Keyboard";
+"lock_aspect_ratio_short" = "Aspect";
+"display_effects" = "Display Effects";
+"brightness" = "Brightness";
+"contrast" = "Contrast";
+"saturation" = "Saturation";
+"spatial_adjustments" = "Spatial Adjustments";
+"vertical_height" = "Vertical Height";
+"passthrough_environment_brightness" = "Passthrough Environment Brightness";
+"pinned_screen_size" = "Pinned Screen Size";
+"pinned_screen_height" = "Pinned Screen Height";
+"screen_scale" = "Screen Scale";
+"viewing_distance" = "Viewing Distance";
+"control_panel" = "Control Panel";
+"collapse_panel" = "Collapse Panel";
+"full_immersion" = "Full Immersion";
+"lock_aspect_ratio" = "Lock Aspect Ratio";
+"locked" = "Locked";
+"lock_position" = "Lock Position";
+"unpin_studio" = "Unpin to Studio";
+"pin_studio" = "Pin to Studio";
+"gamepad_home" = "Gamepad Home";
 

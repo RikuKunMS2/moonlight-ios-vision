@@ -1,0 +1,142 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "Reality Composer Pro Version 1.0 (418)"
+    }
+    defaultPrim = "Root"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "Root"
+{
+    reorder nameChildren = ["SystemProxyMesh", "DockingRegion", "EnvironmentProbe", "Reverb"]
+    def Xform "SystemProxyMesh" (
+        active = true
+        references = None
+    )
+    {
+        reorder nameChildren = ["Video_Dock", "Floor"]
+        def "Floor" (
+            active = true
+            references = @Floor.usda@
+        )
+        {
+            reorder nameChildren = ["Studio_floor_2_Lightspill", "Material", "Studio_floor_2_2_Lightspill", "Video_Dock"]
+            float3 xformOp:scale = (1, 1, 1)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            over "Studio_floor_2" (
+                references = None
+            )
+            {
+            }
+
+            over "Studio_floor_2_Lightspill"
+            {
+                over "Studio_2" (
+                    references = None
+                )
+                {
+                    over "Mesh_009" (
+                        references = None
+                    )
+                    {
+                        def RealityKitComponent "SceneUnderstanding"
+                        {
+                            uniform token info:id = "RealityKit.SceneUnderstanding"
+                        }
+                    }
+                }
+            }
+
+            over "Studio_floor_2_2_Lightspill"
+            {
+                over "Studio_2_2" (
+                    references = None
+                )
+                {
+                    over "Mesh_010" (
+                        references = None
+                    )
+                    {
+                        def RealityKitComponent "SceneUnderstanding"
+                        {
+                            uniform token info:id = "RealityKit.SceneUnderstanding"
+                        }
+                    }
+                }
+            }
+
+            over "Studio_floor_2_2" (
+                references = None
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "Reverb" (
+        active = true
+        references = None
+    )
+    {
+        def RealityKitComponent "Reverb"
+        {
+            uniform token info:id = "RealityKit.Reverb"
+            token reverbPreset = "REAudioReverbPresetMuseum"
+        }
+    }
+
+    def Xform "EnvironmentProbe" (
+        active = true
+        references = None
+    )
+    {
+        def RealityKitComponent "VirtualEnvironmentProbe"
+        {
+            token blendMode = "blend"
+            uniform token info:id = "RealityKit.VirtualEnvironmentProbe"
+
+            def RealityKitStruct "Resource1"
+            {
+                asset ibl = @../ibl/Studio_IBL_LatLong_Light.exr@
+            }
+
+            def RealityKitStruct "Resource2"
+            {
+                asset ibl = @../ibl/Studio_IBL_LatLong_Dark.exr@
+            }
+        }
+    }
+
+    def Xform "DockingRegion" (
+        references = None
+    )
+    {
+        quatf xformOp:orient = (1, 0, 0, 0)
+        float3 xformOp:scale = (1, 1, 1)
+        double3 xformOp:translate = (0, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+        def Xform "Player" (
+            references = None
+        )
+        {
+            double3 xformOp:translate = (0, 2.3499999046325684, -10.199999809265137)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            def RealityKitComponent "CustomDockingRegion"
+            {
+                token info:id = "RealityKit.CustomDockingRegion"
+
+                def RealityKitStruct "m_bounds"
+                {
+                    float3 max = (4.25, 1.7708333, 0)
+                    float3 min = (-4.25, -1.7708333, -0)
+                }
+            }
+        }
+    }
+}
+

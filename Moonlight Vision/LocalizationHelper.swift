@@ -2,9 +2,7 @@
 //  LocalizationHelper.swift
 //  Moonlight Vision
 //
-//  Created on 2/2/25.
-//  Copyright © 2025 Moonlight Game Streaming Project. All rights reserved.
-//
+//  Created by Linggan-ua on 2025/11/16.
 
 import Foundation
 import SwiftUI

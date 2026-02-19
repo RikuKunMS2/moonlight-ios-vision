@@ -47,9 +47,6 @@ struct StreamControls<Additions: View>: View {
                 VStack(alignment: .leading, spacing: 15) { controls }
             }
         }
-        .onChange(of: viewModel.vol) { newVal, _ in
-            setVolume(Int32(newVal))
-        }
         // Removed .labelStyle(.iconOnly) to display Text labels
         .padding()
         .hoverEffect { effect, isActive, _ in
@@ -97,7 +94,13 @@ struct StreamControls<Additions: View>: View {
                         .foregroundStyle(viewModel.mute ? .secondary : .primary)
                 }
                 
-                Slider(value: $viewModel.vol, in: 0...127)
+                Slider(value: Binding(
+                    get: { viewModel.vol },
+                    set: { newValue in
+                        viewModel.vol = newValue
+                        setVolume(Int32(newValue)) // Real-time update
+                    }
+                ), in: 0...127)
                     .frame(width: 300)
                     .padding([.trailing])
             }

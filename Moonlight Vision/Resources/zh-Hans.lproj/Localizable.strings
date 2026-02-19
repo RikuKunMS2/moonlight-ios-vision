@@ -57,11 +57,14 @@
 // Stream Controls
 "home" = "主页";
 "toggle_dimming" = "环境调暗";
+"toggle_dimming_short" = "调暗";
 "keyboard" = "键盘";
 "volume" = "音量";
 "fix_aspect_ratio" = "重置宽高比";
-"spatial_audio" = "空间音频模式";
-"direct_audio" = "直达声模式";
+"spatial_audio" = "空间音频";
+"spatial_audio_short" = "空间";
+"direct_audio" = "立体声";
+"stereo_audio_short" = "立体声";
 
 
 // Stream Status
@@ -75,18 +78,25 @@
 "tap_video_to_type" = "点击屏幕以输入";
 
 // RealityKit Controls
-"boost_luminance" = "亮度增强";
-"flatten" = "扁平化";
+"boost_luminance" = "亮度增强 / 亮度";
+"boost" = "增强";
+"gamma" = "伽马";
+"saturation" = "饱和度";
+"curvature" = "曲率";
+"depth" = "深度";
+"immersion" = "沉浸式模式";
+"scale" = "缩放";
+"flatten" = "曲面屏";
 "reset_depth" = "重置深度";
 "height" = "高度";
 "spatial" = "空间";
 "black_sphere_opacity" = "环境透明度";
 "size" = "大小";
 "distance" = "距离";
-"screen_locked" = "屏幕锁定（固定屏幕）";
-"screen_unlocked" = "屏幕解锁（可移动屏幕）";
+"screen_locked" = "屏幕锁定（输入激活）";
+"screen_unlocked" = "屏幕解锁（可移动屏幕激活）";
 "3d_mode" = "3D 模式";
-"main_button" = "返回主页";
+"main_button" = "主按钮";
 "starting_stream" = "正在启动 %@...";
 
 // Settings
@@ -100,6 +110,8 @@
 "uikit_classic" = "UIKit（经典）";
 "realitykit_native" = "RealityKit（原生）";
 "custom" = "自定义";
+"custom_framerate" = "自定义刷新率";
+"custom_bitrate" = "自定义码率";
 "width" = "宽度";
 "by" = "×";
 "realitykit_settings" = "RealityKit 渲染器设置（实验性）";
@@ -107,7 +119,11 @@
 "immersive_mode" = "沉浸式模式（可移动屏幕）";
 "animate_screen_curve" = "动画屏幕曲线";
 "screen_curvature" = "屏幕曲率";
+"high_res_pinned_screen" = "置顶屏幕高分辨率";
+"high_res_pinned_screen_footer" = "⚠️ 可能影响性能。置顶屏幕时提高清晰度。";
 "uikit_settings" = "UIKit（经典）渲染器设置";
+"window_corner_radius" = "窗口圆角";
+"corner_radius_clarity_warning" = "这可能会影响串流清晰度";
 "touch_mode" = "触摸模式";
 "touchpad" = "触摸板";
 "touchscreen" = "触摸屏";
@@ -136,6 +152,10 @@
 "remember_realitykit_settings" = "记住 RealityKit 设置";
 "stream_settings" = "串流设置";
 "remember_stream_settings" = "记住串流设置";
+"reset_to_defaults" = "清除用户设置";
+"reset_to_defaults_message" = "请选择要清除的设置类型：";
+"reset_all_settings" = "清除所有设置";
+"reset_stream_settings_only" = "仅清除串流设置";
 
 // Apps View
 "unknown" = "未知";
@@ -157,4 +177,38 @@
 "feature_requests" = "功能请求";
 "more_information" = "更多信息";
 "official_website" = "官方网站：";
+
+// Control Panel
+"environment" = "环境";
+"passthrough" = "透视";
+"light" = "Studio 白昼";
+"dark" = "Studio 黑夜";
+"semi_immersion_mode" = "半沉浸";
+"quick_actions" = "快捷操作";
+"restore_brightness" = "恢复亮度";
+"restore_brightness_short" = "亮度";
+"stereo_audio" = "立体声";
+"virtual_keyboard" = "虚拟键盘";
+"virtual_keyboard_short" = "键盘";
+"lock_aspect_ratio_short" = "宽高比";
+"display_effects" = "显示效果";
+"brightness" = "亮度";
+"contrast" = "对比度";
+"saturation" = "饱和度";
+"spatial_adjustments" = "空间调整";
+"vertical_height" = "垂直高度";
+"passthrough_environment_brightness" = "透视环境亮度";
+"pinned_screen_size" = "置顶屏幕大小";
+"pinned_screen_height" = "置顶屏幕高度";
+"screen_scale" = "画面缩放";
+"viewing_distance" = "观看距离";
+"control_panel" = "控制面板";
+"collapse_panel" = "收起面板";
+"full_immersion" = "全沉浸";
+"lock_aspect_ratio" = "重置宽高比";
+"locked" = "已锁定";
+"lock_position" = "锁定位置";
+"unpin_studio" = "解除置顶";
+"pin_studio" = "置顶到工作室";
+"gamepad_home" = "游戏手柄 Home";
 

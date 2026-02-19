@@ -1,0 +1,15 @@
+{
+  "pathsToIds" : {
+    "Studio\/Sources\/Studio\/Studio.rkassets\/AAA_MainScene.usda" : "97F357D2-0E55-4707-9C5D-0536B8CA017C",
+    "Studio\/Sources\/Studio\/Studio.rkassets\/common.usda" : "6B304EE6-38C2-4DB7-9567-D80E006160E5",
+    "Studio\/Sources\/Studio\/Studio.rkassets\/Scene.usda" : "A3312CFA-5680-4E06-A36C-ABBF0D498FBF",
+    "Studio\/Sources\/Studio\/Studio.rkassets\/scenes\/AAA_Main_Scene.usda" : "038AFDC3-DFD5-48D2-BFF8-A3806F3C1372",
+    "Studio\/Sources\/Studio\/Studio.rkassets\/scenes\/AAA_MainScene.usda" : "8F764CB9-A442-4D1D-A2CB-55330191842E",
+    "Studio\/Sources\/Studio\/Studio.rkassets\/scenes\/common.usda" : "269A1A20-B8F5-41CC-915E-B825D91D1A24",
+    "Studio\/Sources\/Studio\/Studio.rkassets\/scenes\/Common.usda" : "A828CAA8-5893-4439-9217-A3E05FA4BA5C",
+    "Studio\/Sources\/Studio\/Studio.rkassets\/scenes\/Floor.usda" : "175B5409-704C-4A5D-BC56-DE9B22A09345",
+    "Studio\/Sources\/Studio\/Studio.rkassets\/scenes\/StudioDark.usda" : "17881173-BE3B-4642-B143-97C752135E72",
+    "Studio\/Sources\/Studio\/Studio.rkassets\/scenes\/StudioLight.usda" : "4E93EE2E-9D30-4FC9-89BC-CA51669589EF",
+    "Studio\/Sources\/Studio\/Studio.rkassets\/Untitled%20Scene.usda" : "C139B1CF-BCE0-448A-BF6F-379159CA5FA9"
+  }
+}

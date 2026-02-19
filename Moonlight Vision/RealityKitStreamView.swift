@@ -8,12 +8,16 @@
 
 import GameController
 import RealityKit
+import RealityKitContent
 import SwiftUI
 import simd
 
 let MAX_WIDTH_METERS: Float = 2
 // Limited to ~75 degrees (1.3 rad) to prevent distortion
 let MAX_CURVE_ANGLE: Float = 1.3
+// Studio docking surface dimensions (meters) derived from CustomDockingRegion bounds
+let STUDIO_DOCK_WIDTH_METERS: Float = 8.5
+let STUDIO_DOCK_HEIGHT_METERS: Float = 3.5416667
 
 // MARK: - Delegate
 @objc
@@ -45,6 +49,9 @@ struct RealityKitStreamView: View {
             ) {
                 // --- CLOSE ACTION ---
                 print("[RealityKitStreamView] Close Action Triggered.")
+                
+                // Reset immersion style before closing
+                ImmersionStyleManager.shared.currentStyle = .mixed
                 
                 // 1. Dismiss the current space/window
                 if isImmersive {
@@ -79,6 +86,7 @@ struct _RealityKitStreamView: View {
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var viewModel: MainViewModel
+    @EnvironmentObject private var controlState: StreamControlState
 
     @Binding var streamConfig: StreamConfiguration
     var needsHdr: Bool
@@ -97,10 +105,9 @@ struct _RealityKitStreamView: View {
     // Interaction State
     @State private var isInteractive: Bool = false
     
-    // Controls State (Hidable/Movable)
+    // Controls State
     @State private var isControlsVisible: Bool = true
     @State private var controlsEntity: Entity?
-    @State private var startControlsDragPosition: SIMD3<Float>? = nil
     
     // Volumetric Position State
     @State var height: Float = 0
@@ -133,8 +140,34 @@ struct _RealityKitStreamView: View {
     @State var texture: TextureResource
     @State var screen: ModelEntity = ModelEntity()
     
+    // Environment Entity Tracking
+    @State var currentEnvEntity: Entity?
+    @State private var screenOriginalParent: Entity?
+    
     @State var videoMode: VideoMode = .standard2D
     @State private var surfaceMaterial: ShaderGraphMaterial?
+    
+    // Environment State
+    // Use @State to hold the reference, but we need to treat it carefully in closure contexts
+    // to avoid the dynamic member lookup on the wrapper.
+    @State private var immersiveEnvironment = ImmersiveEnvironment()
+    
+    // Track environment state separately for Picker binding
+    @State private var selectedEnvironmentState: EnvironmentStateType = .none
+    
+    // Environment preload for immersive mode
+    @State private var environmentPreloaded: Bool = false
+    
+    // Prevent rapid toggling of immersion style
+    @State private var isUpdatingImmersion: Bool = false
+    
+    // Pinning (Studio stage) state
+    @State private var isPinnedToStage: Bool = false
+    @State private var isPinningTransitioning: Bool = false
+    @State private var lastFreeformTransform: Transform?
+    @State private var pinnedStageScale: Float = 1.0
+    @State private var wasInteractiveBeforePin: Bool = false
+    @State private var pinStartScale: Float = 1.0
 
     var isSBSVideo: Bool {
         let ratio = Float(streamConfig.width) / Float(streamConfig.height)
@@ -192,7 +225,14 @@ struct _RealityKitStreamView: View {
             }
             .modifier(VolumetricWindowControls(isImmersive: isImmersive, content: { controlsView }))
             .persistentSystemOverlays(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
-            .preferredSurroundingsEffect(viewModel.streamSettings.dimPassthrough ? .systemDark : nil)
+            .preferredSurroundingsEffect(
+                // Apply dimming effect when dimPassthrough is enabled, or use environment effect in immersive mode
+                viewModel.streamSettings.dimPassthrough
+                    ? .systemDark
+                    : (isImmersive && immersiveEnvironment.environmentStateHandler.activeState != .none
+                        ? immersiveEnvironment.surroundingsEffect
+                        : nil)
+            )
             .volumeBaseplateVisibility(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
             .supportedVolumeViewpoints(.front)
 
@@ -205,37 +245,85 @@ struct _RealityKitStreamView: View {
             )
         }
         
-        // 3. Apply Logic/Lifecycle Modifiers and Return
-        return visualContent
+        // 3. Apply Logic/Lifecycle Modifiers
+        let withHDRSync = visualContent
             .onChange(of: viewModel.streamSettings.brightness) { _, _ in updateHDRParams() }
             .onChange(of: viewModel.streamSettings.gamma) { _, _ in updateHDRParams() }
             .onChange(of: viewModel.streamSettings.saturation) { _, _ in updateHDRParams() }
-            .onAppear {
-                // 1. Initialize HDR Settings
-                safeHDRSettings.value = HDRParams(
-                    boost: viewModel.streamSettings.brightness,
-                    contrast: viewModel.streamSettings.gamma,
-                    saturation: viewModel.streamSettings.saturation,
-                    brightness: 0.0
-                )
-                
-                // 2. Validate and Start
-                if !viewModel.activelyStreaming {
-                    print("_RealityKitStreamView: Detected appearance without active stream state.")
-                    openWindow(id: "mainView")
-                    self.closeAction()
-                } else {
-                    startStreamIfNeeded()
-                }
-            }
-            .onChange(of: shouldClose) { _, val in
-                if val {
-                    triggerCloseSequence()
-                }
-            }
-            .onChange(of: scenePhase) { _, phase in
-                handleScenePhaseChange(phase)
-            }
+        
+        // 4. Apply Lifecycle Modifiers
+        let withLifecycle = withHDRSync
+            .task { await handleImmersiveSetupTask() }
+            .onAppear { handleOnAppear() }
+            .onChange(of: shouldClose) { _, val in if val { triggerCloseSequence() } }
+            .onChange(of: scenePhase) { _, phase in handleScenePhaseChange(phase) }
+        
+        // 5. Apply Control State Sync (only needed in immersive mode)
+        return withLifecycle
+            .modifier(ControlStateSyncModifier(
+                isImmersive: isImmersive,
+                controlState: controlState,
+                immersiveScale: $immersiveScale,
+                immersivePosition: $immersivePosition,
+                immersionAmount: $immersionAmount,
+                isInteractive: $isInteractive,
+                selectedEnvironmentState: $selectedEnvironmentState,
+                isUpdatingImmersion: isUpdatingImmersion,
+                showVirtualKeyboard: showVirtualKeyboard,
+                videoMode: videoMode,
+                isPinnedToStage: isPinnedToStage,
+                isPinningTransitioning: isPinningTransitioning,
+                syncToLocal: syncControlStateToLocal,
+                syncFromLocal: syncLocalStateToControlState
+            ))
+    }
+    
+    // MARK: - Lifecycle Handlers
+    
+    private func handleImmersiveSetupTask() async {
+        if isImmersive {
+            immersiveEnvironment.clearEnvironment()
+            environmentPreloaded = false
+            selectedEnvironmentState = .none
+            
+            print("Preloading environment assets...")
+            immersiveEnvironment.loadEnvironment()
+            environmentPreloaded = true
+            
+            updateImmersionStyle(state: .none, semi: false, shouldLock: false)
+        }
+    }
+    
+    private func handleOnAppear() {
+        safeHDRSettings.value = HDRParams(
+            boost: viewModel.streamSettings.brightness,
+            contrast: viewModel.streamSettings.gamma,
+            saturation: viewModel.streamSettings.saturation,
+            brightness: 0.0
+        )
+        
+        // Load saved settings before setting up state
+        loadRealityKitSettings()
+        
+        if isImmersive {
+            setupControlStateCallbacks()
+            // Sync loaded values to controlState
+            controlState.immersiveScale = immersiveScale
+            controlState.immersivePositionX = immersivePosition.x
+            controlState.immersivePositionY = immersivePosition.y
+            controlState.immersivePositionZ = immersivePosition.z
+            controlState.immersionAmount = immersionAmount
+            controlState.pinnedStageScale = pinnedStageScale
+            syncLocalStateToControlState()
+        }
+        
+        if !viewModel.activelyStreaming {
+            print("_RealityKitStreamView: Detected appearance without active stream state.")
+            openWindow(id: "mainView")
+            self.closeAction()
+        } else {
+            startStreamIfNeeded()
+        }
     }
     
     // MARK: - Subviews
@@ -262,6 +350,11 @@ struct _RealityKitStreamView: View {
                 if showVirtualKeyboard {
                     virtualKeyboardOverlay
                 }
+                
+                // 4. Environment Loading Indicator (Immersive only, shown when entering quickly)
+                if isImmersive && immersiveEnvironment.isLoading {
+                    environmentLoadingIndicator
+                }
             }
         }
     }
@@ -273,47 +366,21 @@ struct _RealityKitStreamView: View {
             } update: { content, attachments in
                 updateStreamEntity(content: content, attachments: attachments, proxy: proxy)
             } attachments: {
-                // Attachments
+                // Control panel Attachment (freely movable)
                 Attachment(id: "controls") {
+                    if isImmersive && controlState.isControlPanelVisible {
+                        ImmersiveControlPanelView()
+                            .environmentObject(viewModel)
+                            .environmentObject(controlState)
+                    }
+                }
+                
+                // Global Dock Attachment (independent of screen, fixed in front of user)
+                Attachment(id: "dock") {
                     if isImmersive {
-                        if isControlsVisible {
-                            // Full Controls
-                            VStack(spacing: 0) {
-                                // Drag Handle / Minimize Bar
-                                HStack {
-                                    // Drag Indicator
-                                    Image(systemName: "line.3.horizontal")
-                                        .font(.title2)
-                                        .foregroundStyle(.secondary)
-                                        .frame(width: 60, height: 44)
-                                        .contentShape(Rectangle())
-                                        .hoverEffect()
-                                    
-                                    Spacer()
-                                    
-                                    // HIDE BUTTON
-                                    Button(action: { withAnimation { isControlsVisible = false } }) {
-                                        Label("Hide", systemImage: "chevron.down")
-                                    }
-                                    .buttonStyle(.bordered)
-                                    .controlSize(.regular)
-                                }
-                                .padding(.horizontal)
-                                .padding(.vertical, 8)
-                                .background(.ultraThinMaterial.opacity(0.3))
-                                
-                                controlsView
-                                    .padding(.bottom, 20)
-                            }
-                            .frame(width: 600)
-                            .glassBackgroundEffect()
-                        } else {
-                            // Minimized State
-                            Button(action: { withAnimation { isControlsVisible = true } }) {
-                                Label("Show Controls", systemImage: "slider.horizontal.3")
-                            }
-                            .glassBackgroundEffect()
-                        }
+                        ImmersiveDockView()
+                            .environmentObject(controlState)
+                            .environmentObject(viewModel)
                     }
                 }
                 
@@ -333,15 +400,126 @@ struct _RealityKitStreamView: View {
             // Gestures
             .gesture(dragGesture)
             .gesture(magnifyGesture)
-            .gesture(controlsDragGesture)
         }
     
     // MARK: - Logic Helpers
     
     func triggerCloseSequence() {
+        // Reset immersion style to mixed before closing
+        ImmersionStyleManager.shared.currentStyle = .mixed
+        viewModel.currentImmersionStyle = .mixed
+        
+        // Hide control panel
+        controlState.isControlPanelVisible = false
+        
         openWindow(id: "mainView")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.closeAction()
+        }
+    }
+    
+    // MARK: - Control State Sync
+    
+    func setupControlStateCallbacks() {
+        controlState.needsHdr = needsHdr
+        controlState.controllerSupport = controllerSupport
+        
+        controlState.closeAction = { [self] in
+            if streamConfig != nil { viewModel.savedStreamConfigForResume = streamConfig }
+            needsResume = false
+            hasPerformedTeardown = false
+            viewModel.activelyStreaming = false
+            _streamMan?.stopStream()
+            controllerSupport?.cleanup()
+            triggerCloseSequence()
+        }
+        
+        controlState.toggleKeyboardAction = { [self] in
+            showVirtualKeyboard.toggle()
+        }
+        
+        controlState.onEnvironmentChange = { [self] newState in
+            selectedEnvironmentState = newState
+            immersiveEnvironment.requestEnvironmentState(newState)
+            let needsLock = (selectedEnvironmentState == .none || newState == .none)
+            updateImmersionStyle(state: newState, semi: immersiveEnvironment.isSemiImmersionEnabled, shouldLock: needsLock)
+            if newState == .none && isPinnedToStage {
+                unpinStreamFromStage(animated: false)
+            }
+        }
+        
+        controlState.onSemiImmersionToggle = { [self] enabled in
+            immersiveEnvironment.isSemiImmersionEnabled = enabled
+            updateImmersionStyle(state: immersiveEnvironment.activeState, semi: enabled, shouldLock: true)
+        }
+        
+        controlState.onPinToggle = { [self] in
+            if isPinnedToStage {
+                unpinStreamFromStage(animated: true)
+            } else {
+                pinStreamToStage()
+            }
+        }
+        
+        controlState.saveSettings = { [self] in
+            // Sync local state to controlState before saving (for immersive mode)
+            if isImmersive {
+                syncLocalStateToControlState()
+            }
+            saveRealityKitSettings()
+        }
+        
+        controlState.toggle3DMode = { [self] in
+            if videoMode == .sideBySide3D {
+                videoMode = .standard2D
+                screen.model?.materials = [UnlitMaterial(texture: texture)]
+            } else {
+                videoMode = .sideBySide3D
+                if let mat = surfaceMaterial {
+                    screen.model?.materials = [mat]
+                }
+            }
+        }
+    }
+    
+    func syncLocalStateToControlState() {
+        controlState.immersiveScale = immersiveScale
+        controlState.immersivePositionX = immersivePosition.x
+        controlState.immersivePositionY = immersivePosition.y
+        controlState.immersivePositionZ = immersivePosition.z
+        controlState.immersionAmount = immersionAmount
+        controlState.isInteractive = isInteractive
+        controlState.selectedEnvironmentState = selectedEnvironmentState
+        controlState.isSemiImmersionEnabled = immersiveEnvironment.isSemiImmersionEnabled
+        controlState.isUpdatingImmersion = isUpdatingImmersion
+        controlState.isKeyboardActive = showVirtualKeyboard
+        controlState.videoMode = videoMode
+        controlState.isPinnedToStage = isPinnedToStage
+        controlState.isPinningTransitioning = isPinningTransitioning
+        controlState.canPinToStage = immersiveEnvironment.dockingAnchor != nil
+        // Sync pinned scale and height (only when pinned, to avoid overwriting user adjustments)
+        if isPinnedToStage {
+            controlState.pinnedStageScale = pinnedStageScale
+            // Height value is only maintained in controlState, no reverse sync needed
+        }
+    }
+    
+    func syncControlStateToLocal() {
+        immersiveScale = controlState.immersiveScale
+        immersivePosition = SIMD3<Float>(
+            controlState.immersivePositionX,
+            controlState.immersivePositionY,
+            controlState.immersivePositionZ
+        )
+        immersionAmount = controlState.immersionAmount
+        isInteractive = controlState.isInteractive
+        if selectedEnvironmentState != controlState.selectedEnvironmentState {
+            selectedEnvironmentState = controlState.selectedEnvironmentState
+        }
+        videoMode = controlState.videoMode
+        // Sync pinned scale value (only when pinned)
+        if isPinnedToStage && !isPinningTransitioning {
+            pinnedStageScale = controlState.pinnedStageScale
         }
     }
     
@@ -378,6 +556,9 @@ struct _RealityKitStreamView: View {
             screen.collision = CollisionComponent(shapes: [colBox], mode: .colliding)
             screen.components.set(InputTargetComponent())
             content.add(screen)
+            if screenOriginalParent == nil {
+                screenOriginalParent = screen.parent
+            }
             
             if isImmersive {
                 let sphereMesh = MeshResource.generateSphere(radius: 100)
@@ -388,11 +569,19 @@ struct _RealityKitStreamView: View {
                 content.add(blackOutSphere)
             }
             
+            // Global Dock - fixed below user's line of sight
+            if isImmersive, let dock = attachments.entity(for: "dock") {
+                content.add(dock)
+                // Fixed position in front and below user
+                dock.position = SIMD3<Float>(0, 0.6, -1.0)
+            }
+            
+            // Control panel - independent of screen, freely movable
             if isImmersive, let controls = attachments.entity(for: "controls") {
                 self.controlsEntity = controls
-                screen.addChild(controls)
-                let screenHeight = MAX_WIDTH_METERS * aspectRatio
-                controls.position = [0, -(screenHeight / 2.0) - 0.25, 0.1]
+                content.add(controls)
+                // Initial position: in front and slightly below user
+                controls.position = SIMD3<Float>(0, 1.0, -1.3)
                 controls.components.set(InputTargetComponent())
             }
             
@@ -403,12 +592,76 @@ struct _RealityKitStreamView: View {
         }
     
     func updateStreamEntity(content: RealityViewContent, attachments: RealityViewAttachments, proxy: GeometryProxy3D) {
+            // CRITICAL: Ensure screen is in scene (handles re-entry after returning from main menu)
+            if screen.parent == nil && screen.model?.mesh != nil {
+                content.add(screen)
+                if screenOriginalParent == nil {
+                    screenOriginalParent = screen.parent
+                }
+                print("🔄 Re-added screen entity to scene after re-entry")
+            }
+            
+            // Environment Management
+            if isImmersive {
+                let envRoot = immersiveEnvironment.rootEntity
+                let currentState = immersiveEnvironment.environmentStateHandler.activeState
+                
+                if let envRoot = envRoot {
+                    let isInScene = envRoot.parent != nil
+                    
+                    if currentState != .none {
+                        // Add environment only when not in None state
+                        if !isInScene {
+                            content.add(envRoot)
+                            print("➕ Added environment entity to scene (state: \(currentState))")
+                        }
+                        // Ensure it's enabled
+                        if !envRoot.isEnabled {
+                            envRoot.isEnabled = true
+                            print("Enabled environment entity")
+                        }
+                    } else {
+                        // CRITICAL: Remove environment COMPLETELY when in None state for full passthrough
+                        if isInScene {
+                            content.remove(envRoot)
+                            print("REMOVED environment entity from scene (state: None) - PASSTHROUGH ACTIVE")
+                        }
+                        // Ensure it's disabled
+                        if envRoot.isEnabled {
+                            envRoot.isEnabled = false
+                            print("Disabled environment entity - PASSTHROUGH ACTIVE")
+                        }
+                    }
+                } else {
+                    // Entity not loaded yet - this is normal on first frame
+                    if currentState != .none {
+                        // If we want an environment but it's not loaded, trigger load if not already loading
+                        if !immersiveEnvironment.isLoading && !immersiveEnvironment.isLoaded {
+                            print("Environment needed but not loaded, triggering load...")
+                            immersiveEnvironment.loadEnvironment()
+                        }
+                    }
+                }
+            }
+
             let currentCurve = viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier
+            
+            // Decide whether to increase mesh resolution when pinned based on settings
+            let baseResolution: UInt32 = 100
+            let resolutionMultiplier: UInt32
+            if isPinnedToStage && viewModel.streamSettings.realitykitHighResPinnedScreen {
+                // If high resolution setting is enabled, increase resolution based on scale (up to 2x, i.e., 200x200)
+                let scaleFactor = min(controlState.pinnedStageScale / 1.0, 2.0)
+                resolutionMultiplier = UInt32(max(1, min(2, Int(scaleFactor))))
+            } else {
+                resolutionMultiplier = 1
+            }
+            let meshResolution = (baseResolution * resolutionMultiplier, baseResolution * resolutionMultiplier)
             
             if let mesh = try? Self.generateCurvedPlane(
                 width: MAX_WIDTH_METERS,
                 aspectRatio: aspectRatio,
-                resolution: (100,100),
+                resolution: meshResolution,
                 curveMagnitude: currentCurve
             ) {
                 try? screen.model!.mesh.replace(with: mesh.contents)
@@ -420,9 +673,58 @@ struct _RealityKitStreamView: View {
             let zCorrection = -curveDepth
 
             if isImmersive {
-                screen.scale = SIMD3<Float>(repeating: immersiveScale)
-                screen.position = immersivePosition + SIMD3<Float>(0, 0, zCorrection)
-                blackOutSphere.components.set(OpacityComponent(opacity: immersionAmount))
+                if isPinnedToStage {
+                    // When pinning transition is in progress, do NOT touch the transform at all.
+                    // Let the move() animation handle everything.
+                    if !isPinningTransitioning {
+                        // Use adjustable scale and height values from controlState
+                        // If screen is a child of anchor, need to update transform
+                        if let anchor = immersiveEnvironment.dockingAnchor, screen.parent == anchor {
+                            // Update transform's scale and translation
+                            // Note: Screen is rotated -90 degrees (around X axis), so:
+                            // - Local Y axis corresponds to world's forward/backward direction
+                            // - Local Z axis corresponds to world's vertical direction (but reversed, down is positive)
+                            var currentTransform = screen.transform
+                            currentTransform.scale = SIMD3<Float>(repeating: controlState.pinnedStageScale)
+                            // Update height: In rotated coordinate system, Z axis corresponds to vertical direction, need to negate
+                            let forwardOffset: Float = 0.05
+                            currentTransform.translation = SIMD3<Float>(0, forwardOffset, -controlState.pinnedStageHeight)
+                            screen.transform = currentTransform
+                        } else {
+                            // If not yet a child node, directly set scale
+                            screen.scale = SIMD3<Float>(repeating: controlState.pinnedStageScale)
+                        }
+                        
+                        // If scale value changed, update mesh resolution to maintain clarity
+                        if abs(pinnedStageScale - controlState.pinnedStageScale) > 0.01 {
+                            pinnedStageScale = controlState.pinnedStageScale
+                            updateMeshResolutionForPinning()
+                        } else {
+                            pinnedStageScale = controlState.pinnedStageScale
+                        }
+                    }
+                    // else: animation is running, hands off!
+                } else {
+                    // Apply user-controlled transform only when not pinned
+                    screen.scale = SIMD3<Float>(repeating: immersiveScale)
+                    screen.position = immersivePosition + SIMD3<Float>(0, 0, zCorrection)
+                }
+                
+                // Immersion Amount Logic
+                // If using Custom Environment (Studio), 'immersionAmount' might control 
+                // something else or be ignored in favor of the environment's own state.
+                // But if in Passthrough (None), we might want the black sphere for dimming.
+                
+                let isUsingCustomEnv = immersiveEnvironment.environmentStateHandler.activeState != .none
+                
+                if isUsingCustomEnv {
+                    // In Studio mode, we don't use the black sphere for immersion
+                    blackOutSphere.components.set(OpacityComponent(opacity: 0.0))
+                } else {
+                    // In Passthrough mode, use the sphere for simple dimming if desired
+                    // Or if 'immersion' slider is used to dim passthrough.
+                    blackOutSphere.components.set(OpacityComponent(opacity: immersionAmount))
+                }
                 blackOutSphere.position = .zero
                 
                 if let inputEnt = attachments.entity(for: "input_overlay") {
@@ -492,27 +794,6 @@ struct _RealityKitStreamView: View {
             }
     }
     
-    var controlsDragGesture: some Gesture {
-        DragGesture()
-            .targetedToEntity(controlsEntity ?? screen)
-            .onChanged { value in
-                guard isImmersive else { return }
-                guard let entity = controlsEntity,
-                      value.entity == entity,
-                      let parent = entity.parent else { return }
-                
-                if startControlsDragPosition == nil { startControlsDragPosition = entity.position }
-                
-                let translationScene3D = value.convert(value.translation3D, from: .local, to: .scene)
-                let translationSceneVector = SIMD3<Float>(Float(translationScene3D.x), Float(translationScene3D.y), Float(translationScene3D.z))
-                let translationParentVector = parent.convert(direction: translationSceneVector, from: nil)
-                
-                entity.position = startControlsDragPosition! + translationParentVector
-            }
-            .onEnded { _ in
-                startControlsDragPosition = nil
-            }
-    }
     
     var magnifyGesture: some Gesture {
         MagnifyGesture()
@@ -668,6 +949,14 @@ struct _RealityKitStreamView: View {
         if let savedImmersion = defaults.object(forKey: "realitykitImmersionAmount") as? Float { immersionAmount = savedImmersion }
         if let savedGamma = defaults.object(forKey: "realitykitGamma") as? Float { viewModel.streamSettings.gamma = savedGamma }
         if let savedSat = defaults.object(forKey: "realitykitSaturation") as? Float { viewModel.streamSettings.saturation = savedSat }
+        // Load pinned screen settings
+        if let savedPinnedScale = defaults.object(forKey: "realitykitPinnedStageScale") as? Float {
+            pinnedStageScale = savedPinnedScale
+            controlState.pinnedStageScale = savedPinnedScale
+        }
+        if let savedPinnedHeight = defaults.object(forKey: "realitykitPinnedStageHeight") as? Float {
+            controlState.pinnedStageHeight = savedPinnedHeight
+        }
     }
     
     private func saveRealityKitSettings() {
@@ -677,14 +966,41 @@ struct _RealityKitStreamView: View {
         defaults.set(viewModel.streamSettings.saturation, forKey: "realitykitSaturation")
         defaults.set(height, forKey: "realitykitHeight")
         defaults.set(depthOffset, forKey: "realitykitDepthOffset")
-        defaults.set(immersiveScale, forKey: "realitykitImmersiveScale")
-        defaults.set(immersivePosition.x, forKey: "realitykitImmersivePosX")
-        defaults.set(immersivePosition.y, forKey: "realitykitImmersivePosY")
-        defaults.set(immersivePosition.z, forKey: "realitykitImmersivePosZ")
-        defaults.set(immersionAmount, forKey: "realitykitImmersionAmount")
+        // Use controlState values for immersive mode, local values for non-immersive mode
+        if isImmersive {
+            defaults.set(controlState.immersiveScale, forKey: "realitykitImmersiveScale")
+            defaults.set(controlState.immersivePositionX, forKey: "realitykitImmersivePosX")
+            defaults.set(controlState.immersivePositionY, forKey: "realitykitImmersivePosY")
+            defaults.set(controlState.immersivePositionZ, forKey: "realitykitImmersivePosZ")
+            defaults.set(controlState.immersionAmount, forKey: "realitykitImmersionAmount")
+        } else {
+            defaults.set(immersiveScale, forKey: "realitykitImmersiveScale")
+            defaults.set(immersivePosition.x, forKey: "realitykitImmersivePosX")
+            defaults.set(immersivePosition.y, forKey: "realitykitImmersivePosY")
+            defaults.set(immersivePosition.z, forKey: "realitykitImmersivePosZ")
+            defaults.set(immersionAmount, forKey: "realitykitImmersionAmount")
+        }
+        // Save pinned screen settings
+        defaults.set(controlState.pinnedStageScale, forKey: "realitykitPinnedStageScale")
+        defaults.set(controlState.pinnedStageHeight, forKey: "realitykitPinnedStageHeight")
     }
     
     // MARK: - View Components
+    
+    @ViewBuilder
+    var environmentLoadingIndicator: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.5)
+            Text(viewModel.localized("loading_environment") ?? "正在加载环境...")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(30)
+        .background(.regularMaterial)
+        .cornerRadius(20)
+        .glassBackgroundEffect()
+    }
     
     @ViewBuilder
     var virtualKeyboardOverlay: some View {
@@ -750,10 +1066,7 @@ struct _RealityKitStreamView: View {
     
     @ViewBuilder
     var controlsView: some View {
-        StreamControls(
-            horizontal: false,
-            streamConfig: $streamConfig,
-            isKeyboardActive: showVirtualKeyboard,
+        StandardControlPanelView(
             closeAction: {
                 if streamConfig != nil { viewModel.savedStreamConfigForResume = streamConfig }
                 needsResume = false
@@ -763,10 +1076,16 @@ struct _RealityKitStreamView: View {
                 self.controllerSupport?.cleanup()
                 triggerCloseSequence()
             },
-            toggleKeyboardAction: { showVirtualKeyboard.toggle() }
-        ) {
-            settingsControls
-        }
+            toggleKeyboardAction: { showVirtualKeyboard.toggle() },
+            isKeyboardActive: showVirtualKeyboard,
+            depthOffset: $depthOffset,
+            height: $height,
+            zLimits: zLimits,
+            yLimits: yLimits,
+            needsHdr: needsHdr,
+            isRealityKit: true
+        )
+        .environmentObject(viewModel)
     }
     
     @ViewBuilder
@@ -890,6 +1209,91 @@ struct _RealityKitStreamView: View {
             Divider().padding(.vertical, 5)
             Text(viewModel.localized("spatial")).font(.caption).foregroundStyle(.secondary)
             
+            VStack(spacing: 10) {
+                HStack {
+                    Text("Environment")
+                        .font(.caption).bold().frame(width: labelWidth, alignment: .leading)
+                    
+                    Picker("Environment", selection: $selectedEnvironmentState) {
+                        Text("None").tag(EnvironmentStateType.none)
+                        Text("Light").tag(EnvironmentStateType.light)
+                        Text("Dark").tag(EnvironmentStateType.dark)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: sliderWidth + 40)
+                    .disabled(isUpdatingImmersion)
+                    .onChange(of: selectedEnvironmentState) { oldValue, newValue in
+                        print("Picker changed from \(oldValue) to \(newValue)")
+                        immersiveEnvironment.requestEnvironmentState(newValue)
+                        let needsLock = (oldValue == .none || newValue == .none)
+                        updateImmersionStyle(state: newValue, semi: immersiveEnvironment.isSemiImmersionEnabled, shouldLock: needsLock)
+                        if newValue == .none && isPinnedToStage {
+                            unpinStreamFromStage(animated: false)
+                        }
+                    }
+                    .onChange(of: immersiveEnvironment.environmentStateHandler.activeState) { oldValue, newValue in
+                        // Sync Picker selection with actual environment state
+                        if selectedEnvironmentState != newValue {
+                            print("Syncing Picker selection to \(newValue)")
+                            selectedEnvironmentState = newValue
+                            let needsLock = (oldValue == .none || newValue == .none)
+                            updateImmersionStyle(state: newValue, semi: immersiveEnvironment.isSemiImmersionEnabled, shouldLock: needsLock)
+                            
+                            if newValue == .none && isPinnedToStage {
+                                unpinStreamFromStage(animated: false)
+                            }
+                        }
+                    }
+                }
+                
+                // Semi-Immersion Toggle (Only visible in custom environments)
+                if immersiveEnvironment.environmentStateHandler.activeState != .none {
+                    HStack {
+                        Spacer().frame(width: labelWidth)
+                        Toggle(isOn: Binding(
+                            get: { immersiveEnvironment.isSemiImmersionEnabled },
+                            set: { 
+                                immersiveEnvironment.isSemiImmersionEnabled = $0
+                                updateImmersionStyle(state: immersiveEnvironment.activeState, semi: $0, shouldLock: true)
+                            }
+                        )) {
+                            HStack {
+                                Image(systemName: immersiveEnvironment.isSemiImmersionEnabled ? "digitalcrown.press.fill" : "circle.circle.fill")
+                                Text(immersiveEnvironment.isSemiImmersionEnabled ? "半沉浸模式 (旋钮可用)" : "全沉浸模式")
+                            }
+                            .font(.caption)
+                        }
+                        .toggleStyle(.button)
+                        .frame(width: sliderWidth + 40)
+                        .help("开启后使用数码表冠调整沉浸度")
+                        .disabled(isUpdatingImmersion)
+                        Spacer()
+                    }
+                    
+                    HStack {
+                        Spacer().frame(width: labelWidth)
+                        Button {
+                            if isPinnedToStage {
+                                unpinStreamFromStage(animated: true)
+                            } else {
+                                pinStreamToStage()
+                            }
+                        } label: {
+                            Label(
+                                isPinnedToStage ? "解除置顶" : "置顶到工作室屏幕",
+                                systemImage: isPinnedToStage ? "arrow.down.right.and.arrow.up.left" : "pin.circle"
+                            )
+                            .font(.caption)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.mini)
+                        .disabled(isPinningTransitioning || immersiveEnvironment.dockingAnchor == nil || immersiveEnvironment.environmentStateHandler.activeState == .none)
+                        .help("将串流屏幕吸附到 Apple Studio 场景的大屏幕上")
+                        Spacer()
+                    }
+                }
+            }
+            
             HStack {
                 Text(viewModel.localized("immersion"))
                     .font(.caption).bold().frame(width: labelWidth, alignment: .leading)
@@ -905,6 +1309,7 @@ struct _RealityKitStreamView: View {
                 Slider(value: $immersiveScale, in: 0.5...6.0)
                     .frame(width: sliderWidth)
                     .onChange(of: immersiveScale) { _, _ in if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() } }
+                    .disabled(isPinnedToStage)
                 Text(String(format: "%.1fx", immersiveScale)).font(.caption).monospacedDigit().frame(width: 35, alignment: .leading)
             }
             
@@ -912,6 +1317,7 @@ struct _RealityKitStreamView: View {
                 Text(viewModel.localized("distance"))
                     .font(.caption).bold().frame(width: labelWidth, alignment: .leading)
                 Slider(value: Binding(get: { immersivePosition.z }, set: { immersivePosition.z = $0; if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() } }), in: -10.0 ... -0.5).frame(width: sliderWidth)
+                    .disabled(isPinnedToStage)
                 Text(String(format: "%.1fm", abs(immersivePosition.z))).font(.caption).monospacedDigit().frame(width: 35, alignment: .leading)
             }
             
@@ -919,12 +1325,16 @@ struct _RealityKitStreamView: View {
                 Text(viewModel.localized("height"))
                     .font(.caption).bold().frame(width: labelWidth, alignment: .leading)
                 Slider(value: Binding(get: { immersivePosition.y }, set: { immersivePosition.y = $0; if viewModel.streamSettings.rememberStreamSettings { saveRealityKitSettings() } }), in: 0.0 ... 5.0).frame(width: sliderWidth)
+                    .disabled(isPinnedToStage)
                 Text(String(format: "%.1fm", immersivePosition.y)).font(.caption).monospacedDigit().frame(width: 35, alignment: .leading)
             }
             
             Toggle(isOn: $isInteractive) {
                 Label(isInteractive ? viewModel.localized("screen_locked") : viewModel.localized("screen_unlocked"), systemImage: isInteractive ? "lock.fill" : "lock.open.fill")
-            }.toggleStyle(.button).padding(.top, 5)
+            }
+            .toggleStyle(.button)
+            .padding(.top, 5)
+            .disabled(isPinnedToStage)
         }
 
         HStack {
@@ -959,6 +1369,210 @@ struct _RealityKitStreamView: View {
                     }
                 }
         )
+    }
+    
+    // MARK: - Immersion Control Helper
+    
+    private func updateImmersionStyle(state: EnvironmentStateType, semi: Bool, shouldLock: Bool = true) {
+        // Lock UI immediately if requested
+        if shouldLock {
+            isUpdatingImmersion = true
+        }
+        
+        Task { @MainActor in
+            if state == .none {
+                // In None state, we want passthrough mixed with content
+                viewModel.currentImmersionStyle = .mixed
+                ImmersionStyleManager.shared.currentStyle = .mixed
+            } else {
+                if semi {
+                    // Semi-Immersion: Progressive allows Digital Crown to dial between passthrough and environment
+                    viewModel.currentImmersionStyle = .progressive
+                    ImmersionStyleManager.shared.currentStyle = .progressive
+                } else {
+                    // Full-Immersion: Full means app controls it, Digital Crown usually disabled for immersion
+                    viewModel.currentImmersionStyle = .full
+                    ImmersionStyleManager.shared.currentStyle = .full
+                }
+            }
+            print("Updated Immersion Style to: \(viewModel.currentImmersionStyle) via Manager: \(ImmersionStyleManager.shared.currentStyle)")
+            
+            if shouldLock {
+                // Add delay to prevent rapid toggling which can break system transition
+                try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+                isUpdatingImmersion = false
+            }
+        }
+    }
+    
+    // MARK: - Studio Pinning Helpers
+    
+    private func stageAnchorLocalTransform() -> (anchor: Entity, transform: Transform)? {
+        guard immersiveEnvironment.environmentStateHandler.activeState != .none else { return nil }
+        guard let anchor = immersiveEnvironment.dockingAnchor else { return nil }
+        guard anchor.scene != nil else { return nil }
+        
+        let scale = stageScaleForCurrentStream()
+        let forwardOffset: Float = 0.05
+        let pitchAdjustment = simd_quatf(angle: -.pi / 2, axis: SIMD3<Float>(1, 0, 0))
+        let transform = Transform(scale: SIMD3<Float>(repeating: scale),
+                                  rotation: pitchAdjustment,
+                                  translation: SIMD3<Float>(0, 0, forwardOffset))
+        return (anchor, transform)
+    }
+
+    private func worldTransform(for anchor: Entity, applying localTransform: Transform) -> Transform {
+        let anchorMatrix = anchor.transformMatrix(relativeTo: nil)
+        let worldMatrix = anchorMatrix * localTransform.matrix
+        return Transform(matrix: worldMatrix)
+    }
+    
+    private func stageScaleForCurrentStream() -> Float {
+        let baseWidth = MAX_WIDTH_METERS
+        let baseHeight = max(0.001, baseWidth * aspectRatio)
+        let widthScale = STUDIO_DOCK_WIDTH_METERS / baseWidth
+        let heightScale = STUDIO_DOCK_HEIGHT_METERS / baseHeight
+        let stageScale = min(widthScale, heightScale) * 0.95
+        return min(stageScale, 4.5)
+    }
+    
+    private func pinStreamToStage() {
+        guard isImmersive else { return }
+        guard !isPinnedToStage, !isPinningTransitioning else { return }
+        guard let (anchor, stageTransform) = stageAnchorLocalTransform() else {
+            print("Stage anchor unavailable, cannot pin screen")
+            return
+        }
+        guard screen.parent != nil else {
+            print("Screen entity not ready for pinning")
+            return
+        }
+        
+        lastFreeformTransform = Transform(matrix: screen.transformMatrix(relativeTo: nil))
+        pinStartScale = screen.scale.x
+        wasInteractiveBeforePin = isInteractive
+        isInteractive = true
+        
+        // Use user-adjusted scale value, or default if not yet adjusted
+        let defaultScale = stageTransform.scale.x
+        let targetScale: Float
+        if controlState.pinnedStageScale == 1.0 || abs(controlState.pinnedStageScale - 1.0) < 0.01 {
+            // User hasn't adjusted yet, use default value
+            targetScale = defaultScale
+            controlState.pinnedStageScale = defaultScale
+        } else {
+            // Use previously adjusted value
+            targetScale = controlState.pinnedStageScale
+        }
+        pinnedStageScale = targetScale
+        
+        // Create transform using target scale and height values
+        // Note: Screen is rotated -90 degrees (around X axis), so:
+        // - Local Y axis corresponds to world's forward/backward direction
+        // - Local Z axis corresponds to world's vertical direction (but reversed, down is positive)
+        let forwardOffset: Float = 0.05
+        let pitchAdjustment = simd_quatf(angle: -.pi / 2, axis: SIMD3<Float>(1, 0, 0))
+        let customStageTransform = Transform(
+            scale: SIMD3<Float>(repeating: targetScale),
+            rotation: pitchAdjustment,
+            translation: SIMD3<Float>(0, forwardOffset, -controlState.pinnedStageHeight)
+        )
+        
+        isPinnedToStage = true
+        isPinningTransitioning = true
+        
+        // Calculate world target with FULL scale (position + rotation + scale all animate together)
+        let worldTarget = worldTransform(for: anchor, applying: customStageTransform)
+        
+        // Single smooth animation: position, rotation, AND scale all interpolate together
+        // This replicates Apple's demo where the screen flies to the stage while growing
+        screen.move(to: worldTarget, relativeTo: nil, duration: 1.5, timingFunction: .easeInOut)
+        
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_550_000_000)
+            guard isPinnedToStage else { return }
+            // Attach to anchor after animation completes
+            screen.setParent(anchor, preservingWorldTransform: true)
+            screen.transform = customStageTransform
+            isPinningTransitioning = false
+            
+            // After pinning completes, increase mesh resolution to maintain clarity
+            updateMeshResolutionForPinning()
+        }
+    }
+    
+    // Update mesh resolution to maintain clarity when pinned (only when setting is enabled)
+    private func updateMeshResolutionForPinning() {
+        guard isPinnedToStage, !isPinningTransitioning else { return }
+        guard viewModel.streamSettings.realitykitHighResPinnedScreen else { return } // Check if setting is enabled
+        
+        let currentCurve = viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier
+        let baseResolution: UInt32 = 100
+        
+        // Increase resolution based on scale (up to 2x, i.e., 200x200)
+        // Larger scale requires higher resolution
+        let scaleFactor = min(controlState.pinnedStageScale / 1.0, 2.0)
+        let resolutionMultiplier = UInt32(max(1, min(2, Int(scaleFactor * 1.5)))) // 1.5x scale reaches 2x resolution
+        let meshResolution = (baseResolution * resolutionMultiplier, baseResolution * resolutionMultiplier)
+        
+        if let mesh = try? Self.generateCurvedPlane(
+            width: MAX_WIDTH_METERS,
+            aspectRatio: aspectRatio,
+            resolution: meshResolution,
+            curveMagnitude: currentCurve
+        ) {
+            try? screen.model?.mesh.replace(with: mesh.contents)
+        }
+    }
+    
+    private func unpinStreamFromStage(animated: Bool) {
+        guard isPinnedToStage else { return }
+        if isPinningTransitioning && animated {
+            return
+        }
+        
+        // When unpinning, restore original mesh resolution
+        Task { @MainActor in
+            let currentCurve = viewModel.streamSettings.realitykitRendererCurvature * curveAnimationMultiplier
+            if let mesh = try? Self.generateCurvedPlane(
+                width: MAX_WIDTH_METERS,
+                aspectRatio: aspectRatio,
+                resolution: (100, 100), // Restore original resolution
+                curveMagnitude: currentCurve
+            ) {
+                try? screen.model?.mesh.replace(with: mesh.contents)
+            }
+        }
+        
+        let targetTransform = lastFreeformTransform ?? Transform(matrix: screen.transformMatrix(relativeTo: nil))
+        
+        let completeUnpin: @MainActor () -> Void = {
+            isPinnedToStage = false
+            isPinningTransitioning = false
+            isInteractive = wasInteractiveBeforePin
+            pinStartScale = immersiveScale
+        }
+        
+        isPinningTransitioning = true
+        
+        if let originalParent = screenOriginalParent {
+            screen.setParent(originalParent, preservingWorldTransform: true)
+        } else {
+            screen.setParent(nil, preservingWorldTransform: true)
+        }
+        
+        if animated {
+            screen.move(to: targetTransform, relativeTo: nil, duration: 1.0, timingFunction: .easeInOut)
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_300_000_000)
+                completeUnpin()
+            }
+        } else {
+            screen.transform = targetTransform
+            Task { @MainActor in
+                completeUnpin()
+            }
+        }
     }
     
     static func generateCurvedPlane(width: Float, aspectRatio: Float, resolution: (UInt32, UInt32), curveMagnitude: Float) throws -> MeshResource {
@@ -1032,6 +1646,63 @@ struct VolumetricWindowControls<ControlsContent: View>: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+// MARK: - Control State Sync Modifier
+struct ControlStateSyncModifier: ViewModifier {
+    let isImmersive: Bool
+    @ObservedObject var controlState: StreamControlState
+    
+    @Binding var immersiveScale: Float
+    @Binding var immersivePosition: SIMD3<Float>
+    @Binding var immersionAmount: Float
+    @Binding var isInteractive: Bool
+    @Binding var selectedEnvironmentState: EnvironmentStateType
+    
+    let isUpdatingImmersion: Bool
+    let showVirtualKeyboard: Bool
+    let videoMode: VideoMode
+    let isPinnedToStage: Bool
+    let isPinningTransitioning: Bool
+    
+    let syncToLocal: () -> Void
+    let syncFromLocal: () -> Void
+    
+    func body(content: Content) -> some View {
+        // Group 1: Sync from controlState to local
+        let withControlStateSync = content
+            .onChange(of: controlState.immersiveScale) { _, _ in syncToLocal() }
+            .onChange(of: controlState.immersivePositionY) { _, _ in syncToLocal() }
+            .onChange(of: controlState.immersivePositionZ) { _, _ in syncToLocal() }
+            .onChange(of: controlState.immersionAmount) { _, _ in syncToLocal() }
+            .onChange(of: controlState.isInteractive) { _, _ in syncToLocal() }
+            .onChange(of: controlState.pinnedStageScale) { _, _ in syncToLocal() }
+            .onChange(of: controlState.pinnedStageHeight) { _, _ in syncToLocal() } // Listen for pinned height changes
+        
+        // Group 2: Environment state changes
+        let withEnvironmentSync = withControlStateSync
+            .onChange(of: controlState.selectedEnvironmentState) { _, newValue in
+                if selectedEnvironmentState != newValue {
+                    controlState.onEnvironmentChange?(newValue)
+                }
+            }
+        
+        // Group 3: Sync from local to controlState
+        let withLocalSync = withEnvironmentSync
+            .onChange(of: immersiveScale) { _, _ in if isImmersive { syncFromLocal() } }
+            .onChange(of: immersivePosition) { _, _ in if isImmersive { syncFromLocal() } }
+            .onChange(of: immersionAmount) { _, _ in if isImmersive { syncFromLocal() } }
+            .onChange(of: isInteractive) { _, _ in if isImmersive { syncFromLocal() } }
+            .onChange(of: selectedEnvironmentState) { _, _ in if isImmersive { syncFromLocal() } }
+        
+        // Group 4: Other state sync
+        return withLocalSync
+            .onChange(of: isUpdatingImmersion) { _, _ in if isImmersive { syncFromLocal() } }
+            .onChange(of: showVirtualKeyboard) { _, _ in if isImmersive { syncFromLocal() } }
+            .onChange(of: videoMode) { _, _ in if isImmersive { syncFromLocal() } }
+            .onChange(of: isPinnedToStage) { _, _ in if isImmersive { syncFromLocal() } }
+            .onChange(of: isPinningTransitioning) { _, _ in if isImmersive { syncFromLocal() } }
     }
 }
 

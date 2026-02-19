@@ -1,0 +1,433 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "Reality Composer Pro Version 1.0 (418)"
+    }
+    defaultPrim = "Root"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "Root"
+{
+    def Xform "Visual" (
+        active = true
+    )
+    {
+        reorder nameChildren = ["Floor", "dome", "Studio"]
+        def "Studio" (
+            active = true
+            references = @../meshes/Studio.usdc@
+        )
+        {
+            float3 xformOp:scale = (1, 1, 1)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            over "_materials" (
+                references = None
+            )
+            {
+                over "BakingGroup1" (
+                    references = None
+                )
+                {
+                    token outputs:mtlx:surface.connect = </Root/Visual/Studio/_materials/BakingGroup1/UnlitSurface.outputs:out>
+                    token outputs:realitykit:vertex
+                    float2 ui:nodegraph:realitykit:subgraphOutputs:pos = (0, 109.5)
+
+                    def Shader "Image"
+                    {
+                        uniform token info:id = "ND_image_color3"
+                        asset inputs:file = @../textures/dark/BakingGroup1_d.png@
+                        color3f outputs:out
+                        float2 ui:nodegraph:node:pos = (-580.0703, 76.76172)
+                        int ui:nodegraph:node:stackingOrder = 302
+                    }
+
+                    def Shader "UnlitSurface"
+                    {
+                        uniform token info:id = "ND_realitykit_unlit_surfaceshader"
+                        bool inputs:applyPostProcessToneMap = 0
+                        color3f inputs:color.connect = </Root/Visual/Studio/_materials/BakingGroup1/Image.outputs:out>
+                        bool inputs:hasPremultipliedAlpha
+                        float inputs:opacity
+                        float inputs:opacityThreshold
+                        token outputs:out
+                        float2 ui:nodegraph:node:pos = (-270.32422, 85.33984)
+                        int ui:nodegraph:node:stackingOrder = 303
+                    }
+                }
+
+                over "BakingGroup3" (
+                    references = None
+                )
+                {
+                    token outputs:mtlx:surface.connect = </Root/Visual/Studio/_materials/BakingGroup3/UnlitSurface.outputs:out>
+                    token outputs:realitykit:vertex
+                    float2 ui:nodegraph:realitykit:subgraphOutputs:pos = (0, 109.5)
+
+                    def Shader "UnlitSurface"
+                    {
+                        uniform token info:id = "ND_realitykit_unlit_surfaceshader"
+                        bool inputs:applyPostProcessToneMap = 0
+                        color3f inputs:color.connect = </Root/Visual/Studio/_materials/BakingGroup3/Image.outputs:out>
+                        float inputs:opacity
+                        float inputs:opacityThreshold
+                        token outputs:out
+                        float2 ui:nodegraph:node:pos = (-306.03906, 138.01562)
+                        int ui:nodegraph:node:stackingOrder = 130
+                    }
+
+                    def Shader "Image"
+                    {
+                        uniform token info:id = "ND_image_color3"
+                        asset inputs:file = @../textures/dark/BakingGroup3_d.png@
+                        color3f outputs:out
+                        float2 ui:nodegraph:node:pos = (-659.4414, 119.375)
+                        int ui:nodegraph:node:stackingOrder = 130
+                    }
+                }
+
+                over "BakingGroup4" (
+                    references = None
+                )
+                {
+                    token outputs:mtlx:surface.connect = </Root/Visual/Studio/_materials/BakingGroup4/UnlitSurface.outputs:out>
+                    token outputs:realitykit:vertex
+                    float2 ui:nodegraph:realitykit:subgraphOutputs:pos = (0, 109.5)
+
+                    def Shader "Image"
+                    {
+                        uniform token info:id = "ND_image_color3"
+                        asset inputs:file = @../textures/dark/BakingGroup4_d.png@
+                        color3f outputs:out
+                        float2 ui:nodegraph:node:pos = (-639.4414, 139.375)
+                        int ui:nodegraph:node:stackingOrder = 132
+                    }
+
+                    def Shader "UnlitSurface"
+                    {
+                        uniform token info:id = "ND_realitykit_unlit_surfaceshader"
+                        bool inputs:applyPostProcessToneMap = 0
+                        color3f inputs:color.connect = </Root/Visual/Studio/_materials/BakingGroup4/Image.outputs:out>
+                        bool inputs:hasPremultipliedAlpha
+                        float inputs:opacity
+                        float inputs:opacityThreshold
+                        token outputs:out
+                        float2 ui:nodegraph:node:pos = (-286.03906, 158.01562)
+                        int ui:nodegraph:node:stackingOrder = 131
+                    }
+                }
+
+                over "BakingGroup5" (
+                    references = None
+                )
+                {
+                    token outputs:mtlx:surface.connect = </Root/Visual/Studio/_materials/BakingGroup5/UnlitSurface.outputs:out>
+                    token outputs:realitykit:vertex
+                    float2 ui:nodegraph:realitykit:subgraphOutputs:pos = (0, 109.5)
+
+                    def Shader "UnlitSurface"
+                    {
+                        uniform token info:id = "ND_realitykit_unlit_surfaceshader"
+                        bool inputs:applyPostProcessToneMap = 0
+                        color3f inputs:color.connect = </Root/Visual/Studio/_materials/BakingGroup5/Image.outputs:out>
+                        bool inputs:hasPremultipliedAlpha
+                        float inputs:opacity
+                        float inputs:opacityThreshold
+                        token outputs:out
+                        float2 ui:nodegraph:node:pos = (-286.03906, 158.01562)
+                        int ui:nodegraph:node:stackingOrder = 131
+                    }
+
+                    def Shader "Image"
+                    {
+                        uniform token info:id = "ND_image_color3"
+                        asset inputs:file = @../textures/dark/BakingGroup5_d.png@
+                        color3f outputs:out
+                        float2 ui:nodegraph:node:pos = (-639.4414, 139.375)
+                        int ui:nodegraph:node:stackingOrder = 132
+                    }
+                }
+
+                over "BakingGroup6" (
+                    references = None
+                )
+                {
+                    token outputs:mtlx:surface.connect = </Root/Visual/Studio/_materials/BakingGroup6/UnlitSurface.outputs:out>
+                    token outputs:realitykit:vertex
+                    float2 ui:nodegraph:realitykit:subgraphOutputs:pos = (0, 109.5)
+
+                    def Shader "Image"
+                    {
+                        uniform token info:id = "ND_image_color3"
+                        asset inputs:file = @../textures/dark/BakingGroup6_d.png@
+                        color3f outputs:out
+                        float2 ui:nodegraph:node:pos = (-639.4414, 139.375)
+                        int ui:nodegraph:node:stackingOrder = 132
+                    }
+
+                    def Shader "UnlitSurface"
+                    {
+                        uniform token info:id = "ND_realitykit_unlit_surfaceshader"
+                        bool inputs:applyPostProcessToneMap = 0
+                        color3f inputs:color.connect = </Root/Visual/Studio/_materials/BakingGroup6/Image.outputs:out>
+                        bool inputs:hasPremultipliedAlpha
+                        float inputs:opacity
+                        float inputs:opacityThreshold
+                        token outputs:out
+                        float2 ui:nodegraph:node:pos = (-286.03906, 158.01562)
+                        int ui:nodegraph:node:stackingOrder = 134
+                    }
+                }
+
+                over "BakingGroup7" (
+                    references = None
+                )
+                {
+                    token outputs:mtlx:surface.connect = </Root/Visual/Studio/_materials/BakingGroup7/UnlitSurface.outputs:out>
+                    token outputs:realitykit:vertex
+                    float2 ui:nodegraph:realitykit:subgraphOutputs:pos = (0, 109.5)
+
+                    def Shader "Image"
+                    {
+                        uniform token info:id = "ND_image_color3"
+                        asset inputs:file = @../textures/dark/BakingGroup7_d.png@
+                        color3f outputs:out
+                        float2 ui:nodegraph:node:pos = (-639.4414, 139.375)
+                        int ui:nodegraph:node:stackingOrder = 132
+                    }
+
+                    def Shader "UnlitSurface"
+                    {
+                        uniform token info:id = "ND_realitykit_unlit_surfaceshader"
+                        bool inputs:applyPostProcessToneMap = 0
+                        color3f inputs:color.connect = </Root/Visual/Studio/_materials/BakingGroup7/Image.outputs:out>
+                        bool inputs:hasPremultipliedAlpha
+                        float inputs:opacity
+                        float inputs:opacityThreshold
+                        token outputs:out
+                        float2 ui:nodegraph:node:pos = (-286.03906, 158.01562)
+                        int ui:nodegraph:node:stackingOrder = 131
+                    }
+                }
+
+                over "BakingGroup1_1" (
+                    references = None
+                )
+                {
+                    token outputs:mtlx:surface.connect = </Root/Visual/Studio/_materials/BakingGroup1_1/UnlitSurface.outputs:out>
+                    token outputs:realitykit:vertex
+                    float2 ui:nodegraph:realitykit:subgraphOutputs:pos = (0, 110.5)
+
+                    def Shader "UnlitSurface" (
+                        references = None
+                    )
+                    {
+                        uniform token info:id = "ND_realitykit_unlit_surfaceshader"
+                        bool inputs:applyPostProcessToneMap = 0
+                        color3f inputs:color.connect = </Root/Visual/Studio/_materials/BakingGroup1_1/Image.outputs:out>
+                        float inputs:opacity
+                        token outputs:out
+                        float2 ui:nodegraph:node:pos = (-295.6328, 118.55469)
+                        int ui:nodegraph:node:stackingOrder = 7
+                    }
+
+                    def Shader "Image" (
+                        references = None
+                    )
+                    {
+                        uniform token info:id = "ND_image_color3"
+                        asset inputs:file = @../textures/dark/BakingGroup1_1_d.png@
+                        color3f outputs:out
+                        float2 ui:nodegraph:node:pos = (-604.2422, 77.12109)
+                        int ui:nodegraph:node:stackingOrder = 6
+                    }
+                }
+
+                over "Glass_Skylight" (
+                    references = None
+                )
+                {
+                    token outputs:mtlx:surface
+                    token outputs:realitykit:vertex
+                }
+
+                over "Glass_Catwalk" (
+                    references = None
+                )
+                {
+                    token outputs:mtlx:surface
+                    token outputs:realitykit:vertex
+                }
+            }
+
+            over "Studio_1" (
+                references = None
+            )
+            {
+            }
+
+            over "Studio_4" (
+                references = None
+            )
+            {
+                over "Mesh_003" (
+                    references = None
+                )
+                {
+                }
+            }
+
+            over "Studio_1_1" (
+                references = None
+            )
+            {
+            }
+
+            over "Studio_3" (
+                references = None
+            )
+            {
+            }
+
+            over "Studio_7" (
+                references = None
+            )
+            {
+            }
+
+            over "Studio_5" (
+                references = None
+            )
+            {
+            }
+
+            over "Studio_6" (
+                references = None
+            )
+            {
+            }
+
+            over "Studio_Glass_Catwalk" (
+                references = None
+            )
+            {
+            }
+        }
+
+        def "dome" (
+            active = true
+            prepend references = @../meshes/dome.usdc@
+        )
+        {
+            float3 xformOp:scale = (1, 1, 1)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            over "_materials"
+            {
+                over "Sky"
+                {
+                    token outputs:mtlx:surface.connect = </Root/Visual/dome/_materials/Sky/UnlitSurface.outputs:out>
+                    token outputs:realitykit:vertex
+                    token outputs:surface.connect = </Root/Visual/dome/_materials/Sky/previewShader.outputs:surface>
+                    float2 ui:nodegraph:realitykit:subgraphOutputs:pos = (0, 109.5)
+
+                    over "previewShader" (
+                        active = false
+                    )
+                    {
+                    }
+
+                    def Shader "UnlitSurface"
+                    {
+                        uniform token info:id = "ND_realitykit_unlit_surfaceshader"
+                        color3f inputs:color.connect = </Root/Visual/dome/_materials/Sky/Image.outputs:out>
+                        float inputs:opacity
+                        float inputs:opacityThreshold
+                        token outputs:out
+                        float2 ui:nodegraph:node:pos = (-272.70703, 114.953125)
+                        int ui:nodegraph:node:stackingOrder = 3
+                    }
+
+                    def Shader "Image"
+                    {
+                        uniform token info:id = "ND_image_color3"
+                        asset inputs:file = @../textures/skies/Studio_sky_LatLong_Dark.exr@
+                        color3f outputs:out
+                        float2 ui:nodegraph:node:pos = (-680.1797, 112.25781)
+                        int ui:nodegraph:node:stackingOrder = 7
+                    }
+                }
+            }
+        }
+
+        def "Floor" (
+            active = true
+            references = @Floor.usda@
+        )
+        {
+            float3 xformOp:scale = (1, 1, 1)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient", "xformOp:scale"]
+
+            over "Material" (
+                references = None
+            )
+            {
+            }
+
+            over "Studio_floor_2_2_Lightspill" (
+                references = None
+            )
+            {
+                over "Studio_2_2" (
+                    references = None
+                )
+                {
+                    over "Mesh_010" (
+                        prepend apiSchemas = ["MaterialBindingAPI"]
+                        references = None
+                    )
+                    {
+                        rel material:binding = </Root/Visual/Floor/Studio_floor_2_2> (
+                            bindMaterialAs = "weakerThanDescendants"
+                        )
+                    }
+                }
+            }
+
+            over "Studio_floor_2_Lightspill"
+            {
+                over "Studio_2" (
+                    references = None
+                )
+                {
+                    over "Mesh_009" (
+                        prepend apiSchemas = ["MaterialBindingAPI"]
+                        references = None
+                    )
+                    {
+                        rel material:binding = </Root/Visual/Floor/Studio_floor_2> (
+                            bindMaterialAs = "weakerThanDescendants"
+                        )
+                    }
+                }
+            }
+
+            over "Studio_floor_2" (
+                references = None
+            )
+            {
+                asset inputs:Texture = @../textures/dark/BakingGroup2_d.png@
+            }
+
+            over "Studio_floor_2_2" (
+                references = None
+            )
+            {
+                asset inputs:Texture = @../textures/dark/BakingGroup2_2_d.png@
+            }
+        }
+    }
+}
+

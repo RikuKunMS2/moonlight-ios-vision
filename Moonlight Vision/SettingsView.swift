@@ -14,6 +14,86 @@ struct SettingsView: View {
     @EnvironmentObject private var viewModel: MainViewModel
     @State private var selectedAspectRatio: AspectRatio?
     @State private var isCustomAspectRatio: Bool = false
+    
+    // Debounce timer for slider changes
+    @State private var saveTimer: Timer?
+    
+    // Confirmation dialog state for reset
+    @State private var showResetConfirmation: Bool = false
+    
+    // Custom framerate and bitrate states
+    @State private var isCustomFramerate: Bool = false
+    @State private var isCustomBitrate: Bool = false
+    @State private var customFramerateValue: Int32 = 60
+    @State private var customBitrateValue: Int32 = 30 // Stored in Mbps
+    
+    // Computed bindings for framerate picker
+    private var framerateBinding: Binding<Int32> {
+        Binding(
+            get: {
+                if isCustomFramerate {
+                    return -1 // Special value for custom
+                }
+                return settings.framerate
+            },
+            set: { newValue in
+                if newValue == -1 {
+                    isCustomFramerate = true
+                    settings.framerate = customFramerateValue
+                } else {
+                    isCustomFramerate = false
+                    settings.framerate = newValue
+                }
+                settings.save()
+            }
+        )
+    }
+    
+    // Computed bindings for bitrate picker
+    private var bitrateBinding: Binding<Int32> {
+        Binding(
+            get: {
+                if isCustomBitrate {
+                    return -1 // Special value for custom
+                }
+                return settings.bitrate
+            },
+            set: { newValue in
+                if newValue == -1 {
+                    isCustomBitrate = true
+                    settings.bitrate = customBitrateValue * 1000 // Convert Mbps to kbps
+                } else {
+                    isCustomBitrate = false
+                    settings.bitrate = newValue
+                }
+                settings.save()
+            }
+        )
+    }
+    
+    // Computed binding for custom framerate slider
+    private var customFramerateSliderBinding: Binding<Double> {
+        Binding(
+            get: { Double(customFramerateValue) },
+            set: { newValue in
+                customFramerateValue = Int32(newValue)
+                settings.framerate = customFramerateValue
+                settings.save()
+            }
+        )
+    }
+    
+    // Computed binding for custom bitrate slider
+    private var customBitrateSliderBinding: Binding<Double> {
+        Binding(
+            get: { Double(customBitrateValue) },
+            set: { newValue in
+                customBitrateValue = Int32(newValue)
+                settings.bitrate = customBitrateValue * 1000 // Convert Mbps to kbps
+                settings.save()
+            }
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -103,19 +183,63 @@ struct SettingsView: View {
                         }
                     }
                     
-                    Picker(viewModel.localized("framerate"), selection: $settings.framerate) {
+                    // Framerate picker with custom option
+                    Picker(viewModel.localized("framerate"), selection: framerateBinding) {
                         ForEach(Self.framerateTable, id: \.self) { framerate in
-                            Text("\(framerate)")
+                            Text("\(framerate)").tag(framerate as Int32)
                         }
+                        Text(viewModel.localized("custom")).tag(-1 as Int32)
                     }
-                    .onChange(of: settings.framerate) { _, _ in settings.save() }
                     
-                    Picker(viewModel.localized("bitrate"), selection: $settings.bitrate) {
-                        ForEach(Self.bitrateTable, id: \.self) { bitrate in
-                            Text("\(bitrate / 1000)Mbps")
+                    // Custom framerate controls
+                    if isCustomFramerate {
+                        HStack {
+                            Text(viewModel.localized("custom_framerate"))
+                            Spacer()
+                            TextField("", value: $customFramerateValue, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 80)
+                                .keyboardType(.numberPad)
+                                .onChange(of: customFramerateValue) { _, newValue in
+                                    // Clamp value to reasonable range
+                                    customFramerateValue = max(1, min(240, newValue))
+                                    settings.framerate = customFramerateValue
+                                    settings.save()
+                                }
+                            Text("fps")
                         }
+                        
+                        Slider(value: customFramerateSliderBinding, in: 1...120, step: 1)
                     }
-                    .onChange(of: settings.bitrate) { _, _ in settings.save() }
+                    
+                    // Bitrate picker with custom option
+                    Picker(viewModel.localized("bitrate"), selection: bitrateBinding) {
+                        ForEach(Self.bitrateTable, id: \.self) { bitrate in
+                            Text("\(bitrate / 1000)Mbps").tag(bitrate as Int32)
+                        }
+                        Text(viewModel.localized("custom")).tag(-1 as Int32)
+                    }
+                    
+                    // Custom bitrate controls
+                    if isCustomBitrate {
+                        HStack {
+                            Text(viewModel.localized("custom_bitrate"))
+                            Spacer()
+                            TextField("", value: $customBitrateValue, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 100)
+                                .keyboardType(.numberPad)
+                                .onChange(of: customBitrateValue) { _, newValue in
+                                    // Clamp value to reasonable range (1-1000 Mbps)
+                                    customBitrateValue = max(1, min(1000, newValue))
+                                    settings.bitrate = customBitrateValue * 1000 // Convert Mbps to kbps
+                                    settings.save()
+                                }
+                            Text("Mbps")
+                        }
+                        
+                        Slider(value: customBitrateSliderBinding, in: 1...1000, step: 1)
+                    }
                     
                     Picker(viewModel.localized("renderer"), selection: $settings.renderer) {
                         Text(viewModel.localized("uikit_classic")).tag(Renderer.classic)
@@ -134,13 +258,48 @@ struct SettingsView: View {
                         
                         Text(viewModel.localized("screen_curvature"))
                         Slider(value: $settings.realitykitRendererCurvature, in: (0...1), step: 0.001)
-                            .onChange(of: settings.realitykitRendererCurvature) { _, _ in settings.save() }
+                            .onChange(of: settings.realitykitRendererCurvature) { _, _ in
+                                // Debounce: delay save to avoid frequent writes
+                                saveTimer?.invalidate()
+                                saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                                    settings.save()
+                                }
+                            }
+                        
+                        Toggle(viewModel.localized("high_res_pinned_screen"), isOn: $settings.realitykitHighResPinnedScreen)
+                            .onChange(of: settings.realitykitHighResPinnedScreen) { _, _ in settings.save() }
+                        
+                        if settings.realitykitHighResPinnedScreen {
+                            Text(viewModel.localized("high_res_pinned_screen_footer"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 
                 Section(header: Text(viewModel.localized("stream_settings"))) {
                     Toggle(viewModel.localized("remember_stream_settings"), isOn: $settings.rememberStreamSettings)
                         .onChange(of: settings.rememberStreamSettings) { _, _ in settings.save() }
+                    
+                    Button(action: {
+                        showResetConfirmation = true
+                    }) {
+                        HStack {
+                            Image(systemName: "arrow.counterclockwise")
+                            Text(viewModel.localized("reset_to_defaults"))
+                        }
+                    }
+                    .confirmationDialog(viewModel.localized("reset_to_defaults"), isPresented: $showResetConfirmation, titleVisibility: .visible) {
+                        Button(viewModel.localized("reset_all_settings"), role: .destructive) {
+                            settings.resetAllSettings()
+                        }
+                        Button(viewModel.localized("reset_stream_settings_only"), role: .destructive) {
+                            settings.resetStreamSettingsOnly()
+                        }
+                        Button(viewModel.localized("cancel"), role: .cancel) { }
+                    } message: {
+                        Text(viewModel.localized("reset_to_defaults_message"))
+                    }
                 }
                 
                 if (settings.renderer == .classic) {
@@ -164,6 +323,28 @@ struct SettingsView: View {
                         
                         Toggle(viewModel.localized("statistics_overlay"), isOn: $settings.statsOverlay)
                             .onChange(of: settings.statsOverlay) { _, _ in settings.save() }
+                        
+                        HStack {
+                            Text(viewModel.localized("window_corner_radius"))
+                            Spacer()
+                            Text("\(Int(settings.uikitWindowCornerRadius))px")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                        Slider(value: $settings.uikitWindowCornerRadius, in: 0...50, step: 1)
+                            .onChange(of: settings.uikitWindowCornerRadius) { _, _ in
+                                // Debounce: delay save to avoid frequent writes
+                                saveTimer?.invalidate()
+                                saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                                    settings.save()
+                                }
+                            }
+                        
+                        if settings.uikitWindowCornerRadius > 0 {
+                            Text(viewModel.localized("corner_radius_clarity_warning"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 
@@ -220,6 +401,16 @@ struct SettingsView: View {
             }
             .navigationTitle(viewModel.localized("settings"))
             .onDisappear {
+                // Cancel pending save timer and save immediately
+                saveTimer?.invalidate()
+                saveTimer = nil
+                // Ensure custom values are saved before closing
+                if isCustomFramerate {
+                    settings.framerate = customFramerateValue
+                }
+                if isCustomBitrate {
+                    settings.bitrate = customBitrateValue * 1000 // Convert Mbps to kbps
+                }
                 settings.save()
             }
             .frame(width: 600)
@@ -227,6 +418,26 @@ struct SettingsView: View {
                 selectedAspectRatio = settings.resolution.aspectRatio
                 isCustomAspectRatio = !Self.resolutionTable.contains(settings.resolution)
                 
+// Check if framerate is custom (not in the table)
+// Also check if the value is valid (greater than 0)
+if settings.framerate > 0 && !Self.framerateTable.contains(settings.framerate) {
+    isCustomFramerate = true
+    customFramerateValue = settings.framerate
+} else {
+    isCustomFramerate = false
+    // Ensure customFramerateValue is set to current value if switching from custom
+    if settings.framerate > 0 {
+        customFramerateValue = settings.framerate
+    }
+}
+
+// Check if bitrate is custom (not in the table)
+if !Self.bitrateTable.contains(settings.bitrate) {
+    isCustomBitrate = true
+    customBitrateValue = settings.bitrate / 1000 // Convert kbps to Mbps
+} else {
+    isCustomBitrate = false
+}
                 // If the user has AV1 selected (e.g. from sync or previous device) but it's not supported here,
                 // fall back to Auto to prevent issues.
                 if settings.preferredCodec == .av1 && !VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1) {
@@ -353,7 +564,7 @@ extension SettingsView {
         Dictionary(grouping: resolutionTable, by: \.aspectRatio).sorted { $0.key < $1.key }
     }
 
-    static let framerateTable: [Int32] = [30, 60, 90, 120]
+    static let framerateTable: [Int32] = [24, 30, 60, 90, 100, 120]
 
     static let bitrateTable: [Int32] = [
             5000, 10000, 30000, 50000, 75000, 100000, 120000, 150000,
