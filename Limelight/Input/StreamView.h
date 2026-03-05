@@ -37,8 +37,9 @@ enum X1MouseButton : uint8_t;
 
 - (void) toggleKeyboard;
 
-
 #if !TARGET_OS_TV
+/// Switch between absolute (touchscreen) and relative (trackpad) touch mode at runtime
+- (void) setAbsoluteTouchMode:(BOOL)enabled;
 - (void) updateCursorLocation:(CGPoint)location isMouse:(BOOL)isMouse;
 #endif
 

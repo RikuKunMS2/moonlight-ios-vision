@@ -20,14 +20,17 @@ struct ImmersiveControlPanelView: View {
     // Spatial audio mode state
     @State private var spatialAudioMode: Bool = true
     
+    // Delay pinned sliders ~1.5s after pin completes to avoid animation stutter
+    @State private var showPinnedSliders = false
+    @State private var pinnedSlidersDelayTask: Task<Void, Never>?
+    
     // Check if HDR is enabled
     private var isHdrEnabled: Bool {
         controlState.needsHdr || viewModel.streamSettings.enableHdr
     }
     
-    var body: some View {
+    private var mainContent: some View {
         HStack(alignment: .top, spacing: 0) {
-            // Left: Environment and quick actions
             leftSection
                 .frame(width: 420)
                 .padding(40)
@@ -35,59 +38,101 @@ struct ImmersiveControlPanelView: View {
             Divider()
                 .padding(.vertical, 40)
             
-            if isHdrEnabled {
-                // Three-column layout when HDR is enabled
-                // Center: Display settings
-                centerSection
-                    .frame(width: 480)
-                    .padding(40)
-                
-                Divider()
-                    .padding(.vertical, 40)
-                
-                // Right: Spatial settings
-                rightSection
-                    .frame(width: 480)
-                    .padding(40)
-            } else {
-                // Two-column layout when HDR is disabled
-                // Center: Display settings + Spatial settings
-                VStack(alignment: .leading, spacing: 0) {
-                    centerSection
-                    
-                    Divider()
-                        .padding(.vertical, 28)
-                    
-                    rightSection
-                }
+            mainCenterColumn
+        }
+    }
+    
+    @ViewBuilder
+    private var mainCenterColumn: some View {
+        if isHdrEnabled {
+            centerSection
                 .frame(width: 480)
                 .padding(40)
+            Divider()
+                .padding(.vertical, 40)
+            rightSection
+                .frame(width: 480)
+                .padding(40)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                centerSection
+                Divider()
+                    .padding(.vertical, 28)
+                rightSection
             }
+            .frame(width: 480)
+            .padding(40)
         }
-        .frame(width: isHdrEnabled ? 1600 : 1100, height: 650) // Adjust width based on HDR state
-        .glassBackgroundEffect()
-        .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
-        .onChange(of: viewModel.streamSettings.brightness) { _, _ in debouncedSave() }
-        .onChange(of: viewModel.streamSettings.gamma) { _, _ in debouncedSave() }
-        .onChange(of: viewModel.streamSettings.saturation) { _, _ in debouncedSave() }
-        .onChange(of: viewModel.streamSettings.realitykitRendererCurvature) { _, _ in debouncedSave() }
-        .onChange(of: viewModel.streamSettings.dimPassthrough) { _, _ in debouncedSaveDimPassthrough() }
-        .onChange(of: controlState.immersiveScale) { _, _ in debouncedSave() }
-        .onChange(of: controlState.immersivePositionX) { _, _ in debouncedSave() }
-        .onChange(of: controlState.immersivePositionY) { _, _ in debouncedSave() }
-        .onChange(of: controlState.immersivePositionZ) { _, _ in debouncedSave() }
-        .onChange(of: controlState.immersionAmount) { _, _ in debouncedSave() }
-        .onChange(of: controlState.pinnedStageScale) { _, _ in debouncedSave() }
-        .onChange(of: controlState.pinnedStageHeight) { _, _ in debouncedSave() }
-        .onDisappear {
-            // Save immediately when view disappears
-            saveTimer?.invalidate()
-            saveTimer = nil
-            dimPassthroughSaveTimer?.invalidate()
-            dimPassthroughSaveTimer = nil
-            controlState.saveSettings?()
-            viewModel.streamSettings.save()
+    }
+    
+    private var styledContent: some View {
+        mainContent
+            .frame(width: isHdrEnabled ? 1600 : 1100, height: showPinnedSliders ? 730 : 650)
+            .glassBackgroundEffect()
+            .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
+            .overlay(alignment: .topTrailing) {
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        controlState.isControlPanelVisible = false
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title)
+                        .symbolRenderingMode(.hierarchical)
+                }
+                .buttonStyle(.plain)
+                .padding(40)
+            }
+    }
+
+    var body: some View {
+        styledContent
+            .modifier(ImmersivePanelSaveModifier(
+                viewModel: viewModel,
+                controlState: controlState,
+                debouncedSave: debouncedSave,
+                debouncedSaveDimPassthrough: debouncedSaveDimPassthrough
+            ))
+            .modifier(ImmersivePanelPinnedModifier(
+                controlState: controlState,
+                handlePinnedChange: handlePinnedChange,
+                handlePinningTransitioningChange: handlePinningTransitioningChange,
+                handleDisappear: handleDisappear
+            ))
+            .onAppear {
+                if controlState.isPinnedToStage && !controlState.isPinningTransitioning {
+                    showPinnedSliders = true
+                }
+            }
+    }
+
+    private func handlePinnedChange(_ isPinned: Bool) {
+        if !isPinned { showPinnedSliders = false; pinnedSlidersDelayTask?.cancel() }
+    }
+
+    private func handlePinningTransitioningChange(_ transitioning: Bool) {
+        if !transitioning && controlState.isPinnedToStage {
+            pinnedSlidersDelayTask?.cancel()
+            pinnedSlidersDelayTask = Task {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.25)) { showPinnedSliders = true }
+                }
+            }
+        } else if transitioning {
+            showPinnedSliders = false
+            pinnedSlidersDelayTask?.cancel()
         }
+    }
+
+    private func handleDisappear() {
+        saveTimer?.invalidate()
+        saveTimer = nil
+        dimPassthroughSaveTimer?.invalidate()
+        dimPassthroughSaveTimer = nil
+        controlState.saveSettings?()
+        viewModel.streamSettings.save()
     }
     
     // Debounce save: delay 0.5 seconds to avoid frequent writes
@@ -126,20 +171,6 @@ struct ImmersiveControlPanelView: View {
                     controlState.onEnvironmentChange?(newValue)
                 }
                 
-                // Semi-immersion toggle
-                if controlState.selectedEnvironmentState != .none {
-                    Toggle(isOn: Binding(
-                        get: { controlState.isSemiImmersionEnabled },
-                        set: { controlState.onSemiImmersionToggle?($0) }
-                    )) {
-                        Label(viewModel.localized("semi_immersion_mode"), systemImage: "dial.medium")
-                            .font(.subheadline)
-                    }
-                    .toggleStyle(.button)
-                    .buttonStyle(.bordered)
-                    .frame(maxWidth: .infinity)
-                    .disabled(controlState.isUpdatingImmersion)
-                }
             }
             
             // Quick actions
@@ -147,20 +178,23 @@ struct ImmersiveControlPanelView: View {
                 SectionHeader(title: viewModel.localized("quick_actions"), icon: "square.grid.2x2")
                 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    // Home
+                    // Home: push main overlay; Stop is on main menu
                     ModernActionTile(icon: "house.fill", title: viewModel.localized("home")) {
-                        controlState.closeAction?()
+                        (controlState.homeAction ?? controlState.closeAction)?()
                     }
                     
                     // Dimming
                     ModernActionTile(
-                        icon: viewModel.streamSettings.dimPassthrough ? "sun.max.fill" : "moon.fill",
-                        title: viewModel.streamSettings.dimPassthrough ? viewModel.localized("restore_brightness") : viewModel.localized("toggle_dimming"),
-                        isActive: viewModel.streamSettings.dimPassthrough
+                        icon: controlState.dimLevel == 0 ? "moon.fill" : "sun.max.fill",
+                        title: viewModel.localized("toggle_dimming"),
+                        isActive: controlState.dimLevel != 0
                     ) {
                         withAnimation {
-                            viewModel.streamSettings.dimPassthrough.toggle()
-                            // Note: onChange will trigger debouncedSaveDimPassthrough()
+                            if let toggle = controlState.toggleDimmingPickerAction {
+                                toggle()
+                            } else {
+                                viewModel.streamSettings.dimPassthrough.toggle()
+                            }
                         }
                     }
                     
@@ -173,22 +207,11 @@ struct ImmersiveControlPanelView: View {
                         withAnimation {
                             spatialAudioMode.toggle()
                             if spatialAudioMode {
-                                // Switch to spatial audio (sound from screen)
                                 AudioHelpers.fixAudioForSurroundForCurrentWindow()
                             } else {
-                                // Switch to direct audio (sound from ears)
                                 AudioHelpers.fixAudioForDirectStereo()
                             }
                         }
-                    }
-                    
-                    // Keyboard
-                    ModernActionTile(
-                        icon: "keyboard.fill",
-                        title: viewModel.localized("virtual_keyboard"),
-                        isActive: controlState.isKeyboardActive
-                    ) {
-                        withAnimation { controlState.toggleKeyboardAction?() }
                     }
                     
                     // 3D
@@ -207,6 +230,15 @@ struct ImmersiveControlPanelView: View {
                         isActive: false
                     ) {
                         sendGamepadHomeButton()
+                    }
+                    
+                    // Stats Overlay
+                    ModernActionTile(
+                        icon: viewModel.streamSettings.statsOverlay ? "chart.bar.fill" : "chart.bar",
+                        title: viewModel.localized("stats_overlay"),
+                        isActive: viewModel.streamSettings.statsOverlay
+                    ) {
+                        withAnimation { viewModel.streamSettings.statsOverlay.toggle() }
                     }
                 }
                 
@@ -228,17 +260,17 @@ struct ImmersiveControlPanelView: View {
                     SteppedSliderRow(
                         title: viewModel.localized("brightness"),
                         value: $viewModel.streamSettings.brightness,
-                        range: 1.0...10.0,
-                        defaultValue: 4.0,
-                        format: "%.1f",
+                        range: -10.0...10.0,
+                        defaultValue: 1.0,
+                        format: "%.2f",
                         step: 0.01
                     )
                     
                     SteppedSliderRow(
                         title: viewModel.localized("contrast"),
                         value: $viewModel.streamSettings.gamma,
-                        range: 0.5...5.0,
-                        defaultValue: 2.0,
+                        range: -10.0...10.0,
+                        defaultValue: 1.0,
                         format: "%.2f",
                         step: 0.01
                     )
@@ -246,8 +278,8 @@ struct ImmersiveControlPanelView: View {
                     SteppedSliderRow(
                         title: viewModel.localized("saturation"),
                         value: $viewModel.streamSettings.saturation,
-                        range: 0.0...4.0,
-                        defaultValue: 1.70,
+                        range: -10.0...10.0,
+                        defaultValue: 1.0,
                         format: "%.2f",
                         step: 0.01
                     )
@@ -261,6 +293,16 @@ struct ImmersiveControlPanelView: View {
                     defaultValue: 0.0,
                     format: "%.3f",
                     step: 0.01
+                )
+                
+                // Screen corner radius
+                SteppedSliderRow(
+                    title: viewModel.localized("screen_corner_radius"),
+                    value: $viewModel.streamSettings.realitykitScreenCornerRadius,
+                    range: 0...0.05,
+                    defaultValue: 0.018,
+                    format: "%.3f",
+                    step: 0.001
                 )
             }
         }
@@ -324,8 +366,8 @@ struct ImmersiveControlPanelView: View {
                     )
                 }
                 
-                // Pinned screen size and height - only shown when pinned and animation completes (avoid animation stutter)
-                if controlState.isPinnedToStage && !controlState.isPinningTransitioning {
+                // Pinned screen size and height - delayed ~1.5s after pin completes to avoid animation stutter
+                if controlState.isPinnedToStage && !controlState.isPinningTransitioning && showPinnedSliders {
                     SteppedSliderRow(
                         title: viewModel.localized("pinned_screen_size"),
                         value: $controlState.pinnedStageScale,
@@ -344,11 +386,11 @@ struct ImmersiveControlPanelView: View {
                     )
                 }
                 
-                SteppedSliderRow(
-                    title: viewModel.localized("screen_scale"),
-                    value: $controlState.immersiveScale,
-                    range: 0.05...5.0,
-                    defaultValue: 1.0,
+                    SteppedSliderRow(
+                        title: viewModel.localized("screen_scale"),
+                        value: $controlState.immersiveScale,
+                        range: 0.05...5.0,
+                        defaultValue: 0.8,
                     format: "%.2fx",
                     disabled: controlState.isPinnedToStage,
                     step: 0.01
@@ -375,6 +417,16 @@ struct ImmersiveControlPanelView: View {
                     format: "%.2fm",
                     disabled: controlState.isPinnedToStage,
                     step: 0.01
+                )
+                
+                SteppedSliderRow(
+                    title: viewModel.localized("screen_tilt"),
+                    value: $controlState.tiltAngle,
+                    range: -60.0...60.0,
+                    defaultValue: 0.0,
+                    format: "%.0f°",
+                    disabled: controlState.isPinnedToStage,
+                    step: 1.0
                 )
             }
         }
@@ -426,6 +478,47 @@ struct ImmersiveControlPanelView: View {
     }
 }
 
+// MARK: - Immersive Panel Change Modifiers (split to avoid compiler type-check timeout)
+
+private struct ImmersivePanelSaveModifier: ViewModifier {
+    @ObservedObject var viewModel: MainViewModel
+    @ObservedObject var controlState: StreamControlState
+    let debouncedSave: () -> Void
+    let debouncedSaveDimPassthrough: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: viewModel.streamSettings.brightness) { _, _ in debouncedSave() }
+            .onChange(of: viewModel.streamSettings.gamma) { _, _ in debouncedSave() }
+            .onChange(of: viewModel.streamSettings.saturation) { _, _ in debouncedSave() }
+            .onChange(of: viewModel.streamSettings.realitykitRendererCurvature) { _, _ in debouncedSave() }
+            .onChange(of: viewModel.streamSettings.realitykitScreenCornerRadius) { _, _ in debouncedSave() }
+            .onChange(of: viewModel.streamSettings.dimPassthrough) { _, _ in debouncedSaveDimPassthrough() }
+            .onChange(of: controlState.immersiveScale) { _, _ in debouncedSave() }
+            .onChange(of: controlState.immersivePositionX) { _, _ in debouncedSave() }
+            .onChange(of: controlState.immersivePositionY) { _, _ in debouncedSave() }
+            .onChange(of: controlState.immersivePositionZ) { _, _ in debouncedSave() }
+            .onChange(of: controlState.immersionAmount) { _, _ in debouncedSave() }
+            .onChange(of: controlState.pinnedStageScale) { _, _ in debouncedSave() }
+            .onChange(of: controlState.pinnedStageHeight) { _, _ in debouncedSave() }
+            .onChange(of: controlState.isInteractive) { _, _ in debouncedSave() }
+    }
+}
+
+private struct ImmersivePanelPinnedModifier: ViewModifier {
+    @ObservedObject var controlState: StreamControlState
+    let handlePinnedChange: (Bool) -> Void
+    let handlePinningTransitioningChange: (Bool) -> Void
+    let handleDisappear: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: controlState.isPinnedToStage) { _, newValue in handlePinnedChange(newValue) }
+            .onChange(of: controlState.isPinningTransitioning) { _, newValue in handlePinningTransitioningChange(newValue) }
+            .onDisappear(perform: handleDisappear)
+    }
+}
+
 // MARK: - Helper Views
 
 /// Unified section header
@@ -450,20 +543,34 @@ struct ModernActionTile: View {
     let title: String
     var isActive: Bool = false
     var disabled: Bool = false
+    /// When true, keep uniform style (no white background when active), only content changes
+    var keepUniformStyle: Bool = false
     let action: () -> Void
+    
+    private var effectiveIconColor: Color {
+        keepUniformStyle ? Color.primary : (isActive ? Color.black : Color.primary)
+    }
+    
+    private var effectiveTextColor: Color {
+        keepUniformStyle ? Color.secondary : (isActive ? Color.black.opacity(0.8) : Color.secondary)
+    }
+    
+    private var effectiveBackground: Color {
+        keepUniformStyle ? Color.black.opacity(0.2) : (isActive ? Color.white : Color.black.opacity(0.2))
+    }
     
     var body: some View {
         Button(action: action) {
             VStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 24))
-                    .foregroundStyle(isActive ? Color.black : Color.primary)
+                    .foregroundStyle(effectiveIconColor)
                     .contentTransition(.symbolEffect(.replace))
                 
                 Text(title)
                     .font(.caption)
                     .fontWeight(.medium)
-                    .foregroundStyle(isActive ? Color.black.opacity(0.8) : Color.secondary)
+                    .foregroundStyle(effectiveTextColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -471,7 +578,7 @@ struct ModernActionTile: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(isActive ? Color.white : Color.black.opacity(0.2))
+                    .fill(effectiveBackground)
             )
         }
         .buttonStyle(.plain)

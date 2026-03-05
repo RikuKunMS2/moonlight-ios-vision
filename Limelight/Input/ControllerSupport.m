@@ -1374,6 +1374,17 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     return _controllers.count;
 }
 
++(int) getGamepadMaskForSlot:(int)slot
+{
+    return 1 << slot;
+}
+
+-(void) setSwapABXYButtons:(BOOL)swap
+{
+    _swapABXYButtons = swap;
+    Log(LOG_I, @"Swap A/B X/Y buttons updated to: %d", swap);
+}
+
 -(id) initWithConfig:(StreamConfiguration*)streamConfig delegate:(id<ControllerSupportDelegate>)delegate
 {
     self = [super init];

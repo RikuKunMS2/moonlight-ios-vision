@@ -50,6 +50,19 @@ class AudioHelpers {
         }
     }
 
+    static func fixAudioForScene(identifier: String) {
+        configureAudioSession(exclusive: true)
+        
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            print("AudioHelpers - Anchoring audio to scene: \(identifier)")
+            try audioSession.setPreferredOutputNumberOfChannels(audioSession.maximumOutputNumberOfChannels)
+            try audioSession.setIntendedSpatialExperience(.headTracked(soundStageSize: .medium, anchoringStrategy: .scene(identifier: identifier)))
+        } catch {
+            print("AudioHelpers - Failed to anchor to scene \(identifier): \(error)")
+        }
+    }
+
     static func fixAudioForSurroundForUIKitWindow(_ window: UIWindow, exclusive: Bool = true) {
         configureAudioSession(exclusive: exclusive)
 

@@ -69,12 +69,23 @@
 // Stream Status
 "stream_stopped" = "Stream stopped";
 "stream_stopped_message" = "Please close this window before starting a new stream from the main menu.";
+"reconnecting" = "Reconnecting...";
+"reconnect_attempt" = "Attempt %d of %d";
 "open_main_menu" = "Open Main Menu";
+"resume_stream" = "Resume";
 "stream_error" = "Stream error";
 "unknown_error" = "Unknown error";
 "close" = "Close";
+"select_stream_mode" = "Select Stream Mode";
+"stream_mode_uikit" = "Flat window";
+"stream_mode_uikit_desc" = "UIKit";
+"stream_mode_volume" = "Volume";
+"stream_mode_volume_desc" = "3D curved";
+"stream_mode_immersive" = "Immersive";
+"stream_mode_immersive_desc" = "Full space";
 "keyboard_active" = "Keyboard Active";
 "tap_video_to_type" = "Tap video to type";
+"uikit_keyboard_hint" = "Tap screen to open keyboard";
 
 // RealityKit Controls
 "boost_luminance" = "Boost / Luminance";
@@ -118,14 +129,15 @@
 "immersive_mode" = "Immersive Mode (Movable Screen)";
 "animate_screen_curve" = "Animate screen curve";
 "screen_curvature" = "Screen curvature";
-"high_res_pinned_screen" = "High Resolution Pinned Screen";
-"high_res_pinned_screen_footer" = "⚠️ May impact performance. Improves clarity when screen is pinned to stage.";
+"screen_corner_radius" = "Screen corner radius";
 "uikit_settings" = "UIKit (Classic) Renderer Settings";
 "window_corner_radius" = "Window Corner Radius";
 "corner_radius_clarity_warning" = "This may affect stream clarity";
 "touch_mode" = "Touch Mode";
 "touchpad" = "Touchpad";
 "touchscreen" = "Touchscreen";
+"input_mode_trackpad" = "Trackpad";
+"input_mode_gaze_input" = "Gaze Input";
 "on_screen_controls" = "On-Screen Controls";
 "off" = "Off";
 "auto" = "Auto";
@@ -210,4 +222,35 @@
 "unpin_studio" = "Unpin to Studio";
 "pin_studio" = "Pin to Studio";
 "gamepad_home" = "Gamepad Home";
+"stats_overlay" = "Stats Overlay";
+"screen_tilt" = "Screen Tilt";
+"hide_panel" = "Hide Panel";
+"semi_short" = "Semi";
+"full_short" = "Full";
+"dimming" = "Dimming";
+"dim_night" = "Night";
+"dim_reactive_v1" = "Reactive V1";
+"dim_eclipse" = "Eclipse";
+"dim_midnight" = "Midnight";
+"dim_twilight" = "Twilight";
+"dim_dawn" = "Dawn";
+"dim_sunrise" = "Sunrise";
+"dim_woodland" = "Woodland";
+"dim_reactive_v2" = "Reactive V2";
+"dim_starfield" = "Starfield";
+"dim_desert" = "Desert";
+"dim_off" = "Dimming Off";
 
+// Floating hints & popups
+"tap_reveal_controls" = "Tap to reveal controls, tap again to select";
+"switched_to_screen_adjust" = "Switched to Screen Adjust Mode";
+"input_mode_screen_adjust" = "Screen Adjust Mode";
+"input_mode_controller" = "Controller Mode";
+"input_mode_gaze" = "Gaze Control Mode";
+"input_mode_touch" = "Touch Control Mode";
+"standard_display" = "Standard Display";
+"3d_short" = "3D";
+"hide_stats" = "Hide Stats";
+"show_stats" = "Show Stats";
+"hide_keyboard" = "Hide Keyboard";
+"show_keyboard" = "Show Keyboard";

@@ -38,6 +38,9 @@ import os
     
     /// Tracks whether the user prefers semi-immersion (Digital Crown active) in Studio mode.
     public var isSemiImmersionEnabled: Bool = false
+    
+    /// Called when environment load completes and docking anchor is available (for e.g. updating canPinToStage).
+    public var onLoadComplete: (() -> Void)?
 
     public var surroundingsEffect: SurroundingsEffect? {
         switch environmentStateHandler.activeState {
@@ -90,6 +93,7 @@ import os
                 isLoading = false
                 isLoaded = true
                 print("Environment loaded successfully")
+                onLoadComplete?()
             } catch {
                 print("Failed to load Studio bundle: \(error.localizedDescription)")
                 isLoading = false

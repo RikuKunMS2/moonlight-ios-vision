@@ -12,6 +12,7 @@ import SwiftUI
 struct MainContentView: View {
     @EnvironmentObject private var viewModel: MainViewModel
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var selectedHost: TemporaryHost?
 
@@ -68,7 +69,33 @@ struct MainContentView: View {
                     .padding() // Add some bottom padding for visual spacing
                     .buttonStyle(.plain) // Remove button styling to make it look like text
                 }
-                .toolbar { // Keep the toolbar as is for now
+                .toolbar {
+                    if viewModel.activelyStreaming {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(viewModel.localized("resume_stream"), systemImage: "play.circle.fill") {
+                                NotificationCenter.default.post(name: Notification.Name("ResumeStreamFromMenu"), object: nil)
+                            }
+                        }
+                        ToolbarItem(placement: .destructiveAction) {
+                            Button(viewModel.localized("stop"), systemImage: "stop.circle.fill") {
+                                Task {
+                                    NotificationCenter.default.post(name: Notification.Name("RequestStreamCloseFromMainMenu"), object: nil)
+                                    viewModel.userDidRequestDisconnect()
+                                    // Dismiss volume/classic window from main view (reliable when main is in front)
+                                    // Use dismissWindow(id:) without value: StreamConfiguration lacks Hashable, so value-based dismiss fails to match
+                                    if viewModel.streamSettings.renderer == .realitykit && !viewModel.streamSettings.realitykitImmersiveMode {
+                                        dismissWindow(id: "realitykitStreamingWindow")
+                                    } else if viewModel.streamSettings.renderer == .classic {
+                                        dismissWindow(id: "classicStreamingWindow")
+                                    }
+                                    await viewModel.waitForTeardown(timeout: 1.2)
+                                    if viewModel.streamState != .idle {
+                                        viewModel.forceResetStreamLifecycleIfNeeded()
+                                    }
+                                }
+                            }
+                        }
+                    }
                     ToolbarItem(placement: .primaryAction) {
                         Button(viewModel.localized("add_server"), systemImage: "plus") {
                             addingHost = true
@@ -135,10 +162,14 @@ struct MainContentView: View {
                 //if !isRefreshingDiscovery { // Only begin refresh if not already toggled on
                 //    viewModel.beginRefresh()
                 //}
-            }.onDisappear {
-                //if !isRefreshingDiscovery { // Only stop refresh if not toggled on and still running
-                    viewModel.stopRefresh()
-                //}
+            }
+            .onChange(of: scenePhase) { oldValue, newValue in
+                if oldValue == .active && (newValue == .inactive || newValue == .background) {
+                    NotificationCenter.default.post(name: Notification.Name("MainViewWindowClosed"), object: nil)
+                }
+            }
+            .onDisappear {
+                viewModel.stopRefresh()
                 NotificationCenter.default.removeObserver(self)
             }
 

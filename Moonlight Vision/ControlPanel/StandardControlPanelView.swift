@@ -11,9 +11,15 @@ import SwiftUI
 struct StandardControlPanelView: View {
     @EnvironmentObject private var viewModel: MainViewModel
     
+    /// Home: push main (stream stays). Stop: full teardown. If nil, closeAction used for both.
+    var homeAction: (() -> Void)? = nil
+    var stopAction: (() -> Void)? = nil
     let closeAction: () -> Void
     let toggleKeyboardAction: (() -> Void)?
     let isKeyboardActive: Bool
+    
+    /// UIKit only: toggle input mode (touchscreen vs trackpad)
+    var toggleInputModeAction: (() -> Void)? = nil
     
     // RealityKit spatial adjustment parameters (optional, only for RealityKit non-immersive mode)
     var depthOffset: Binding<Float>? = nil
@@ -115,9 +121,9 @@ struct StandardControlPanelView: View {
         HStack(spacing: 20) {
             // Quick action buttons (horizontal arrangement, square)
             HStack(spacing: 12) {
-                // Home
+                // Home (push main when homeAction set, else full teardown)
                 ModernActionTile(icon: "house.fill", title: viewModel.localized("home")) {
-                    closeAction()
+                    (homeAction ?? closeAction)()
                 }
                 .frame(width: 80, height: 80)
                 
@@ -155,14 +161,49 @@ struct StandardControlPanelView: View {
                 }
                 .frame(width: 80, height: 80)
                 
+                // Stats overlay
+                ModernActionTile(
+                    icon: viewModel.streamSettings.statsOverlay ? "chart.bar.fill" : "chart.bar",
+                    title: viewModel.localized("stats_overlay"),
+                    isActive: viewModel.streamSettings.statsOverlay
+                ) {
+                    withAnimation {
+                        viewModel.streamSettings.statsOverlay.toggle()
+                        viewModel.streamSettings.save()
+                        NotificationCenter.default.post(
+                            name: Notification.Name("UIKitStatsOverlayChanged"),
+                            object: nil,
+                            userInfo: ["enabled": viewModel.streamSettings.statsOverlay]
+                        )
+                    }
+                }
+                .frame(width: 80, height: 80)
+                
                 // Keyboard
                 if let toggleAction = toggleKeyboardAction {
                     ModernActionTile(
-                        icon: "keyboard.fill",
+                        icon: isKeyboardActive ? "keyboard.fill" : "keyboard",
                         title: viewModel.currentLanguage == .english ? viewModel.localized("virtual_keyboard_short") : viewModel.localized("virtual_keyboard"),
                         isActive: isKeyboardActive
                     ) {
                         withAnimation { toggleAction() }
+                    }
+                    .frame(width: 80, height: 80)
+                }
+                
+                // Input mode: eye tracking vs trackpad (UIKit only)
+                if let toggleInput = toggleInputModeAction {
+                    ModernActionTile(
+                        icon: viewModel.streamSettings.absoluteTouchMode ? "eye.fill" : "rectangle",
+                        title: viewModel.streamSettings.absoluteTouchMode ? viewModel.localized("input_mode_gaze_input") : viewModel.localized("input_mode_trackpad"),
+                        isActive: viewModel.streamSettings.absoluteTouchMode,
+                        keepUniformStyle: true
+                    ) {
+                        withAnimation {
+                            viewModel.streamSettings.absoluteTouchMode.toggle()
+                            viewModel.streamSettings.save()
+                            toggleInput()
+                        }
                     }
                     .frame(width: 80, height: 80)
                 }
@@ -233,9 +274,9 @@ struct StandardControlPanelView: View {
                 }
             
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    // Home
+                    // Home (push main when homeAction set, else full teardown)
                     ModernActionTile(icon: "house.fill", title: viewModel.localized("home")) {
-                        closeAction()
+                        (homeAction ?? closeAction)()
                     }
                     
                     // Dimming
@@ -269,7 +310,7 @@ struct StandardControlPanelView: View {
                     // Keyboard
                     if let toggleAction = toggleKeyboardAction {
                         ModernActionTile(
-                            icon: "keyboard.fill",
+                            icon: isKeyboardActive ? "keyboard.fill" : "keyboard",
                             title: viewModel.localized("virtual_keyboard"),
                             isActive: isKeyboardActive
                         ) {
@@ -313,17 +354,17 @@ struct StandardControlPanelView: View {
                     SteppedSliderRow(
                         title: viewModel.localized("brightness"),
                         value: $viewModel.streamSettings.brightness,
-                        range: 1.0...10.0,
-                        defaultValue: 4.0,
-                        format: "%.1f",
+                        range: -10.0...10.0,
+                        defaultValue: 1.0,
+                        format: "%.2f",
                         step: 0.01
                     )
                     
                     SteppedSliderRow(
                         title: viewModel.localized("contrast"),
                         value: $viewModel.streamSettings.gamma,
-                        range: 0.5...5.0,
-                        defaultValue: 2.0,
+                        range: -10.0...10.0,
+                        defaultValue: 1.0,
                         format: "%.2f",
                         step: 0.01
                     )
@@ -331,8 +372,8 @@ struct StandardControlPanelView: View {
                     SteppedSliderRow(
                         title: viewModel.localized("saturation"),
                         value: $viewModel.streamSettings.saturation,
-                        range: 0.0...4.0,
-                        defaultValue: 1.70,
+                        range: -10.0...10.0,
+                        defaultValue: 1.0,
                         format: "%.2f",
                         step: 0.01
                     )

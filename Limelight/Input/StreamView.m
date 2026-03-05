@@ -19,6 +19,9 @@
 
 static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 
+// Zero-width space (U+200B) as sentinel
+static NSString * const kKeyboardSentinel = @"\u200B";
+
 @implementation StreamView {
     OnScreenControls* onScreenControls;
     
@@ -351,6 +354,22 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 
 #endif
 
+#if !TARGET_OS_TV
+- (void)setAbsoluteTouchMode:(BOOL)enabled {
+    if (enabled) {
+        self->touchHandler = [[AbsoluteTouchHandler alloc] initWithView:self];
+        [onScreenControls setLevel:OnScreenControlsLevelOff];
+        Log(LOG_I, @"Switched to absolute touch mode (touchscreen)");
+    } else {
+        self->touchHandler = [[RelativeTouchHandler alloc] initWithView:self];
+        TemporarySettings* settings = [[[DataManager alloc] init] getSettings];
+        OnScreenControlsLevel level = (OnScreenControlsLevel)settings.onscreenControls;
+        [onScreenControls setLevel:level];
+        Log(LOG_I, @"Switched to relative touch mode (trackpad)");
+    }
+}
+#endif
+
 - (void)toggleKeyboard {
     if (isInputingText) {
         Log(LOG_D, @"Closing the keyboard");
@@ -360,7 +379,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         Log(LOG_D, @"Opening the keyboard");
         // Prepare the textbox used to capture keyboard events.
         keyInputField.delegate = self;
-        keyInputField.text = @"0";
+        keyInputField.text = kKeyboardSentinel;
 #if !TARGET_OS_TV && !TARGET_OS_VISION
         // Prepare the toolbar above the keyboard for more options
         UIToolbar *customToolbarView = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, self.bounds.size.width, 44)];
@@ -385,6 +404,9 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         [keyInputField.undoManager disableUndoRegistration];
         
         isInputingText = true;
+#if TARGET_OS_VISION
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"UIKitKeyboardActiveChanged" object:nil userInfo:@{@"active": @YES}];
+#endif
     }
 }
 
@@ -820,6 +842,10 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
         LiSendKeyboardEvent([keyCode shortValue], KEY_ACTION_UP, 0);
     }
     [keysDown removeAllObjects];
+    isInputingText = false;
+#if TARGET_OS_VISION
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"UIKitKeyboardActiveChanged" object:nil userInfo:@{@"active": @NO}];
+#endif
 }
 
 - (void)onKeyboardPressed:(UITextField *)textField {
@@ -831,7 +857,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
             usleep(50 * 1000);
             LiSendKeyboardEvent(0x08, KEY_ACTION_UP, 0);
         } else {
-            // Character 0 will be our known sentinel value
+            // Index 0 is our sentinel value (zero-width space), skip it when sending
             
             // Check if any characters exist which can't be represented in a basic key event
             for (int i = 1; i < [inputText length]; i++) {
@@ -840,8 +866,9 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
                     // We found an unknown key, so send the entire string as UTF-8
                     const char* utf8String = [inputText UTF8String];
                     
-                    // Skip the first character which is our sentinel
-                    LiSendUtf8TextEvent(utf8String + 1, (int)strlen(utf8String) - 1);
+                    // Skip the sentinel character (variable bytes for Unicode)
+                    NSUInteger sentinelBytes = [kKeyboardSentinel lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+                    LiSendUtf8TextEvent(utf8String + sentinelBytes, (int)strlen(utf8String) - (int)sentinelBytes);
                     return;
                 }
             }
@@ -856,7 +883,7 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     });
     
     // Reset text field back to known state
-    textField.text = @"0";
+    textField.text = kKeyboardSentinel;
     
     // Move the insertion point back to the end of the text box
     UITextRange *textRange = [textField textRangeFromPosition:textField.endOfDocument toPosition:textField.endOfDocument];

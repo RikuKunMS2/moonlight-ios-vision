@@ -23,9 +23,13 @@
 typedef void (^noargCallbackType)(void);
 @property (nonatomic, strong) noargCallbackType connectedCallback;
 @property (nonatomic, strong) noargCallbackType disconnectedCallback;
+#if TARGET_OS_VISION
+@property (nonatomic, assign) BOOL uikitReconnectingForRetry;
+#endif
 
 -(void)updatePreferredDisplayMode:(BOOL)streamActive;
 - (void)stopStream;
-- (void)toggleKeyboard; // <-- ADD THIS
+- (void)toggleKeyboard;
+- (void)setAbsoluteTouchMode:(BOOL)enabled;
 
 @end

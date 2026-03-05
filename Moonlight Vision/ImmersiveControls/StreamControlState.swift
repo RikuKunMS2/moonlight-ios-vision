@@ -19,10 +19,10 @@ class StreamControlState: ObservableObject {
     @Published var isControlPanelVisible: Bool = false
     
     // MARK: - Screen Control
-    @Published var immersiveScale: Float = 1.8
+    @Published var immersiveScale: Float = 0.8
     @Published var immersivePositionX: Float = 0
-    @Published var immersivePositionY: Float = 1.5
-    @Published var immersivePositionZ: Float = -2.0
+    @Published var immersivePositionY: Float = 1.0
+    @Published var immersivePositionZ: Float = -1.5
     @Published var immersionAmount: Float = 0.0
     @Published var isInteractive: Bool = false
     
@@ -34,22 +34,29 @@ class StreamControlState: ObservableObject {
     // MARK: - Display Control
     @Published var isKeyboardActive: Bool = false
     @Published var videoMode: VideoMode = .standard2D
+    @Published var dimLevel: Int = 0
+    @Published var tiltAngle: Float = 0.0
     
     // MARK: - Pin to Stage Control
     @Published var isPinnedToStage: Bool = false
     @Published var isPinningTransitioning: Bool = false
     @Published var canPinToStage: Bool = false
-    @Published var pinnedStageScale: Float = 1.0 // Screen scale when pinned
-    @Published var pinnedStageHeight: Float = 0.0 // Vertical offset when pinned (meters)
+    @Published var pinnedStageScale: Float = 5.0 // Screen scale when pinned (default 5x)
+    @Published var pinnedStageHeight: Float = 0.75 // Vertical offset when pinned (default 0.75m)
     
     // MARK: - Action Callbacks
-    var closeAction: (() -> Void)?
+    /// Home: push main overlay (stream stays). Stop: full teardown.
+    var homeAction: (() -> Void)?
+    var stopAction: (() -> Void)?
+    var closeAction: (() -> Void)?  // Legacy fallback
     var toggleKeyboardAction: (() -> Void)?
+    var toggleDimmingPickerAction: (() -> Void)?
     var onEnvironmentChange: ((EnvironmentStateType) -> Void)?
     var onSemiImmersionToggle: ((Bool) -> Void)?
     var onPinToggle: (() -> Void)?
     var saveSettings: (() -> Void)?
     var toggle3DMode: (() -> Void)?
+    var onOverlayHint: ((String) -> Void)?
     
     // MARK: - Controller Support
     weak var controllerSupport: ControllerSupport?

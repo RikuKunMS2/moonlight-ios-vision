@@ -1,16 +1,26 @@
-//
-//  Shaders.metal
-//  Moonlight
-//
-//  Copyright © 2025 Moonlight Game Streaming Project. All rights reserved.
-//
-
 #include <metal_stdlib>
 #include <simd/simd.h>
-
 using namespace metal;
 
-// MARK: - Structs
+// MARK: - Constants
+constant float REFERENCE_WHITE_NITS = 200.0;
+constant float3 kRec709Luma = float3(0.2126, 0.7152, 0.0722);
+
+// MARK: - Structures
+struct ColorEnhancementUniforms {
+    float saturation;
+    float contrast;
+    float warmth;
+    float padding1;
+};
+
+struct FullHDRParams {
+    float boost;
+    float contrast;
+    float saturation;
+    float brightness;
+    int   mode;
+};
 
 struct CopyVertexOut {
     float4 position [[position]];
@@ -18,149 +28,257 @@ struct CopyVertexOut {
 };
 
 struct HDRParams {
-    float boost;      // Luminance Boost / Gain
-    float gamma;      // Gamma correction
-    float saturation; // Color intensity
-    float brightness; // Brightness Offset (Black level lift)
+    uint presetIndex;
+    uint isPQ;
+    uint isBT2020Matrix;
+    uint isBT2020Primaries;
 };
 
+// MARK: - Matrices
+constant float3x3 BT2020_TO_P3 = float3x3(
+    float3( 1.6605, -0.1246, -0.0182),
+    float3(-0.5876,  1.1329, -0.1006),
+    float3(-0.0729, -0.0083,  1.1188)
+);
+
+constant float3x3 BT709_TO_P3 = float3x3(
+    float3( 0.6069, 0.1735, 0.2006),
+    float3( 0.2989, 0.5866, 0.1144),
+    float3( 0.0000, 0.0661, 1.1150)
+);
+
+// MARK: - Helper Functions
+inline float pqInv(float p) {
+    const float m1 = 0.1593017578125;
+    const float m2 = 78.84375;
+    const float c1 = 0.8359375;
+    const float c2 = 18.8515625;
+    const float c3 = 18.6875;
+    p = clamp(p, 0.0, 1.0);
+    float n = pow(p, 1.0 / m2);
+    float num = max(n - c1, 0.0);
+    float den = max(c2 - c3 * n, 1e-4);
+    return pow(num / den, 1.0 / m1) * 10000.0;
+}
+
+inline float3 pqInv(float3 p) {
+    return float3(pqInv(p.r), pqInv(p.g), pqInv(p.b));
+}
+
+inline float expandY_10bit(float y) {
+    return clamp((y - 0.06256) * 1.16780, 0.0, 1.0);
+}
+
+inline float2 expandCbCr_10bit(float2 uv) {
+    return (uv - float2(0.5, 0.5)) * 1.14170;
+}
+
+inline float roundedRectSDF(float2 centerPos, float2 size, float radius) {
+    return length(max(abs(centerPos) - size + radius, 0.0)) - radius;
+}
+
+// MARK: - Color Grading
+inline float3 applyVisionProGrading(float3 color, ColorEnhancementUniforms params) {
+    float luma = dot(color, kRec709Luma);
+    float3 saturated = mix(float3(luma), color, params.saturation);
+    float3 contrasted = (saturated - 0.5) * params.contrast + 0.5;
+
+    float3 warmed = contrasted;
+    if (abs(params.warmth) > 0.001) {
+        warmed.r = contrasted.r * (1.0 + params.warmth * 0.5);
+        warmed.b = contrasted.b * (1.0 - params.warmth * 0.5);
+        warmed = clamp(warmed, 0.0, 1.0);
+    }
+
+    return clamp(warmed, 0.0, 1.0);
+}
+
+inline float3 applyVisionProGrading(float3 color, constant ColorEnhancementUniforms& paramsConst) {
+    ColorEnhancementUniforms local = paramsConst;
+    return applyVisionProGrading(color, local);
+}
+
 // MARK: - Vertex Shader
-
-vertex CopyVertexOut copyVertexShader(ushort vertexID [[vertex_id]]) {
-    CopyVertexOut out;
-    // Generates a full screen quad from 4 vertices (Triangle Strip)
-    float2 uv = float2(float((vertexID << ushort(1)) & 2u), float(vertexID & ushort(2)) * 0.5);
-    out.position = float4((uv * float2(2.0, -2.0)) + float2(-1.0, 1.0), 0.0, 1.0);
-    out.uv = uv;
-    return out;
+vertex CopyVertexOut copyVertexShader(ushort vid [[vertex_id]]) {
+    CopyVertexOut o;
+    float2 uv = float2(float((vid << 1) & 2u), float(vid & 2u) * 0.5);
+    o.position = float4((uv * float2(2.0, -2.0)) + float2(-1.0, 1.0), 0.0, 1.0);
+    o.uv = uv;
+    return o;
 }
 
-// MARK: - Math Helpers
+// MARK: - Curved Display Shaders (Standard Linear - Optimized for VR)
+fragment half4 copyFragmentShaderHDR_EDR(
+    CopyVertexOut in [[stage_in]],
+    texture2d<float> yTex [[texture(0)]],
+    texture2d<float> cbcrTex [[texture(1)]],
+    constant HDRParams &params [[buffer(0)]],
+    constant FullHDRParams &full [[buffer(1)]],
+    constant ColorEnhancementUniforms &enhancements [[buffer(2)]]
+) {
+    constexpr sampler s(coord::normalized, address::clamp_to_edge, filter::linear);
 
-// Helper: Converts SMPTE ST.2084 (PQ) encoded values (0.0-1.0) to Linear Nits (0-10000)
-float3 PQtoLinearNits(float3 pq) {
-    // Constants for SMPTE ST.2084 (PQ)
-    float m1 = 2610.0 / 4096.0 / 4.0;
-    float m2 = 2523.0 / 4096.0 * 128.0;
-    float c1 = 3424.0 / 4096.0;
-    float c2 = 2413.0 / 4096.0 * 32.0;
-    float c3 = 2392.0 / 4096.0 * 32.0;
-    
-    // SAFEGUARD: Ensure input never exceeds 1.0 or drops below 0.0 to prevent math errors
-    float3 safePQ = clamp(pq, 0.0, 1.0);
-    
-    float3 N = pow(safePQ, 1.0 / m2);
-    
-    // Avoid division by zero singularity at N ~= 1.008
-    float3 denominator = max(c2 - c3 * N, 0.0001);
-    
-    float3 L = pow(max((N - c1) / denominator, 0.0), 1.0 / m1);
-    
-    // Output is 0.0 to 1.0, where 1.0 = 10,000 nits
-    return L * 10000.0;
-}
+    float ySample = yTex.sample(s, in.uv).r;
+    float2 uvSample = cbcrTex.sample(s, in.uv).rg;
 
-// BT.2020 Limited Range YUV to RGB Conversion Constants
-constant float3 kYUVToR = float3(1.0,  0.0000,  1.4746);
-constant float3 kYUVToG = float3(1.0, -0.1645, -0.5714);
-constant float3 kYUVToB = float3(1.0,  1.8814,  0.0000);
+    float y = expandY_10bit(ySample);
+    float2 uv = expandCbCr_10bit(uvSample);
+    float cb = uv.x;
+    float cr = uv.y;
 
-// MARK: - Fragment Shader: YUV (AV1 HDR Fix)
-
-// This shader is used when we manually decode AV1 HDR to P010 YUV to bypass
-// system conversion bugs. We do the PQ decoding manually here.
-fragment half4 copyFragmentShaderYUV(CopyVertexOut in [[stage_in]],
-                                     texture2d<float> luma_tex [[texture(0)]],
-                                     texture2d<float> chroma_tex [[texture(1)]],
-                                     constant bool& hdrEnabled [[buffer(0)]],
-                                     constant HDRParams& hdrParams [[buffer(1)]])
-{
-    constexpr sampler colorSampler(coord::normalized, address::clamp_to_edge, filter::linear);
-
-    // 1. Sample Y and CbCr planes
-    float y = luma_tex.sample(colorSampler, in.uv).r;
-    float2 uv = chroma_tex.sample(colorSampler, in.uv).rg;
-
-    // 2. Adjust for Limited Video Range (16-235 -> 0.0-1.0)
-    // Y starts at 16/255 (~0.062745). UV is centered at 0.5.
-    float y_adj = max(y - 0.062745, 0.0);
-    float u_adj = uv.r - 0.5;
-    float v_adj = uv.g - 0.5;
-
-    // 3. Convert BT.2020 YUV to RGB
-    float r = dot(float3(y_adj, u_adj, v_adj), kYUVToR);
-    float g = dot(float3(y_adj, u_adj, v_adj), kYUVToG);
-    float b = dot(float3(y_adj, u_adj, v_adj), kYUVToB);
-
-    float3 rgb = float3(r, g, b);
-
-    // --- HDR LOGIC (Manual PQ Decoding) ---
-    if (hdrEnabled) {
-        // [CRITICAL]: Clamp RGB values BEFORE sending them to PQ Decoder.
-        // Noise or YUV conversion artifacts > 1.0 will cause NaN in pow().
-        rgb = clamp(rgb, 0.0, 1.0);
-        
-        // 4. Decode PQ Curve to Linear Nits (0 - 10,000)
-        float3 linearNits = PQtoLinearNits(rgb);
-        
-        // 5. Convert Nits to Apple EDR Float
-        // On Apple platforms, 1.0 float usually represents SDR White (100 nits).
-        // So 1000 nits should be float value 10.0.
-        rgb = linearNits / 100.0;
-        
-        // 6. Apply Saturation
-        float luminance = dot(rgb, float3(0.2126, 0.7152, 0.0722));
-        rgb = mix(float3(luminance), rgb, hdrParams.saturation);
-
-        // 7. Apply Gamma
-        // Note: Gamma is technically a transfer function applied to linear light,
-        // but users expect it to behave like a brightness curve/contrast adjust.
-        if (hdrParams.gamma != 1.0) {
-            rgb = pow(max(rgb, 0.0), float3(hdrParams.gamma));
-        }
-         
-        // 8. Apply Boost & Brightness Offset
-        float boost = max(hdrParams.boost, 0.1);
-        rgb = rgb * boost;
-        rgb = rgb + float3(hdrParams.brightness);
+    float3 rgb_nl;
+    if (params.isBT2020Matrix == 1u) {
+        rgb_nl = float3(y + 1.4746 * cr, y - 0.16455 * cb - 0.57135 * cr, y + 1.8814 * cb);
+    } else {
+        rgb_nl = float3(y + 1.5748 * cr, y - 0.1873 * cb - 0.4681 * cr, y + 1.8556 * cb);
     }
-    
-    return half4(half3(rgb), 1.0);
+
+    float3 finalColor;
+    if (params.isPQ == 1u) {
+        float3 linearNits = pqInv(clamp(rgb_nl, 0.0, 1.0));
+        finalColor = linearNits / REFERENCE_WHITE_NITS;
+    } else {
+        finalColor = rgb_nl;
+    }
+
+    finalColor *= max(full.boost, 0.0);
+    finalColor += max(full.brightness, 0.0);
+
+    ColorEnhancementUniforms eff = enhancements;
+    eff.saturation = enhancements.saturation * full.saturation;
+    eff.contrast   = enhancements.contrast   * full.contrast;
+
+    finalColor = applyVisionProGrading(finalColor, eff);
+    finalColor = (params.isPQ == 1u) ? min(finalColor, float3(20.0)) : clamp(finalColor, 0.0, 1.0);
+    return half4(half3(finalColor), 1.0h);
 }
 
-// MARK: - Fragment Shader: RGB (HEVC HDR / SDR)
+fragment half4 copyFragmentShaderHEVC_EDR(
+    CopyVertexOut in [[stage_in]],
+    texture2d<half> rgbTex [[texture(0)]],
+    constant HDRParams &params [[buffer(0)]],
+    constant FullHDRParams &full [[buffer(1)]],
+    constant ColorEnhancementUniforms &enhancements [[buffer(2)]]
+) {
+    constexpr sampler s(coord::normalized, address::clamp_to_edge, filter::linear);
 
-// This shader is used when the System (VideoToolbox) handles the conversion.
-// For HEVC HDR, the system outputs Linear RGBA (P3 D65), so we skip PQ decoding.
-fragment half4 copyFragmentShader(CopyVertexOut in [[stage_in]],
-                                texture2d<half> in_tex [[texture(0)]],
-                                constant bool& hdrEnabled [[buffer(0)]],
-                                constant HDRParams& hdrParams [[buffer(1)]])
-{
-    constexpr sampler colorSampler(coord::normalized, address::clamp_to_edge, filter::linear);
+    float3 rgb_nl = float3(rgbTex.sample(s, in.uv).rgb);
 
-    half4 color = in_tex.sample(colorSampler, in.uv);
-    float3 rgb = float3(color.rgb);
-    
-    if (hdrEnabled) {
-        // [CRITICAL]: The input `rgb` is ALREADY Linear Float here because we configured
-        // VideoToolbox with `kCMFormatDescriptionTransferFunction_Linear`.
-        // DO NOT CALL PQtoLinearNits here.
-        
-        // 1. Apply Saturation
-        float luminance = dot(rgb, float3(0.2126, 0.7152, 0.0722));
-        rgb = mix(float3(luminance), rgb, hdrParams.saturation);
-
-        // 2. Apply Gamma
-        if (hdrParams.gamma != 1.0) {
-            rgb = pow(max(rgb, 0.0), float3(hdrParams.gamma));
-        }
-        
-        // 3. Apply Boost & Brightness
-        float boost = max(hdrParams.boost, 0.1);
-        rgb = rgb * boost;
-        rgb = rgb + float3(hdrParams.brightness);
+    float3 finalColor;
+    if (params.isPQ == 1u) {
+        float3 linearNits = pqInv(clamp(rgb_nl, 0.0, 1.0));
+        finalColor = linearNits / REFERENCE_WHITE_NITS;
+    } else {
+        finalColor = rgb_nl;
     }
-    
-    return half4(half3(rgb), color.a);
+
+    finalColor *= max(full.boost, 0.0);
+    finalColor += max(full.brightness, 0.0);
+
+    ColorEnhancementUniforms eff = enhancements;
+    eff.saturation = enhancements.saturation * full.saturation;
+    eff.contrast   = enhancements.contrast   * full.contrast;
+
+    finalColor = applyVisionProGrading(finalColor, eff);
+    finalColor = (params.isPQ == 1u) ? min(finalColor, float3(20.0)) : clamp(finalColor, 0.0, 1.0);
+    return half4(half3(finalColor), 1.0h);
+}
+
+// MARK: - UIKit Shaders (Clean Pass-Through with Shader-Based Rounded Corners)
+fragment half4 copyFragmentShaderHDR_EDR_UIKit(
+    CopyVertexOut in [[stage_in]],
+    texture2d<float> yTex [[texture(0)]],
+    texture2d<float> cbcrTex [[texture(1)]],
+    constant HDRParams &params [[buffer(0)]],
+    constant FullHDRParams &full [[buffer(1)]],
+    constant ColorEnhancementUniforms &enhancements [[buffer(2)]]
+) {
+    constexpr sampler s(coord::normalized, address::clamp_to_edge, filter::linear);
+
+    float2 texSize = float2(yTex.get_width(), yTex.get_height());
+    float2 pixelPos = in.uv * texSize;
+    float2 centerPos = pixelPos - (texSize * 0.5);
+    float cornerRadius = 16.0;
+    float dist = roundedRectSDF(centerPos, texSize * 0.5, cornerRadius);
+
+    if (dist > 0.0) {
+        discard_fragment();
+    }
+
+    float ySample = yTex.sample(s, in.uv).r;
+    float2 uvSample = cbcrTex.sample(s, in.uv).rg;
+
+    float y = expandY_10bit(ySample);
+    float2 uv = expandCbCr_10bit(uvSample);
+    float cb = uv.x;
+    float cr = uv.y;
+
+    float3 rgb_nl;
+    if (params.isBT2020Matrix == 1u) {
+        rgb_nl = float3(y + 1.4746 * cr, y - 0.16455 * cb - 0.57135 * cr, y + 1.8814 * cb);
+    } else {
+        rgb_nl = float3(y + 1.5748 * cr, y - 0.1873 * cb - 0.4681 * cr, y + 1.8556 * cb);
+    }
+
+    float3 finalColor;
+    if (params.isPQ == 1u) {
+        float3 linearNits = pqInv(clamp(rgb_nl, 0.0, 1.0));
+        finalColor = linearNits / REFERENCE_WHITE_NITS;
+    } else {
+        finalColor = rgb_nl;
+    }
+
+    finalColor *= max(full.boost, 0.0);
+    finalColor += max(full.brightness, 0.0);
+
+    ColorEnhancementUniforms eff = enhancements;
+    eff.saturation = enhancements.saturation * full.saturation;
+    eff.contrast   = enhancements.contrast   * full.contrast;
+
+    finalColor = applyVisionProGrading(finalColor, eff);
+    finalColor = (params.isPQ == 1u) ? min(finalColor, float3(20.0)) : clamp(finalColor, 0.0, 1.0);
+
+    return half4(half3(finalColor), 1.0h);
+}
+
+fragment half4 copyFragmentShaderHEVC_EDR_UIKit(
+    CopyVertexOut in [[stage_in]],
+    texture2d<half> rgbTex [[texture(0)]],
+    constant HDRParams &params [[buffer(0)]],
+    constant FullHDRParams &full [[buffer(1)]],
+    constant ColorEnhancementUniforms &enhancements [[buffer(2)]]
+) {
+    constexpr sampler s(coord::normalized, address::clamp_to_edge, filter::linear);
+
+    float2 texSize = float2(rgbTex.get_width(), rgbTex.get_height());
+    float2 pixelPos = in.uv * texSize;
+    float2 centerPos = pixelPos - (texSize * 0.5);
+    float cornerRadius = 16.0;
+    float dist = roundedRectSDF(centerPos, texSize * 0.5, cornerRadius);
+
+    if (dist > 0.0) {
+        discard_fragment();
+    }
+
+    float3 rgb_nl = float3(rgbTex.sample(s, in.uv).rgb);
+
+    float3 finalColor;
+    if (params.isPQ == 1u) {
+        float3 linearNits = pqInv(clamp(rgb_nl, 0.0, 1.0));
+        finalColor = linearNits / REFERENCE_WHITE_NITS;
+    } else {
+        finalColor = rgb_nl;
+    }
+
+    finalColor *= max(full.boost, 0.0);
+    finalColor += max(full.brightness, 0.0);
+
+    ColorEnhancementUniforms eff = enhancements;
+    eff.saturation = enhancements.saturation * full.saturation;
+    eff.contrast   = enhancements.contrast   * full.contrast;
+
+    finalColor = applyVisionProGrading(finalColor, eff);
+    finalColor = (params.isPQ == 1u) ? min(finalColor, float3(20.0)) : clamp(finalColor, 0.0, 1.0);
+
+    return half4(half3(finalColor), 1.0h);
 }

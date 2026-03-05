@@ -45,3 +45,7 @@ public class TemporaryApp: NSObject {
         parent.host = host
     }
 }
+
+extension TemporaryApp: Identifiable {
+    // id: String already satisfies Identifiable
+}
