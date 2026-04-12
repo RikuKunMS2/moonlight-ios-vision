@@ -304,9 +304,9 @@ class CVMetalHelpers {
             case kCVPixelFormatType_32BGRA,
                  kCVPixelFormatType_Lossless_32BGRA,
                  kCVPixelFormatType_Lossy_32BGRA:
-                return [MTLPixelFormat.bgra8Unorm_srgb, MTLPixelFormat.invalid]
+                return [MTLPixelFormat.bgra8Unorm, MTLPixelFormat.invalid]
             case kCVPixelFormatType_32RGBA:
-                return [MTLPixelFormat.rgba8Unorm_srgb, MTLPixelFormat.invalid]
+                return [MTLPixelFormat.rgba8Unorm, MTLPixelFormat.invalid]
 
             // Guess 8-bit biplanar otherwise
             default:

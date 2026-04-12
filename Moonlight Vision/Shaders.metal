@@ -1,10 +1,29 @@
+//
+//  Shaders.metal
+//  Moonlight
+//
+//  Copyright © 2025 Moonlight Game Streaming Project. All rights reserved.
+//
 #include <metal_stdlib>
 #include <simd/simd.h>
 using namespace metal;
 
 // MARK: - Constants
-constant float REFERENCE_WHITE_NITS = 200.0;
+// BT.2408 diffuse white: 203 nits → maps to EDR 1.0 in an ideal EDR pipeline.
+constant float PQ_REFERENCE_WHITE_NITS = 203.0;
+// PQ highlight rolloff (applied to linear Display P3 **luma** to preserve hue).
+constant float PQ_SOFT_CLIP_KNEE     = 1.0;
+constant float PQ_SOFT_CLIP_MAX_EDR  = 2.55;
+// Base trim for all content written to Unlit `rgba16Float` (still hotter than UIKit).
+constant float REALITYKIT_UNLIT_HDR_LINEAR_SCALE = 0.68;
+// SDR streams in HDR mode: user feedback “仍略亮” — small extra trim on Display P3 path only.
+constant float REALITYKIT_SDR_ON_DISPLAYP3_EXTRA = 0.93;
+// PQ/HDR needs stronger attenuation than SDR-in-HDR; applied only when isPQ.
+constant float REALITYKIT_PQ_EXTRA_LINEAR_SCALE = 0.64;
+// Linear Display P3 → relative luminance (D65). Used only after BT*_TO_DISPLAY_P3 for PQ tone mapping.
+constant float3 kLinearDisplayP3Luma = float3(0.2289, 0.6917, 0.0793);
 constant float3 kRec709Luma = float3(0.2126, 0.7152, 0.0722);
+constant float3 kRec2020Luma = float3(0.2627, 0.6780, 0.0593);
 
 // MARK: - Structures
 struct ColorEnhancementUniforms {
@@ -19,6 +38,8 @@ struct FullHDRParams {
     float contrast;
     float saturation;
     float brightness;
+    /// User trim for PQ (ST.2084) / true HDR frames only; 1.0 = default.
+    float pqExposure;
     int   mode;
 };
 
@@ -28,26 +49,47 @@ struct CopyVertexOut {
 };
 
 struct HDRParams {
-    uint presetIndex;
+    uint is10Bit;
+    uint isFullRange;
     uint isPQ;
-    uint isBT2020Matrix;
-    uint isBT2020Primaries;
+    uint matrixType;
+    uint primariesType;
+    uint isTargetDisplayP3;
 };
 
-// MARK: - Matrices
-constant float3x3 BT2020_TO_P3 = float3x3(
-    float3( 1.6605, -0.1246, -0.0182),
-    float3(-0.5876,  1.1329, -0.1006),
-    float3(-0.0729, -0.0083,  1.1188)
+
+// Column-major linear-light gamut transforms with D65 white point.
+constant float3x3 BT709_TO_DISPLAY_P3 = float3x3(
+    float3(0.82246, 0.03319, 0.01708),
+    float3(0.17754, 0.96681, 0.07240),
+    float3(0.00000, 0.00000, 0.91052)
 );
 
-constant float3x3 BT709_TO_P3 = float3x3(
-    float3( 0.6069, 0.1735, 0.2006),
-    float3( 0.2989, 0.5866, 0.1144),
-    float3( 0.0000, 0.0661, 1.1150)
+constant float3x3 BT2020_TO_DISPLAY_P3 = float3x3(
+    float3( 1.22494, -0.04206, -0.01964),
+    float3(-0.22494,  1.04206, -0.07864),
+    float3( 0.00000,  0.00000,  1.09827)
 );
 
-// MARK: - Helper Functions
+// SMPTE-C (BT.601 studio primaries) to Rec.709 in linear light.
+constant float3x3 SMPTEC_TO_BT709 = float3x3(
+    float3( 1.0654, -0.0196,  0.0016),
+    float3(-0.0554,  1.0364, -0.0044),
+    float3(-0.0010, -0.0167,  1.0028)
+);
+
+/// SDR → linear Display P3 for `rgba16Float`. Do **not** clamp to 1: per-channel clip skews hue vs UIKit
+/// for saturated Rec.709 / SMPTE-C / 2020 colors that land slightly above 1.0 in P3 linear.
+inline float3 mapSdrPrimariesToDisplay(float3 linearColor, constant HDRParams& params) {
+    if (params.primariesType == 1u) {
+        return max(BT2020_TO_DISPLAY_P3 * linearColor, float3(0.0));
+    }
+    if (params.primariesType == 2u) {
+        float3 linear709 = max(SMPTEC_TO_BT709 * linearColor, float3(0.0));
+        return max(BT709_TO_DISPLAY_P3 * linear709, float3(0.0));
+    }
+    return max(BT709_TO_DISPLAY_P3 * linearColor, float3(0.0));
+}
 inline float pqInv(float p) {
     const float m1 = 0.1593017578125;
     const float m2 = 78.84375;
@@ -65,16 +107,91 @@ inline float3 pqInv(float3 p) {
     return float3(pqInv(p.r), pqInv(p.g), pqInv(p.b));
 }
 
-inline float expandY_10bit(float y) {
-    return clamp((y - 0.06256) * 1.16780, 0.0, 1.0);
-}
-
-inline float2 expandCbCr_10bit(float2 uv) {
-    return (uv - float2(0.5, 0.5)) * 1.14170;
-}
-
 inline float roundedRectSDF(float2 centerPos, float2 size, float radius) {
     return length(max(abs(centerPos) - size + radius, 0.0)) - radius;
+}
+
+inline float3 rec709ToLinear(float3 c) {
+    // Apple's ColorSync uses a gamma of 1.961 for Rec.709 video, which causes the famous "QuickTime gamma shift".
+    // To match UIKit's AVSampleBufferDisplayLayer exactly, we must use the same 1.961 gamma curve
+    // instead of the mathematically correct BT.709 piecewise inverse transfer function.
+    return pow(clamp(c, 0.0, 1.0), float3(1.961));
+}
+
+
+inline float3 decode709VideoRange(float ySample, float2 uvSample, bool is10Bit) {
+    float yOffset = is10Bit ? (64.0 / 1023.0) : (16.0 / 255.0);
+    float uvCenter = is10Bit ? (512.0 / 1023.0) : (128.0 / 255.0);
+    float y = max(ySample - yOffset, 0.0) * (is10Bit ? (1023.0 / 876.0) : (255.0 / 219.0));
+    float cb = uvSample.x - uvCenter;
+    float cr = uvSample.y - uvCenter;
+    return float3(
+        y + 1.79274107 * cr,
+        y - 0.21324861 * cb - 0.53290933 * cr,
+        y + 2.11240179 * cb
+    );
+}
+
+inline float3 decode709FullRange(float ySample, float2 uvSample, bool is10Bit) {
+    float uvCenter = is10Bit ? (512.0 / 1023.0) : (128.0 / 255.0);
+    float y = clamp(ySample, 0.0, 1.0);
+    float cb = uvSample.x - uvCenter;
+    float cr = uvSample.y - uvCenter;
+    return float3(
+        y + 1.5748 * cr,
+        y - 0.187324 * cb - 0.468124 * cr,
+        y + 1.8556 * cb
+    );
+}
+
+inline float3 decode2020VideoRange(float ySample, float2 uvSample, bool is10Bit) {
+    float yOffset = is10Bit ? (64.0 / 1023.0) : (16.0 / 255.0);
+    float uvCenter = is10Bit ? (512.0 / 1023.0) : (128.0 / 255.0);
+    float y = max(ySample - yOffset, 0.0) * (is10Bit ? (1023.0 / 876.0) : (255.0 / 219.0));
+    float cb = uvSample.x - uvCenter;
+    float cr = uvSample.y - uvCenter;
+    return float3(
+        y + 1.67867411 * cr,
+        y - 0.18732610 * cb - 0.65042432 * cr,
+        y + 2.14177232 * cb
+    );
+}
+
+inline float3 decode2020FullRange(float ySample, float2 uvSample, bool is10Bit) {
+    float uvCenter = is10Bit ? (512.0 / 1023.0) : (128.0 / 255.0);
+    float y = clamp(ySample, 0.0, 1.0);
+    float cb = uvSample.x - uvCenter;
+    float cr = uvSample.y - uvCenter;
+    return float3(
+        y + 1.4746 * cr,
+        y - 0.164553 * cb - 0.571353 * cr,
+        y + 1.8814 * cb
+    );
+}
+
+inline float3 decode601VideoRange(float ySample, float2 uvSample, bool is10Bit) {
+    float yOffset = is10Bit ? (64.0 / 1023.0) : (16.0 / 255.0);
+    float uvCenter = is10Bit ? (512.0 / 1023.0) : (128.0 / 255.0);
+    float y = max(ySample - yOffset, 0.0) * (is10Bit ? (1023.0 / 876.0) : (255.0 / 219.0));
+    float cb = uvSample.x - uvCenter;
+    float cr = uvSample.y - uvCenter;
+    return float3(
+        y + 1.596027 * cr,
+        y - 0.391762 * cb - 0.812968 * cr,
+        y + 2.017232 * cb
+    );
+}
+
+inline float3 decode601FullRange(float ySample, float2 uvSample, bool is10Bit) {
+    float uvCenter = is10Bit ? (512.0 / 1023.0) : (128.0 / 255.0);
+    float y = clamp(ySample, 0.0, 1.0);
+    float cb = uvSample.x - uvCenter;
+    float cr = uvSample.y - uvCenter;
+    return float3(
+        y + 1.40200 * cr,
+        y - 0.344136 * cb - 0.714136 * cr,
+        y + 1.77200 * cb
+    );
 }
 
 // MARK: - Color Grading
@@ -96,6 +213,44 @@ inline float3 applyVisionProGrading(float3 color, ColorEnhancementUniforms param
 inline float3 applyVisionProGrading(float3 color, constant ColorEnhancementUniforms& paramsConst) {
     ColorEnhancementUniforms local = paramsConst;
     return applyVisionProGrading(color, local);
+}
+
+/// PQ / scene-linear HDR: do **not** clamp to 1 — SDR grading would clip highlights and skew hue.
+inline float3 applyVisionProGradingHDR(float3 color, ColorEnhancementUniforms params, uint useBT2020Luma) {
+    float luma = (useBT2020Luma == 1u) ? dot(color, kRec2020Luma) : dot(color, kRec709Luma);
+    float3 saturated = mix(float3(luma), color, params.saturation);
+    float3 contrasted = (saturated - float3(luma)) * params.contrast + float3(luma);
+
+    float3 warmed = contrasted;
+    if (abs(params.warmth) > 0.001) {
+        warmed.r = contrasted.r * (1.0 + params.warmth * 0.5);
+        warmed.b = contrasted.b * (1.0 - params.warmth * 0.5);
+    }
+
+    return max(warmed, float3(0.0));
+}
+
+/// Map absolute-nit BT.2020 (or BT.709) linear light to Display P3 EDR.
+/// No clamping — HDR headroom is preserved for soft-clip downstream.
+inline float3 pqNitsToDisplayP3(float3 nits, constant HDRParams& params) {
+    float3 edr = nits / PQ_REFERENCE_WHITE_NITS; // 203 nits → 1.0 EDR
+    bool use2020 = (params.primariesType == 1u) || (params.matrixType == 1u);
+    return use2020 ? BT2020_TO_DISPLAY_P3 * edr : BT709_TO_DISPLAY_P3 * edr;
+}
+
+/// Soft-clip a single EDR channel. Linear below `knee`, smooth exponential rolloff above.
+/// SDR white (1.0) is always below the knee → completely untouched.
+inline float pqSoftClip1(float x, float knee, float maxEDR) {
+    if (x <= knee) return x;
+    float range = maxEDR - knee;
+    return knee + range * (1.0 - exp(-(x - knee) / range));
+}
+
+/// Compress PQ peaks using **luma** in linear P3 (chromaticity preserved; avoids per-channel clip = hue shift + blown highlights).
+inline float3 pqToneMapLumaDisplayP3(float3 cP3, float knee, float maxEDR) {
+    float y = max(dot(cP3, kLinearDisplayP3Luma), 1e-6);
+    float y2 = pqSoftClip1(y, knee, maxEDR);
+    return cP3 * (y2 / y);
 }
 
 // MARK: - Vertex Shader
@@ -121,35 +276,58 @@ fragment half4 copyFragmentShaderHDR_EDR(
     float ySample = yTex.sample(s, in.uv).r;
     float2 uvSample = cbcrTex.sample(s, in.uv).rg;
 
-    float y = expandY_10bit(ySample);
-    float2 uv = expandCbCr_10bit(uvSample);
-    float cb = uv.x;
-    float cr = uv.y;
-
     float3 rgb_nl;
-    if (params.isBT2020Matrix == 1u) {
-        rgb_nl = float3(y + 1.4746 * cr, y - 0.16455 * cb - 0.57135 * cr, y + 1.8814 * cb);
+    if (params.matrixType == 1u) {
+        rgb_nl = (params.isFullRange == 1u)
+            ? decode2020FullRange(ySample, uvSample, params.is10Bit == 1u)
+            : decode2020VideoRange(ySample, uvSample, params.is10Bit == 1u);
+    } else if (params.matrixType == 2u) {
+        rgb_nl = (params.isFullRange == 1u)
+            ? decode601FullRange(ySample, uvSample, params.is10Bit == 1u)
+            : decode601VideoRange(ySample, uvSample, params.is10Bit == 1u);
     } else {
-        rgb_nl = float3(y + 1.5748 * cr, y - 0.1873 * cb - 0.4681 * cr, y + 1.8556 * cb);
+        rgb_nl = (params.isFullRange == 1u)
+            ? decode709FullRange(ySample, uvSample, params.is10Bit == 1u)
+            : decode709VideoRange(ySample, uvSample, params.is10Bit == 1u);
     }
 
     float3 finalColor;
     if (params.isPQ == 1u) {
+        // PQ absolute-nit decode → Display P3 EDR.
+        // 203 nits (BT.2408 reference) → 1.0 EDR (display SDR white). No extra gain.
         float3 linearNits = pqInv(clamp(rgb_nl, 0.0, 1.0));
-        finalColor = linearNits / REFERENCE_WHITE_NITS;
+        finalColor = pqNitsToDisplayP3(linearNits, params);
+        finalColor = pqToneMapLumaDisplayP3(finalColor, PQ_SOFT_CLIP_KNEE, PQ_SOFT_CLIP_MAX_EDR);
+
+        // Apply user-controlled HDR grading (neutral by default: boost=1, contrast=1, saturation=1, brightness=0).
+        finalColor *= max(full.boost, 0.0);
+        finalColor += max(full.brightness, 0.0);
+        ColorEnhancementUniforms eff = enhancements;
+        eff.saturation = enhancements.saturation * full.saturation;
+        eff.contrast   = enhancements.contrast   * full.contrast;
+        uint useBt2020Luma = ((params.primariesType == 1u) || (params.matrixType == 1u)) ? 1u : 0u;
+        finalColor = applyVisionProGradingHDR(finalColor, eff, useBt2020Luma);
+        finalColor *= max(full.pqExposure, 0.0);
     } else {
-        finalColor = rgb_nl;
+        // SDR content: gamma-decode → Display P3 linear.
+        // For rgba16Float target: 1.0 linear = display SDR white (EDR 1.0) — no extra gain needed.
+        float3 linearColor = rec709ToLinear(clamp(rgb_nl, 0.0, 1.0));
+        if (params.isTargetDisplayP3 == 1u) {
+            finalColor = mapSdrPrimariesToDisplay(linearColor, params);
+        } else {
+            finalColor = (params.primariesType == 2u)
+                ? clamp(SMPTEC_TO_BT709 * linearColor, 0.0, 1.0)
+                : linearColor;
+        }
     }
 
-    finalColor *= max(full.boost, 0.0);
-    finalColor += max(full.brightness, 0.0);
-
-    ColorEnhancementUniforms eff = enhancements;
-    eff.saturation = enhancements.saturation * full.saturation;
-    eff.contrast   = enhancements.contrast   * full.contrast;
-
-    finalColor = applyVisionProGrading(finalColor, eff);
-    finalColor = (params.isPQ == 1u) ? min(finalColor, float3(20.0)) : clamp(finalColor, 0.0, 1.0);
+    if (params.isPQ == 1u) {
+        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE * REALITYKIT_PQ_EXTRA_LINEAR_SCALE;
+    } else if (params.isTargetDisplayP3 == 1u) {
+        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE * REALITYKIT_SDR_ON_DISPLAYP3_EXTRA;
+    } else {
+        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE;
+    }
     return half4(half3(finalColor), 1.0h);
 }
 
@@ -162,25 +340,41 @@ fragment half4 copyFragmentShaderHEVC_EDR(
 ) {
     constexpr sampler s(coord::normalized, address::clamp_to_edge, filter::linear);
 
+    // Input texture is plain UNorm SDR video; convert Rec.709 video values explicitly.
     float3 rgb_nl = float3(rgbTex.sample(s, in.uv).rgb);
 
     float3 finalColor;
     if (params.isPQ == 1u) {
         float3 linearNits = pqInv(clamp(rgb_nl, 0.0, 1.0));
-        finalColor = linearNits / REFERENCE_WHITE_NITS;
+        finalColor = pqNitsToDisplayP3(linearNits, params);
+        finalColor = pqToneMapLumaDisplayP3(finalColor, PQ_SOFT_CLIP_KNEE, PQ_SOFT_CLIP_MAX_EDR);
+
+        finalColor *= max(full.boost, 0.0);
+        finalColor += max(full.brightness, 0.0);
+        ColorEnhancementUniforms eff = enhancements;
+        eff.saturation = enhancements.saturation * full.saturation;
+        eff.contrast   = enhancements.contrast   * full.contrast;
+        uint useBt2020Luma = ((params.primariesType == 1u) || (params.matrixType == 1u)) ? 1u : 0u;
+        finalColor = applyVisionProGradingHDR(finalColor, eff, useBt2020Luma);
+        finalColor *= max(full.pqExposure, 0.0);
     } else {
-        finalColor = rgb_nl;
+        float3 linearColor = rec709ToLinear(clamp(rgb_nl, 0.0, 1.0));
+        if (params.isTargetDisplayP3 == 1u) {
+            finalColor = mapSdrPrimariesToDisplay(linearColor, params);
+        } else {
+            finalColor = (params.primariesType == 2u)
+                ? clamp(SMPTEC_TO_BT709 * linearColor, 0.0, 1.0)
+                : linearColor;
+        }
     }
 
-    finalColor *= max(full.boost, 0.0);
-    finalColor += max(full.brightness, 0.0);
-
-    ColorEnhancementUniforms eff = enhancements;
-    eff.saturation = enhancements.saturation * full.saturation;
-    eff.contrast   = enhancements.contrast   * full.contrast;
-
-    finalColor = applyVisionProGrading(finalColor, eff);
-    finalColor = (params.isPQ == 1u) ? min(finalColor, float3(20.0)) : clamp(finalColor, 0.0, 1.0);
+    if (params.isPQ == 1u) {
+        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE * REALITYKIT_PQ_EXTRA_LINEAR_SCALE;
+    } else if (params.isTargetDisplayP3 == 1u) {
+        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE * REALITYKIT_SDR_ON_DISPLAYP3_EXTRA;
+    } else {
+        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE;
+    }
     return half4(half3(finalColor), 1.0h);
 }
 
@@ -208,22 +402,26 @@ fragment half4 copyFragmentShaderHDR_EDR_UIKit(
     float ySample = yTex.sample(s, in.uv).r;
     float2 uvSample = cbcrTex.sample(s, in.uv).rg;
 
-    float y = expandY_10bit(ySample);
-    float2 uv = expandCbCr_10bit(uvSample);
-    float cb = uv.x;
-    float cr = uv.y;
-
     float3 rgb_nl;
-    if (params.isBT2020Matrix == 1u) {
-        rgb_nl = float3(y + 1.4746 * cr, y - 0.16455 * cb - 0.57135 * cr, y + 1.8814 * cb);
+    if (params.matrixType == 1u) {
+        rgb_nl = (params.isFullRange == 1u)
+            ? decode2020FullRange(ySample, uvSample, params.is10Bit == 1u)
+            : decode2020VideoRange(ySample, uvSample, params.is10Bit == 1u);
+    } else if (params.matrixType == 2u) {
+        rgb_nl = (params.isFullRange == 1u)
+            ? decode601FullRange(ySample, uvSample, params.is10Bit == 1u)
+            : decode601VideoRange(ySample, uvSample, params.is10Bit == 1u);
     } else {
-        rgb_nl = float3(y + 1.5748 * cr, y - 0.1873 * cb - 0.4681 * cr, y + 1.8556 * cb);
+        rgb_nl = (params.isFullRange == 1u)
+            ? decode709FullRange(ySample, uvSample, params.is10Bit == 1u)
+            : decode709VideoRange(ySample, uvSample, params.is10Bit == 1u);
     }
 
     float3 finalColor;
     if (params.isPQ == 1u) {
         float3 linearNits = pqInv(clamp(rgb_nl, 0.0, 1.0));
-        finalColor = linearNits / REFERENCE_WHITE_NITS;
+        finalColor = linearNits / PQ_REFERENCE_WHITE_NITS;
+        finalColor *= max(full.pqExposure, 0.0);
     } else {
         finalColor = rgb_nl;
     }
@@ -265,7 +463,8 @@ fragment half4 copyFragmentShaderHEVC_EDR_UIKit(
     float3 finalColor;
     if (params.isPQ == 1u) {
         float3 linearNits = pqInv(clamp(rgb_nl, 0.0, 1.0));
-        finalColor = linearNits / REFERENCE_WHITE_NITS;
+        finalColor = linearNits / PQ_REFERENCE_WHITE_NITS;
+        finalColor *= max(full.pqExposure, 0.0);
     } else {
         finalColor = rgb_nl;
     }

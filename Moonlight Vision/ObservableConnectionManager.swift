@@ -45,17 +45,15 @@ import Combine
     }
     
     func stageStarting(_ stageName: UnsafePointer<CChar>!) {
-        if let stage = stageName {
-            currentStage = String(cString: stage)
-            print("Stage starting: \(currentStage)")
-        }
+        let stage = stageName.map { String(cString: $0) } ?? ""
+        print("Stage starting: \(stage)")
+        Task { @MainActor in self.currentStage = stage }
     }
     
     func stageComplete(_ stageName: UnsafePointer<CChar>!) {
-        if let stage = stageName {
-            currentStage = String(cString: stage)
-            print("Stage complete: \(currentStage)")
-        }
+        let stage = stageName.map { String(cString: $0) } ?? ""
+        print("Stage complete: \(stage)")
+        Task { @MainActor in self.currentStage = stage }
     }
     
     func stageFailed(_ stageName: UnsafePointer<CChar>!, withError errorCode: Int32, portTestFlags: Int32) {
@@ -110,12 +108,12 @@ import Combine
     
     func connectionStatusUpdate(_ status: Int32) {
         print("Connection status updated to: \(status)")
-        connectionStatus = status
+        Task { @MainActor in self.connectionStatus = status }
     }
     
     func setHdrMode(_ enabled: Bool) {
         print("HDR Mode set to: \(enabled)")
-        isHDRModeEnabled = enabled
+        Task { @MainActor in self.isHDRModeEnabled = enabled }
     }
     
     func rumbleTriggers(_ controllerNumber: UInt16, leftTrigger: UInt16, rightTrigger: UInt16) {
@@ -132,8 +130,15 @@ import Combine
     
     func videoContentShown() {
         print("Video content shown")
-        videoShown = true
-        showAlert = false
-        NotificationCenter.default.post(name: Notification.Name("RKStreamFirstFrameShown"), object: nil)
+        Task { @MainActor in
+            // Only post the first-frame notification once per stream session.
+            // DrawableVideoDecoder may call this on every IDR frame in error-recovery
+            // paths; without this guard each call queues a Task that fires onChange
+            // observers multiple times per SwiftUI frame.
+            guard !self.videoShown else { return }
+            self.videoShown = true
+            self.showAlert = false
+            NotificationCenter.default.post(name: Notification.Name("RKStreamFirstFrameShown"), object: nil)
+        }
     }
 }

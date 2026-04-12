@@ -344,9 +344,20 @@
 
 // Override from MDNSCallback - called in a worker thread
 - (void)updateHost:(TemporaryHost*)host {
-    // Discover the hosts before adding to eliminate duplicates
     Log(LOG_D, @"Found host through MDNS: %@:", host.name);
-    // Since this is on a background thread, we do not need to use the opQueue
+
+    // mDNS repeats many announcements per second for the same machine.  If we already
+    // have this UUID in the queue, only merge address hints — do NOT run another
+    // synchronous discoverHost (HTTP) every time; the op-queue worker polls anyway.
+    if (host.uuid.length > 0) {
+        TemporaryHost *existing = [self getHostInDiscovery:host.uuid];
+        if (existing != nil) {
+            [self addHostToDiscovery:host];
+            Log(LOG_D, @"MDNS: known host %@, merged addresses only", host.name);
+            return;
+        }
+    }
+
     DiscoveryWorker* worker = (DiscoveryWorker*)[self createWorkerForHost:host];
     [worker discoverHost];
     if ([self addHostToDiscovery:host]) {

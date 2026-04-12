@@ -79,13 +79,17 @@ struct MainContentView: View {
                         ToolbarItem(placement: .destructiveAction) {
                             Button(viewModel.localized("stop"), systemImage: "stop.circle.fill") {
                                 Task {
+                                    // Post notification first — RealityKitStreamView/UIKitStreamView
+                                    // receive it and call triggerCloseSequence/teardown which handles
+                                    // dismissing their own window. Avoid calling dismissWindow here for
+                                    // RealityKit volume streams: the stream view dismisses itself via
+                                    // triggerCloseSequence, and a second dismissWindow call racing with
+                                    // an in-flight window animation can cause intermittent crashes.
                                     NotificationCenter.default.post(name: Notification.Name("RequestStreamCloseFromMainMenu"), object: nil)
                                     viewModel.userDidRequestDisconnect()
-                                    // Dismiss volume/classic window from main view (reliable when main is in front)
-                                    // Use dismissWindow(id:) without value: StreamConfiguration lacks Hashable, so value-based dismiss fails to match
-                                    if viewModel.streamSettings.renderer == .realitykit && !viewModel.streamSettings.realitykitImmersiveMode {
-                                        dismissWindow(id: "realitykitStreamingWindow")
-                                    } else if viewModel.streamSettings.renderer == .classic {
+                                    // Classic UIKit window doesn't observe the notification for self-dismiss,
+                                    // so we still need to dismiss it from here.
+                                    if viewModel.streamSettings.renderer == .classic {
                                         dismissWindow(id: "classicStreamingWindow")
                                     }
                                     await viewModel.waitForTeardown(timeout: 1.2)
@@ -144,24 +148,30 @@ struct MainContentView: View {
                 viewModel.loadSavedHosts()
             }
             .onAppear {
+                // Start mDNS discovery immediately when the host list appears —
+                // matching the behaviour of the original iOS/iPad Moonlight app
+                // (beginForegroundRefresh in viewWillAppear:).
+                // This is safe to call multiple times; DiscoveryManager guards against
+                // double-start internally.
+                viewModel.beginRefresh()
+
+                // Also re-start when the app returns from background (crown/home).
+                // We register AFTER the direct call above so we don't double-fire on
+                // a cold launch where didBecomeActive fires before onAppear.
                 NotificationCenter.default.addObserver(
                     self,
                     selector: #selector(viewModel.beginRefresh),
                     name: UIApplication.didBecomeActiveNotification,
                     object: nil
                 )
-                // If we have some hosts in the host list and no host has been selected
-                // try to select the first paired host automatically.
-                // this will usually happen when we close the stream and reopen this window
-                // when we do, the host list won't change but we still want to keep the list looking nice and select something by default
+
+                // Auto-select the first paired host when the view appears so the
+                // split view doesn't look empty after closing a stream.
                 if selectedHost == nil,
                    let firstHost = viewModel.hosts.first(where: { $0.pairState == .paired })
                 {
                     selectedHost = firstHost
                 }
-                //if !isRefreshingDiscovery { // Only begin refresh if not already toggled on
-                //    viewModel.beginRefresh()
-                //}
             }
             .onChange(of: scenePhase) { oldValue, newValue in
                 if oldValue == .active && (newValue == .inactive || newValue == .background) {

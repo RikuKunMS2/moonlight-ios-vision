@@ -28,6 +28,8 @@ struct HDRParams {
     var contrast: Float
     var saturation: Float
     var brightness: Float
+    /// PQ / ST.2084 HDR exposure trim (RealityKit path); ignored for SDR frames.
+    var pqExposure: Float
     var mode: Int32  // 0 = Power Curve, 1 = ACES, 2 = ACES + Vibrance
 }
 
@@ -43,6 +45,7 @@ private struct ShaderFullHDRParams {
     var contrast: Float
     var saturation: Float
     var brightness: Float
+    var pqExposure: Float
     var mode: Int32
 }
 
@@ -51,6 +54,7 @@ let kCVImageBufferColorPrimaries_ITU_R_2020 = "ITU_R_2020" as CFString
 let kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ = "SMPTE_ST_2084_PQ" as CFString
 
 let kCVImageBufferColorPrimaries_ITU_R_709_2 = "ITU_R_709_2" as CFString
+let kCVImageBufferColorPrimaries_SMPTE_C = "SMPTE_C" as CFString
 let kCVImageBufferYCbCrMatrix_ITU_R_709_2 = "ITU_R_709_2" as CFString
 
 // MARK: - VideoDecoderRenderer
@@ -63,6 +67,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     private var streamAspectRatio: Float
 
     let callbackToRender: @MainActor (TextureResource.DrawableQueue, (Int, Int)?) -> Void
+    let debugInfoCallback: (@MainActor (String) -> Void)?
     private var hdrSettingsProvider: (() -> HDRParams)? = nil
 
     /// Format and frame info
@@ -133,13 +138,14 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         enableHDR: Bool = false,
         hdrSettingsProvider: (() -> HDRParams)? = nil,
         enhancementsProvider: (() -> (Float, Float, Float))? = nil,
-        callbackToRender: @MainActor @escaping (TextureResource.DrawableQueue, (Int, Int)?) -> Void
+        callbackToRender: @MainActor @escaping (TextureResource.DrawableQueue, (Int, Int)?) -> Void,
+        debugInfoCallback: (@MainActor (String) -> Void)? = nil
     ) {
         metalFormat = enableHDR ? .rgba16Float : .bgra8Unorm_srgb
 
         decodingFormat = enableHDR ?
             kCVPixelFormatType_64RGBAHalf :
-            kCVPixelFormatType_Lossless_32BGRA
+            kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
 
         self.texture = texture
         self.callbacks = callbacks
@@ -149,6 +155,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         self.hdrSettingsProvider = hdrSettingsProvider
         self.enhancementsProvider = enhancementsProvider
         self.callbackToRender = callbackToRender
+        self.debugInfoCallback = debugInfoCallback
 
         decoderCallback = VTDecompressionOutputCallbackRecord()
         decoderCallback.decompressionOutputCallback = { decompressionOutputRefCon, sourceFrameRefCon, status, infoFlags, imageBuffer, presentationTimeStamp, presentationDuration in
@@ -204,40 +211,98 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         let pf = CVPixelBufferGetPixelFormatType(imageBuffer)
         let planeCount = CVPixelBufferGetPlaneCount(imageBuffer)
 
-        var isPQ = hdrEnabled
-        
-        if !isPQ {
-            if let tfVal = CVBufferGetAttachment(imageBuffer, kCVImageBufferTransferFunctionKey, nil)?.takeUnretainedValue(),
-               CFGetTypeID(tfVal) == CFStringGetTypeID() {
-                isPQ = CFEqual(tfVal as! CFString, kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ)
+        /// 10-bit YUV from VT is almost always HDR (PQ/HLG) in this pipeline; 8-bit is SDR — do **not** key off `hdrEnabled`.
+        let looksLikeBt2020TenBitStream: Bool = {
+            switch pf {
+            case kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange,
+                 kCVPixelFormatType_420YpCbCr10BiPlanarFullRange,
+                 kCVPixelFormatType_422YpCbCr10BiPlanarVideoRange,
+                 kCVPixelFormatType_422YpCbCr10BiPlanarFullRange,
+                 kCVPixelFormatType_444YpCbCr10BiPlanarVideoRange,
+                 kCVPixelFormatType_444YpCbCr10BiPlanarFullRange,
+                 kCVPixelFormatType_Lossy_420YpCbCr10PackedBiPlanarVideoRange,
+                 kCVPixelFormatType_Lossless_420YpCbCr10PackedBiPlanarVideoRange,
+                 kCVPixelFormatType_Lossy_420YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_Lossless_420YpCbCr10PackedBiPlanarFullRange_compat,
+                 kCVPixelFormatType_420YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_420YpCbCr10PackedBiPlanarVideoRange,
+                 kCVPixelFormatType_Lossy_422YpCbCr10PackedBiPlanarVideoRange,
+                 kCVPixelFormatType_Lossless_422YpCbCr10PackedBiPlanarVideoRange,
+                 kCVPixelFormatType_Lossy_422YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_Lossless_422YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_422YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_422YpCbCr10PackedBiPlanarVideoRange,
+                 kCVPixelFormatType_444YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_444YpCbCr10PackedBiPlanarVideoRange:
+                return true
+            default:
+                return false
             }
+        }()
+
+        // PQ must follow the **frame** transfer function. Never force PQ just because the user enabled
+        // "HDR display mode" — that was decoding SDR streams through pqInv() (too dark) while true PQ
+        // still looked wrong next to the mistaken baseline.
+        var isPQ = false
+        if let tfVal = CVBufferGetAttachment(imageBuffer, kCVImageBufferTransferFunctionKey, nil)?.takeUnretainedValue(),
+           CFGetTypeID(tfVal) == CFStringGetTypeID() {
+            isPQ = CFEqual(tfVal as! CFString, kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ)
+        } else if hdrEnabled {
+            isPQ = looksLikeBt2020TenBitStream
         }
 
-        var isBT2020Primaries = false
+        var primariesType: UInt32 = 0 // 0=709, 1=2020, 2=SMPTE-C(601)
         if let primVal = CVBufferGetAttachment(imageBuffer, kCVImageBufferColorPrimariesKey, nil)?.takeUnretainedValue(),
            CFGetTypeID(primVal) == CFStringGetTypeID() {
             let prim = primVal as! CFString
             if CFEqual(prim, kCVImageBufferColorPrimaries_ITU_R_2020) {
-                isBT2020Primaries = true
+                primariesType = 1
             } else if CFEqual(prim, kCVImageBufferColorPrimaries_ITU_R_709_2) {
-                isBT2020Primaries = false
+                primariesType = 0
+            } else if CFEqual(prim, kCVImageBufferColorPrimaries_SMPTE_C) {
+                primariesType = 2
             }
         } else {
-            isBT2020Primaries = hdrEnabled
+            primariesType = looksLikeBt2020TenBitStream ? 1 : 0
         }
 
-        var isBT2020Matrix = false
+        var matrixType: UInt32 = 0 // 0=709, 1=2020, 2=601
         if let mtxVal = CVBufferGetAttachment(imageBuffer, kCVImageBufferYCbCrMatrixKey, nil)?.takeUnretainedValue(),
            CFGetTypeID(mtxVal) == CFStringGetTypeID() {
             let mtx = mtxVal as! CFString
             if CFEqual(mtx, kCVImageBufferYCbCrMatrix_ITU_R_2020) {
-                isBT2020Matrix = true
-            } else if CFEqual(mtx, kCVImageBufferYCbCrMatrix_ITU_R_709_2) {
-                isBT2020Matrix = false
+                matrixType = 1
+            } else if CFEqual(mtx, "ITU_R_601_4" as CFString) {
+                matrixType = 2
+            } else {
+                matrixType = 0
             }
         } else {
-            isBT2020Matrix = hdrEnabled
+            matrixType = looksLikeBt2020TenBitStream ? 1 : 0
         }
+
+        let isFullRangeSource: Bool = {
+            switch pf {
+            case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+                 kCVPixelFormatType_422YpCbCr8BiPlanarFullRange,
+                 kCVPixelFormatType_444YpCbCr8BiPlanarFullRange,
+                 kCVPixelFormatType_420YpCbCr10BiPlanarFullRange,
+                 kCVPixelFormatType_422YpCbCr10BiPlanarFullRange,
+                 kCVPixelFormatType_444YpCbCr10BiPlanarFullRange,
+                 kCVPixelFormatType_Lossy_420YpCbCr8BiPlanarFullRange,
+                 kCVPixelFormatType_Lossless_420YpCbCr8BiPlanarFullRange,
+                 kCVPixelFormatType_Lossy_420YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_Lossless_420YpCbCr10PackedBiPlanarFullRange_compat,
+                 kCVPixelFormatType_420YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_Lossy_422YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_Lossless_422YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_422YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_444YpCbCr10PackedBiPlanarFullRange:
+                return true
+            default:
+                return (formatDesc != nil) ? CVMetalHelpers.getIsFullRangeForVideoFormat(formatDesc!) : false
+            }
+        }()
 
         guard
             let drawable = try? drawableQueue?.nextDrawable()
@@ -264,12 +329,22 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 yFormat = .r16Unorm
                 cbcrFormat = .rg16Unorm
                 isBiPlanar = true
+            } else {
+                // Avoid private "secret" SDR texture formats that may apply
+                // undocumented color transforms. Use explicit YUV planes instead.
+                yFormat = .r8Unorm
+                cbcrFormat = .rg8Unorm
+                isBiPlanar = true
             }
         }
 
         if !firstFrameEmitted {
             let fmtStr = CVMetalHelpers.coreVideoPixelFormatToStr[pf] ?? "\(pf)"
-            print("[DrawableVideoDecoder] PF=\(fmtStr), planes=\(planeCount), hdr=\(hdrEnabled), PQ=\(isPQ), 2020Primaries=\(isBT2020Primaries), 2020Matrix=\(isBT2020Matrix)")
+            print("[DrawableVideoDecoder] PF=\(fmtStr), planes=\(planeCount), hdr=\(hdrEnabled), PQ=\(isPQ), fullRange=\(isFullRangeSource), primariesType=\(primariesType), matrixType=\(matrixType)")
+            let debugLine = "Codec \(codecDescription(videoFormat)) | PF \(fmtStr) | planes \(planeCount) | \(isBiPlanar ? "YUV" : "RGB") | \(isFullRangeSource ? "full" : "limited") | Matrix:\(matrixType) | PQ \(isPQ ? "yes" : "no")"
+            DispatchQueue.main.async { [debugInfoCallback] in
+                debugInfoCallback?(debugLine)
+            }
         }
 
         let fragment: String = isBiPlanar ? "copyFragmentShaderHDR_EDR" : "copyFragmentShaderHEVC_EDR"
@@ -359,27 +434,56 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             renderEncoder.setFragmentTexture(sourceTexture, index: 0)
         }
 
-        if hdrEnabled { isPQ = true }
-        
-        struct ShaderHDRParams { var presetIndex: UInt32; var isPQ: UInt32; var isBT2020Matrix: UInt32; var isBT2020Primaries: UInt32 }
+        let is10BitSource: Bool = {
+            switch pf {
+            case kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange,
+                 kCVPixelFormatType_420YpCbCr10BiPlanarFullRange,
+                 kCVPixelFormatType_422YpCbCr10BiPlanarVideoRange,
+                 kCVPixelFormatType_422YpCbCr10BiPlanarFullRange,
+                 kCVPixelFormatType_444YpCbCr10BiPlanarVideoRange,
+                 kCVPixelFormatType_444YpCbCr10BiPlanarFullRange,
+                 kCVPixelFormatType_Lossy_420YpCbCr10PackedBiPlanarVideoRange,
+                 kCVPixelFormatType_Lossless_420YpCbCr10PackedBiPlanarVideoRange,
+                 kCVPixelFormatType_Lossy_420YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_Lossless_420YpCbCr10PackedBiPlanarFullRange_compat,
+                 kCVPixelFormatType_420YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_420YpCbCr10PackedBiPlanarVideoRange,
+                 kCVPixelFormatType_Lossy_422YpCbCr10PackedBiPlanarVideoRange,
+                 kCVPixelFormatType_Lossless_422YpCbCr10PackedBiPlanarVideoRange,
+                 kCVPixelFormatType_Lossy_422YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_Lossless_422YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_422YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_422YpCbCr10PackedBiPlanarVideoRange,
+                 kCVPixelFormatType_444YpCbCr10PackedBiPlanarFullRange,
+                 kCVPixelFormatType_444YpCbCr10PackedBiPlanarVideoRange:
+                return true
+            default:
+                return false
+            }
+        }()
+
+        struct ShaderHDRParams { var is10Bit: UInt32; var isFullRange: UInt32; var isPQ: UInt32; var matrixType: UInt32; var primariesType: UInt32; var isTargetDisplayP3: UInt32 }
         
         var shaderParams = ShaderHDRParams(
-            presetIndex: 0,
+            is10Bit: is10BitSource ? 1 : 0,
+            isFullRange: isFullRangeSource ? 1 : 0,
             isPQ: isPQ ? 1 : 0,
-            isBT2020Matrix: isBT2020Matrix ? 1 : 0,
-            isBT2020Primaries: isBT2020Primaries ? 1 : 0
+            matrixType: matrixType,
+            primariesType: primariesType,
+            isTargetDisplayP3: hdrEnabled ? 1 : 0
         )
         
         renderEncoder.setFragmentBytes(&shaderParams, length: MemoryLayout<ShaderHDRParams>.size, index: 0)
 
         let full = hdrSettingsProvider?() ?? HDRParams(
-            boost: 1.0, contrast: 1.0, saturation: 1.0, brightness: 0.0, mode: 1
+            boost: 1.0, contrast: 1.0, saturation: 1.0, brightness: 0.0, pqExposure: 1.0, mode: 1
         )
         var fullParams = ShaderFullHDRParams(
             boost: full.boost,
             contrast: full.contrast,
             saturation: full.saturation,
             brightness: full.brightness,
+            pqExposure: full.pqExposure,
             mode: full.mode
         )
         renderEncoder.setFragmentBytes(&fullParams, length: MemoryLayout<ShaderFullHDRParams>.size, index: 1)
@@ -405,7 +509,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             firstFrameEmitted = true
             DispatchQueue.main.async {
                 self.callbacks.videoContentShown()
-                print("DrawableVideoDecoder: First frame presented (PQ=\(isPQ), 2020Primaries=\(isBT2020Primaries), 2020Matrix=\(isBT2020Matrix))")
+                print("DrawableVideoDecoder: First frame presented (PQ=\(isPQ), primariesType=\(primariesType), matrixType=\(matrixType))")
             }
         }
     }
@@ -445,7 +549,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         self.frameRate = frameRate
         self.videoWidth = Int(videoWidth)
         self.videoHeight = Int(videoHeight)
-        print("DrawableVideoDecoder: setup format=\(videoFormat) \(videoWidth)x\(videoHeight)@\(frameRate)")
+        print("DrawableVideoDecoder: setup format=\(String(format: "0x%04X", videoFormat)) [\(codecDescription(videoFormat))] \(videoWidth)x\(videoHeight)@\(frameRate)")
 
         let cacheAttributes: [String: Any] = [
             kCVMetalTextureCacheMaximumTextureAgeKey as String: 1,
@@ -519,6 +623,9 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         copyPipelineFormat = nil
         copyPipelineStateYUV = nil
         lastCopyFragment = nil
+        
+        // Reset so the next connection (reconnect) can fire videoContentShown again.
+        firstFrameEmitted = false
         
         print("DrawableVideoDecoder: Stopped and cleaned up all state")
     }
@@ -621,7 +728,12 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         
         VTDecompressionSessionDecodeFrame(activeSession, sampleBuffer: sampleBuffer, flags: [._EnableAsynchronousDecompression], frameRefcon: nil, infoFlagsOut: nil)
 
-        if decodeUnit.pointee.frameType == FRAME_TYPE_IDR {
+        // Only signal first-shown once per connection session.
+        // firstFrameEmitted covers the render-path notification; this covers
+        // the decode-path (IDR arrival) so the UI unblocks even before the
+        // first frame is composited.  Subsequent IDR frames (error recovery)
+        // must NOT re-fire the callback or they flood onChange observers.
+        if decodeUnit.pointee.frameType == FRAME_TYPE_IDR && !firstFrameEmitted {
             callbacks.videoContentShown()
         }
 
@@ -674,7 +786,8 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             print("Failed to create H264 format description: \(status)")
             return nil
         }
-        return fromatDesc
+        guard let baseDesc = fromatDesc else { return nil }
+        return enrichFormatDescription(baseDesc, codecType: kCMVideoCodecType_H264, codec: .h264)
     }
 
     private func createHEVCFormatDescription() -> CMVideoFormatDescription? {
@@ -687,7 +800,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             paramSizes.append(ps.count)
         }
 
-        var videoFormatParams = NSMutableDictionary()
+        let videoFormatParams = NSMutableDictionary()
 
         if let contentLightLevelInfo = contentLightLevelInfo {
             videoFormatParams.setObject(contentLightLevelInfo, forKey: kCMFormatDescriptionExtension_ContentLightLevelInfo as NSString)
@@ -711,7 +824,84 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             print("Failed to create HEVC format description: \(status)")
             return nil
         }
-        return formatDesc
+        guard let baseDesc = formatDesc else { return nil }
+        return enrichFormatDescription(baseDesc, codecType: kCMVideoCodecType_HEVC, codec: .hevc)
+    }
+
+    private enum CodecKind {
+        case h264
+        case hevc
+        case av1
+    }
+
+    private func makeDefaultColorExtensions(for codec: CodecKind) -> NSMutableDictionary {
+        let extensions = NSMutableDictionary()
+        extensions[kCMFormatDescriptionExtension_FieldCount as NSString] = 1 as NSNumber
+
+        switch codec {
+        case .hevc where hdrEnabled || (videoFormat & VIDEO_FORMAT_H265_MAIN10) != 0:
+            extensions[kCMFormatDescriptionExtension_ColorPrimaries as NSString] = kCMFormatDescriptionColorPrimaries_ITU_R_2020
+            extensions[kCMFormatDescriptionExtension_TransferFunction as NSString] = kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ
+            extensions[kCMFormatDescriptionExtension_YCbCrMatrix as NSString] = kCMFormatDescriptionYCbCrMatrix_ITU_R_2020
+            extensions[kCMFormatDescriptionExtension_FullRangeVideo as NSString] = false as NSNumber
+            extensions[kCMFormatDescriptionExtension_Depth as NSString] = 30 as NSNumber
+        default:
+            // GameStream/Limelight SDR content is typically Rec.709 video-range.
+            extensions[kCMFormatDescriptionExtension_ColorPrimaries as NSString] = kCMFormatDescriptionColorPrimaries_ITU_R_709_2
+            extensions[kCMFormatDescriptionExtension_TransferFunction as NSString] = kCMFormatDescriptionTransferFunction_ITU_R_709_2
+            extensions[kCMFormatDescriptionExtension_YCbCrMatrix as NSString] = kCMFormatDescriptionYCbCrMatrix_ITU_R_709_2
+            extensions[kCMFormatDescriptionExtension_FullRangeVideo as NSString] = false as NSNumber
+            extensions[kCMFormatDescriptionExtension_Depth as NSString] = 24 as NSNumber
+        }
+
+        return extensions
+    }
+
+    private func enrichFormatDescription(
+        _ baseDesc: CMVideoFormatDescription,
+        codecType: CMVideoCodecType,
+        codec: CodecKind
+    ) -> CMVideoFormatDescription? {
+        let mergedExtensions = ((CMFormatDescriptionGetExtensions(baseDesc) as NSDictionary?)?.mutableCopy() as? NSMutableDictionary) ?? NSMutableDictionary()
+        let colorDefaults = makeDefaultColorExtensions(for: codec)
+        // Keep stream-provided color metadata when available.
+        // Only fill missing keys with safe defaults.
+        colorDefaults.forEach { key, value in
+            if mergedExtensions[key] == nil {
+                mergedExtensions[key] = value
+            }
+        }
+
+        let dimensions = CMVideoFormatDescriptionGetDimensions(baseDesc)
+        var enrichedDesc: CMVideoFormatDescription?
+        let status = CMVideoFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            codecType: codecType,
+            width: dimensions.width,
+            height: dimensions.height,
+            extensions: mergedExtensions as CFDictionary,
+            formatDescriptionOut: &enrichedDesc
+        )
+
+        if status != noErr {
+            print("Failed to enrich format description: \(status)")
+            return baseDesc
+        }
+
+        return enrichedDesc
+    }
+
+    private func codecDescription(_ format: Int32) -> String {
+        if (format & VIDEO_FORMAT_MASK_AV1) != 0 {
+            return (format & VIDEO_FORMAT_AV1_MAIN10) != 0 ? "AV1 Main10" : "AV1"
+        }
+        if (format & VIDEO_FORMAT_MASK_H265) != 0 {
+            return (format & VIDEO_FORMAT_H265_MAIN10) != 0 ? "HEVC Main10" : "HEVC"
+        }
+        if (format & VIDEO_FORMAT_MASK_H264) != 0 {
+            return "H264"
+        }
+        return "Unknown"
     }
 
     private func createAV1FormatDescriptionForIDRFrame(_ frameData: Data) -> CMVideoFormatDescription? {

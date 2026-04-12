@@ -72,6 +72,8 @@ public class TemporarySettings: NSObject {
     @objc public var brightness: Float = 1.0
     @objc public var gamma: Float = 1.0       // Default: 1.0 (Neutral)
     @objc public var saturation: Float = 1.0  // Default: 1.0 (Neutral)
+    /// PQ (HDR10) / ST.2084 exposure trim for RealityKit; 1.0 = neutral. Not stored in Core Data.
+    @objc public var pqExposure: Float = 1.0
     
     @objc public var appLanguageRaw: Int = AppLanguage.english.rawValue
     @objc public var autoResumeStreamOnReopen = false
@@ -97,6 +99,7 @@ public class TemporarySettings: NSObject {
         self.brightness = 1.0
         self.gamma = 1.0
         self.saturation = 1.0
+        self.pqExposure = 1.0
         
         if let storedLang = UserDefaults.standard.object(forKey: appLanguageDefaultsKey) as? Int {
             self.appLanguageRaw = storedLang
@@ -181,6 +184,7 @@ public class TemporarySettings: NSObject {
             self.brightness = settings.brightness?.floatValue ?? 1.0
             self.gamma = settings.gamma?.floatValue ?? 1.0
             self.saturation = settings.saturation?.floatValue ?? 1.0
+            self.pqExposure = 1.0
             
             if let storedLang = UserDefaults.standard.object(forKey: appLanguageDefaultsKey) as? Int {
                 self.appLanguageRaw = storedLang
@@ -247,6 +251,7 @@ public class TemporarySettings: NSObject {
         self.brightness = 1.0
         self.gamma = 1.0
         self.saturation = 1.0
+        self.pqExposure = 1.0
         
         // RealityKit display settings
         self.realitykitRendererCurvature = 0.0  // Default from slider
@@ -278,6 +283,9 @@ public class TemporarySettings: NSObject {
         defaults.set(1.0, forKey: "realitykitImmersiveGamma")
         defaults.set(1.0, forKey: "realitykitImmersiveSaturation")
         defaults.set(1.0, forKey: "realitykitImmersiveBrightness")
+        defaults.set(1.0, forKey: "realitykitPqExposure")
+        defaults.set(1.0, forKey: "realitykitVolumePqExposure")
+        defaults.set(1.0, forKey: "realitykitImmersivePqExposure")
         
         // Save the reset values
         self.save()
@@ -319,6 +327,7 @@ public class TemporarySettings: NSObject {
         self.brightness = 1.0
         self.gamma = 1.0
         self.saturation = 1.0
+        self.pqExposure = 1.0
         
         // App settings (keep language, reset others)
         self.autoResumeStreamOnReopen = false
@@ -347,6 +356,9 @@ public class TemporarySettings: NSObject {
         // Reset saved gamma and saturation values
         defaults.removeObject(forKey: "realitykitGamma")
         defaults.removeObject(forKey: "realitykitSaturation")
+        defaults.removeObject(forKey: "realitykitPqExposure")
+        defaults.removeObject(forKey: "realitykitVolumePqExposure")
+        defaults.removeObject(forKey: "realitykitImmersivePqExposure")
         
         // Reset UIKit window corner radius
         defaults.set(0.0, forKey: "uikitWindowCornerRadius")

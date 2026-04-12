@@ -105,6 +105,16 @@ import os
     }
 
     public func clearEnvironment() {
+        unloadStudioRootFromMemory()
+    }
+
+    /// Drops the loaded `AAA_MainScene` entity and resets flags so the next Studio selection
+    /// loads a fresh copy. Call when leaving virtual environment (passthrough) or when
+    /// trimming memory — avoids retaining large USDZ / probe data across many toggle cycles.
+    public func unloadStudioRootFromMemory() {
+        if let root = rootEntity {
+            root.removeFromParent()
+        }
         environmentStateHandler.clear()
         rootEntity = nil
         dockingAnchor = nil
@@ -120,10 +130,11 @@ import os
             // CRITICAL: Completely hide and disable the root entity for full passthrough
             if let entity = rootEntity {
                 entity.isEnabled = false
-                // Force remove from scene hierarchy if present
-                // (This will be handled in RealityView's content.remove)
             }
             environmentStateHandler.setActiveState(.none)
+            // Release Studio assets while in passthrough so memory does not accumulate
+            // across repeated immersive exit / virtual-scene toggles.
+            unloadStudioRootFromMemory()
             print("Environment state set to None - PASSTHROUGH mode, activeState: \(environmentStateHandler.activeState)")
         } else {
             // Show and enable the root entity for Studio environment

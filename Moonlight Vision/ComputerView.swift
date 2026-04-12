@@ -70,14 +70,14 @@ struct ComputerView: View {
                         // --- Call with force: true ---
                         await viewModel.updateHost(host: host, force: true)
 
-                        // Refresh apps if needed *after* the forced update
-                        if host.state == .online && host.pairState == .paired {
-                             print("Manual Refresh resulted in Online/Paired state, refreshing apps for \(host.name)")
-                             viewModel.refreshAppsFor(host: host)
-                        }
+                    // Refresh apps if needed *after* the forced update
+                    if host.state == .online && host.pairState == .paired {
+                         print("Manual Refresh resulted in Online/Paired state, refreshing apps for \(host.name)")
+                         await viewModel.refreshAppsFor(host: host)
                     }
-                } label: {
-                    Label(viewModel.localized("refresh_status"), systemImage: "arrow.clockwise")
+                }
+            } label: {
+                Label(viewModel.localized("refresh_status"), systemImage: "arrow.clockwise")
                 }
                 .disabled(host.updatePending)
             }
@@ -97,21 +97,22 @@ struct ComputerView: View {
 
                 if host.state == .online && host.pairState == .paired && host.appList.isEmpty {
                     print("ComputerView.task: Host \(host.name) is Online/Paired after update, refreshing apps.")
-                     viewModel.refreshAppsFor(host: host)
+                    await viewModel.refreshAppsFor(host: host)
                 }
             } else {
                  print("ComputerView.task: Skipping automatic updateHost for \(host.name). StopFlag: \(stopAutomaticStateUpdate), State: \(host.state), PairState: \(host.pairState)")
             }
         }
-        // Optional: React to state changes, e.g., refresh apps when coming online
+        // Refresh apps when returning online from a *non-unknown* state (e.g. offline).
+        // Do NOT refresh on unknown→online: `.task` already ran `refreshAppsFor` after
+        // `updateHost`, and duplicating here caused triple HTTP + AttributeGraph cycles.
         .onChange(of: host.state) { oldState, newState in
              print("Host \(host.name) state changed from \(oldState) to \(newState)")
-             if newState == .online && host.pairState == .paired {
-                 // Check if apps are already loaded? Avoid redundant refresh.
+             if newState == .online && host.pairState == .paired && oldState != .unknown {
                  if host.appList.isEmpty {
-                     print("Host \(host.name) became Online/Paired, refreshing apps.")
+                     print("Host \(host.name) became Online/Paired (from \(oldState)), refreshing apps.")
                      Task {
-                         viewModel.refreshAppsFor(host: host) // Assuming this exists
+                         await viewModel.refreshAppsFor(host: host)
                      }
                  }
              }
@@ -220,7 +221,7 @@ struct ComputerView: View {
                     // Refresh apps if needed *after* the forced update
                     if host.state == .online && host.pairState == .paired {
                          print("Manual Refresh resulted in Online/Paired state, refreshing apps for \(host.name)")
-                         viewModel.refreshAppsFor(host: host)
+                         await viewModel.refreshAppsFor(host: host)
                     }
                 }
             } label: {

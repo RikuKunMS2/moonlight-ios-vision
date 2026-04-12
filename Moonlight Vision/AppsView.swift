@@ -12,7 +12,6 @@ import SwiftUI
 struct AppsView: View {
     @EnvironmentObject private var viewModel: MainViewModel
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.pushWindow) private var pushWindow
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
@@ -48,7 +47,7 @@ struct AppsView: View {
         .navigationTitle(host.name)
         .onAppear() {
             guard !viewModel.activelyStreaming else { return }
-            Task { viewModel.refreshAppsFor(host: host) }
+            Task { await viewModel.refreshAppsFor(host: host) }
         }
         .alert(viewModel.localized("close_previous_window"), isPresented: $viewModel.showClassicWindowCloseAlert) {
             Button(viewModel.localized("got_it"), role: .cancel) {}
@@ -62,7 +61,7 @@ struct AppsView: View {
         }
         .refreshable() {
             guard !viewModel.activelyStreaming else { return }
-            viewModel.refreshAppsFor(host: host)
+            await viewModel.refreshAppsFor(host: host)
         }
         .sheet(item: $streamModeOverlayApp) { app in
             StreamModeSelectionOverlay(

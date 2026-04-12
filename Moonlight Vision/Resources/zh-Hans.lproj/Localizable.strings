@@ -207,6 +207,7 @@
 "brightness" = "亮度";
 "contrast" = "对比度";
 "saturation" = "饱和度";
+"pq_hdr_exposure" = "PQ HDR 曝光";
 "spatial_adjustments" = "空间调整";
 "vertical_height" = "垂直高度";
 "passthrough_environment_brightness" = "透视环境亮度";

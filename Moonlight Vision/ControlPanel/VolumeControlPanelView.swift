@@ -85,6 +85,7 @@ struct VolumeControlPanelView: View {
         .onChange(of: viewModel.streamSettings.brightness) { _, _ in debouncedSave() }
         .onChange(of: viewModel.streamSettings.gamma) { _, _ in debouncedSave() }
         .onChange(of: viewModel.streamSettings.saturation) { _, _ in debouncedSave() }
+        .onChange(of: viewModel.streamSettings.pqExposure) { _, _ in debouncedSave() }
         .onChange(of: viewModel.streamSettings.realitykitRendererCurvature) { _, _ in debouncedSave() }
         .onChange(of: viewModel.streamSettings.dimPassthrough) { _, _ in debouncedSaveDimPassthrough() }
         .onChange(of: depthOffset) { _, _ in debouncedSave() }
@@ -154,6 +155,7 @@ struct VolumeControlPanelView: View {
                     SteppedSliderRow(title: viewModel.localized("brightness"), value: $viewModel.streamSettings.brightness, range: 0.5...3.0, defaultValue: 1.0, format: "%.2f", step: 0.01)
                     SteppedSliderRow(title: viewModel.localized("contrast"), value: $viewModel.streamSettings.gamma, range: 0.5...3.0, defaultValue: 1.0, format: "%.2f", step: 0.01)
                     SteppedSliderRow(title: viewModel.localized("saturation"), value: $viewModel.streamSettings.saturation, range: 0.5...3.0, defaultValue: 1.0, format: "%.2f", step: 0.01)
+                    SteppedSliderRow(title: viewModel.localized("pq_hdr_exposure"), value: $viewModel.streamSettings.pqExposure, range: 0.25...2.5, defaultValue: 1.0, format: "%.2f", step: 0.01)
                 }
                 SteppedSliderRow(title: viewModel.localized("screen_curvature"), value: $viewModel.streamSettings.realitykitRendererCurvature, range: 0...1, defaultValue: 0.0, format: "%.3f", step: 0.01)
             }
@@ -230,6 +232,7 @@ struct VolumeControlPanelView: View {
         defaults.set(viewModel.streamSettings.gamma, forKey: "realitykitVolumeGamma")
         defaults.set(viewModel.streamSettings.saturation, forKey: "realitykitVolumeSaturation")
         defaults.set(viewModel.streamSettings.brightness, forKey: "realitykitVolumeBrightness")
+        defaults.set(viewModel.streamSettings.pqExposure, forKey: "realitykitVolumePqExposure")
         defaults.set(viewModel.streamSettings.dimPassthrough, forKey: "realitykitVolumeDimPassthrough")
         viewModel.streamSettings.save()
     }

@@ -456,71 +456,86 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     // MARK: - Host & App Data Sync
 
     func updateHost(host: TemporaryHost, force: Bool = false) async {
-        await MainActor.run {
-            guard force || host.state != .offline else {
-                print("updateHost: Host \(host.name) is marked offline and force is false. Skipping request.")
-                if host.updatePending { host.updatePending = false }
-                return
-            }
-
-            print("updateHost: Proceeding with server info request for \(host.name). State: \(host.state), Force: \(force)")
-
-            let httpManager = HttpManager(host: host)
-            discoveryManager?.pauseDiscovery(for: host)
-            host.updatePending = true // Mark as pending
-
-            let serverInfoResponse = ServerInfoResponse()
-
-            print("Executing server info request for host: \(host.name) at \(host.activeAddress ?? host.address ?? "N/A")")
-            let request = HttpRequest(for: serverInfoResponse, with: httpManager?.newServerInfoRequest(false), fallbackError: 401, fallbackRequest: httpManager?.newHttpServerInfoRequest())
-            httpManager?.executeRequestSynchronously(request) // BLOCKING CALL
-
-            // --- Process Result ---
-            host.updatePending = false // Clear pending flag regardless of outcome
-
-            guard hosts.contains(where: { $0.uuid == host.uuid }) else {
-                 print("updateHost: Host \(host.name) (UUID: \(host.uuid)) no longer in list after request. Discarding result.")
-                 discoveryManager?.resumeDiscovery(for: host) // Still need to resume discovery
-                 return
-            }
-
-            if serverInfoResponse.isStatusOk() {
-                print("Successfully updated host: \(host.name). Populating host data.")
-                if host.state != .online {
-                     print("updateHost: Host \(host.name) was previously \(host.state), setting to Online after successful update.")
-                     host.state = .online // Ensure state reflects reachability
-                }
-                serverInfoResponse.populateHost(host) // Populate details (like pairState, etc.)
-                
-                // ------------------- FIX -------------------
-                // Save the updated host to persistent storage (Core Data).
-                // This is the critical step to "remember" the pairing.
-                dataManager.update(host)
-                // -------------------------------------------
-                
-            } else {
-                print("Failed to update host: \(host.name) during server info request. Error: \(serverInfoResponse.statusMessage ?? "unknown error"). Setting state to offline.")
-                if host.state != .offline {
-                    host.state = .offline
-                }
-            }
-
-            discoveryManager?.resumeDiscovery(for: host)
+        // --- Main-actor pre-flight (no blocking work here) ---
+        guard force || host.state != .offline else {
+            print("updateHost: Host \(host.name) is marked offline and force is false. Skipping request.")
+            if host.updatePending { host.updatePending = false }
+            return
         }
+
+        print("updateHost: Proceeding with server info request for \(host.name). State: \(host.state), Force: \(force)")
+
+        let httpManager = HttpManager(host: host)
+        discoveryManager?.pauseDiscovery(for: host)
+        host.updatePending = true
+
+        let serverInfoResponse = ServerInfoResponse()
+        print("Executing server info request for host: \(host.name) at \(host.activeAddress ?? host.address ?? "N/A")")
+        let request = HttpRequest(
+            for: serverInfoResponse,
+            with: httpManager?.newServerInfoRequest(false),
+            fallbackError: 401,
+            fallbackRequest: httpManager?.newHttpServerInfoRequest()
+        )
+
+        // Suspend the main actor and run the blocking HTTP call on a background thread.
+        // This keeps the UI fully responsive while waiting for the network response.
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                httpManager?.executeRequestSynchronously(request)
+                continuation.resume()
+            }
+        }
+
+        // --- Back on main actor — process results ---
+        host.updatePending = false
+
+        guard hosts.contains(where: { $0.uuid == host.uuid }) else {
+            print("updateHost: Host \(host.name) (UUID: \(host.uuid)) no longer in list after request. Discarding result.")
+            discoveryManager?.resumeDiscovery(for: host)
+            return
+        }
+
+        if serverInfoResponse.isStatusOk() {
+            print("Successfully updated host: \(host.name). Populating host data.")
+            if host.state != .online {
+                print("updateHost: Host \(host.name) was previously \(host.state), setting to Online after successful update.")
+                host.state = .online
+            }
+            serverInfoResponse.populateHost(host)
+            dataManager.update(host)
+        } else {
+            print("Failed to update host: \(host.name) during server info request. Error: \(serverInfoResponse.statusMessage ?? "unknown error"). Setting state to offline.")
+            if host.state != .offline {
+                host.state = .offline
+            }
+        }
+
+        discoveryManager?.resumeDiscovery(for: host)
     }
 
-    func refreshAppsFor(host: TemporaryHost) {
-        // possibly put loading stuff somewhere?
+    func refreshAppsFor(host: TemporaryHost) async {
         print("refreshAppsFor - Refreshing apps for host: \(host.name)")
         discoveryManager?.pauseDiscovery(for: host)
-        let appListResponse = ConnectionHelper.getAppList(for: host)
+
+        // ConnectionHelper.getAppList retries up to 5 times with 1-second sleeps between
+        // attempts — up to ~5 s of blocking I/O.  Run it on a background thread so the
+        // main actor (and therefore the UI) stays fully responsive.
+        let appListResponse: AppListResponse? = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let response = ConnectionHelper.getAppList(for: host) as? AppListResponse
+                continuation.resume(returning: response)
+            }
+        }
+
+        // --- Back on main actor — process results ---
         discoveryManager?.resumeDiscovery(for: host)
+
         if appListResponse?.isStatusOk() == true {
             let serverApps = (appListResponse!.getAppList() as! Set<TemporaryApp>)
             print("refreshAppsFor - Received \(serverApps.count) apps from server.")
 
             var newAppList = OrderedSet<TemporaryApp>()
-            // Only new apps we have received are valid, but keep the old object and state if it exists.
             for serverApp in serverApps {
                 var matchFound = false
                 for oldApp in host.appList {
@@ -528,7 +543,6 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
                         oldApp.name = serverApp.name
                         oldApp.hdrSupported = serverApp.hdrSupported
                         oldApp.setHost(host)
-                        // Ignore hidden, we want to respect the saved state.
                         matchFound = true
                         newAppList.append(oldApp)
                         break
@@ -547,18 +561,18 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
                 for removedApp in removedApps {
                     database.remove(removedApp)
                 }
-                database.updateApps(forExisting: host) // Persist removals
+                database.updateApps(forExisting: host)
             }
 
             if host.appList != newAppList {
-                 print("refreshAppsFor - App list changed. Updating host.")
-                 host.appList = newAppList // Update the host's app list
+                print("refreshAppsFor - App list changed. Updating host.")
+                host.appList = newAppList
             } else {
-                 print("refreshAppsFor - App list unchanged.")
+                print("refreshAppsFor - App list unchanged.")
             }
 
         } else {
-             print("refreshAppsFor - Failed to retrieve app list for host: \(host.name). Status: \(appListResponse?.statusMessage ?? "Unknown error")")
+            print("refreshAppsFor - Failed to retrieve app list for host: \(host.name). Status: \(appListResponse?.statusMessage ?? "Unknown error")")
             host.state = .offline
         }
     }

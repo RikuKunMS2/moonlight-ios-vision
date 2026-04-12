@@ -63,6 +63,7 @@ struct StandardControlPanelView: View {
         .onChange(of: viewModel.streamSettings.brightness) { _, _ in debouncedSave() }
         .onChange(of: viewModel.streamSettings.gamma) { _, _ in debouncedSave() }
         .onChange(of: viewModel.streamSettings.saturation) { _, _ in debouncedSave() }
+        .onChange(of: viewModel.streamSettings.pqExposure) { _, _ in debouncedSave() }
         .onChange(of: viewModel.streamSettings.realitykitRendererCurvature) { _, _ in debouncedSave() }
         .onChange(of: viewModel.streamSettings.dimPassthrough) { _, _ in debouncedSaveDimPassthrough() }
         .onDisappear {
@@ -152,7 +153,6 @@ struct StandardControlPanelView: View {
             SectionHeader(title: viewModel.localized("display_effects"), icon: "display")
             
             Grid(horizontalSpacing: 16, verticalSpacing: 20) {
-                // HDR settings
                 if viewModel.streamSettings.enableHdr || needsHdr {
                     SteppedSliderRow(
                         title: viewModel.localized("brightness"),
@@ -176,6 +176,15 @@ struct StandardControlPanelView: View {
                         title: viewModel.localized("saturation"),
                         value: $viewModel.streamSettings.saturation,
                         range: 0.0...3.0,
+                        defaultValue: 1.0,
+                        format: "%.2f",
+                        step: 0.01
+                    )
+                    
+                    SteppedSliderRow(
+                        title: viewModel.localized("pq_hdr_exposure"),
+                        value: $viewModel.streamSettings.pqExposure,
+                        range: 0.25...2.5,
                         defaultValue: 1.0,
                         format: "%.2f",
                         step: 0.01
@@ -284,6 +293,7 @@ struct StandardControlPanelView: View {
         let defaults = UserDefaults.standard
         defaults.set(viewModel.streamSettings.gamma, forKey: "realitykitGamma")
         defaults.set(viewModel.streamSettings.saturation, forKey: "realitykitSaturation")
+        defaults.set(viewModel.streamSettings.pqExposure, forKey: "realitykitPqExposure")
         if let height = height {
             defaults.set(height.wrappedValue, forKey: "realitykitHeight")
         }

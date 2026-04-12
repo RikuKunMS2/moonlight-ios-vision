@@ -206,6 +206,7 @@
 "brightness" = "Brightness";
 "contrast" = "Contrast";
 "saturation" = "Saturation";
+"pq_hdr_exposure" = "PQ / HDR exposure";
 "spatial_adjustments" = "Spatial Adjustments";
 "vertical_height" = "Vertical Height";
 "passthrough_environment_brightness" = "Passthrough Environment Brightness";

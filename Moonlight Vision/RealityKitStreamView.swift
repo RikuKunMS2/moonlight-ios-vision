@@ -534,25 +534,52 @@ struct RealityKitStreamView: View {
     var body: some View {
         if let config = streamConfig {
             if config.sessionUUID == viewModel.activeSessionToken {
-            _RealityKitStreamView(
-                streamConfig: Binding<StreamConfiguration>(
+                _RealityKitStreamView(
+                    streamConfig: Binding<StreamConfiguration>(
                         get: { config },
-                    set: { streamConfig = $0 }
-                ),
-                needsHdr: needsHdr,
+                        set: { streamConfig = $0 }
+                    ),
+                    needsHdr: needsHdr,
                     isImmersive: isImmersive,
                     swapAction: { }
                 )
                 .id(config.sessionUUID)
-                } else {
+            } else {
+                // Ghost/stale window: a different session UUID is active.
+                // Redirect to main menu and close this window.
                 Color.black
                     .ignoresSafeArea()
-                    .onAppear {
-                        print("Ghost view detected (UUID \(config.sessionUUID) != active \(viewModel.activeSessionToken)). Suppressing.")
-                }
+                    .task {
+                        print("Ghost view detected (UUID \(config.sessionUUID) != active \(viewModel.activeSessionToken)). Redirecting to main menu.")
+                        redirectZombieToMainMenu()
+                    }
             }
         } else {
-            Color.black.ignoresSafeArea()
+            // Zombie window: visionOS restored this scene after a reboot or long
+            // sleep but the process has no active stream (StreamConfiguration was
+            // never persisted across a process kill).  Redirect to main menu.
+            Color.black
+                .ignoresSafeArea()
+                .task {
+                    guard !viewModel.activelyStreaming else { return }
+                    print("[RealityKitStreamView] Zombie scene detected (nil config, not streaming). Redirecting to main menu.")
+                    redirectZombieToMainMenu()
+                }
+        }
+    }
+
+    /// Open the main menu window and close this dead streaming window/space.
+    private func redirectZombieToMainMenu() {
+        viewModel.savedStreamConfigForResume = nil
+        openWindow(id: "mainView")
+        // Small delay so the main window has time to register before we close self.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if isImmersive {
+                Task { await dismissImmersiveSpace() }
+            } else {
+                dismissWindow(id: "realitykitStreamingWindow")
+            }
+            streamConfig = nil
         }
     }
 }
@@ -564,7 +591,6 @@ struct _RealityKitStreamView: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var viewModel: MainViewModel
     @EnvironmentObject private var controlState: StreamControlState
-    @Environment(\.pushWindow) private var pushWindow
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
 
     @Binding var streamConfig: StreamConfiguration
@@ -628,7 +654,7 @@ struct _RealityKitStreamView: View {
     @State private var hasInitializedPosition = false
     
     @State private var safeHDRSettings = ThreadSafeHDRSettings(
-        params: HDRParams(boost: 1.0, contrast: 1.0, saturation: 1.0, brightness: 0.0, mode: 0)
+        params: HDRParams(boost: 1.0, contrast: 1.0, saturation: 1.0, brightness: 0.0, pqExposure: 1.0, mode: 0)
     )
     @StateObject private var hdrParams = HDRTestParams()
 
@@ -743,6 +769,9 @@ struct _RealityKitStreamView: View {
     @State private var jpgTest3Texture: TextureResource?
     @State private var extraSkyboxTextures: [TextureResource] = []
     @State private var extraSkyboxNames: [String] = []
+    /// In-flight skybox bundle scan — cancel before starting another to avoid duplicate GPU allocations.
+    @State private var extraSkyboxLoadTask: Task<Void, Never>?
+    @State private var dimmerGradientPreloadTask: Task<Void, Never>?
     
     @State private var builtinSkyboxTextures: [String: TextureResource] = [:]
     @State private var envPresetSkyboxTextures: [String: TextureResource] = [:]
@@ -788,6 +817,10 @@ struct _RealityKitStreamView: View {
     private let lastGeneratedCurveBox = MutableBox<Float?>(nil)
     private let lastGeneratedAspectBox = MutableBox<Float?>(nil)
     private let lastGeneratedCornerBox = MutableBox<Float?>(nil)
+    /// Timestamp of the last mesh generation; used to throttle rebuilds during slider drag.
+    private let lastMeshGenTimeBox = MutableBox<Date?>(nil)
+    /// Minimum interval between mesh rebuilds (seconds). Limits to ~15 rebuilds/sec during drag.
+    private static let meshGenMinInterval: TimeInterval = 0.06
     
     var body: some View {
         let contentView = Group {
@@ -841,6 +874,12 @@ struct _RealityKitStreamView: View {
             }
             .onChange(of: scenePhase) { oldValue, newValue in
                 if newValue == .background {
+                    if isImmersive {
+                        // Trim large GPU assets while the immersive space is not visible — Studio USDZ,
+                        // skybox JPEGs, and generated gradient textures otherwise stay resident across
+                        // many crown in/out cycles and virtual-scene toggles.
+                        releaseImmersiveHeavyCachesForBackground()
+                    }
                     if viewModel.activelyStreaming, streamMan != nil {
                         print("Suspending stream due to background")
                         needsResume = true
@@ -850,6 +889,12 @@ struct _RealityKitStreamView: View {
                         controllerSupport = nil
                     }
                 } else if newValue == .active {
+                    if isImmersive,
+                       selectedEnvironmentState != .none,
+                       !immersiveEnvironment.isLoaded,
+                       !immersiveEnvironment.isLoading {
+                        immersiveEnvironment.loadEnvironment()
+                    }
                     if needsResume {
                         print("Resuming stream from background")
                         needsResume = false
@@ -976,10 +1021,22 @@ struct _RealityKitStreamView: View {
             .onChange(of: viewModel.streamSettings.realitykitRendererCurvature) { _, newValue in
                 sliderCurvature = newValue
             }
-            .onChange(of: viewModel.streamSettings.brightness) { _, _ in updateHDRParams() }
-            .onChange(of: viewModel.streamSettings.gamma) { _, _ in updateHDRParams() }
-            .onChange(of: viewModel.streamSettings.saturation) { _, _ in updateHDRParams() }
-        
+            .onChange(of: viewModel.streamSettings.enableHdr) { _, _ in
+                applyDefaultDisplayParams()
+            }
+            .onChange(of: viewModel.streamSettings.brightness) { _, _ in
+                if viewModel.streamSettings.enableHdr { updateHDRParams() }
+            }
+            .onChange(of: viewModel.streamSettings.gamma) { _, _ in
+                if viewModel.streamSettings.enableHdr { updateHDRParams() }
+            }
+            .onChange(of: viewModel.streamSettings.saturation) { _, _ in
+                if viewModel.streamSettings.enableHdr { updateHDRParams() }
+            }
+            .onChange(of: viewModel.streamSettings.pqExposure) { _, _ in
+                if viewModel.streamSettings.enableHdr { updateHDRParams() }
+            }
+
         return controlStateSynced
     }
     
@@ -1221,7 +1278,9 @@ struct _RealityKitStreamView: View {
                             .environmentObject(controlState)
                     } else {
                         VolumeControlPanelView(
-                            homeAction: { pushWindow(id: "mainView") },
+                            // openWindow — pushWindow is only valid for Plain/Default WindowGroup;
+                            // volumetric streaming windows trigger "PushWindowAction requires…" and can crash.
+                            homeAction: { openWindow(id: "mainView") },
                             closeAction: {
                                 viewModel.savedStreamConfigForResume = streamConfig
                                 needsResume = false
@@ -1343,127 +1402,131 @@ struct _RealityKitStreamView: View {
 
     private func setupScene() {
         if !viewModel.activelyStreaming {
+            // Scene appeared while not streaming — zombie window (e.g. restored by
+            // visionOS after a reboot with a stale StreamConfiguration value).
+            // Redirect to main menu and close self.
+            openWindow(id: "mainView")
             Task { @MainActor in
                 viewModel.userDidRequestDisconnect()
                 await dismissImmersiveSpace()
+                if !isImmersive {
+                    dismissWindow(id: "realitykitStreamingWindow")
+                }
             }
             return
         }
-        
-       
+
+        // Non-state prep: safe to do synchronously
         print("[StreamView] Re-initializing ControllerSupport with slotOffset: \(streamConfig.controllerSlotOffset)")
         self.controllerSupport = ControllerSupport(config: streamConfig, delegate: DummyControllerDelegate())
         connectionCallbacks.controllerSupport = self.controllerSupport
-        
-        hasPerformedTeardown = false
-        renderGateOpen = true
-        lastStreamErrorMessage = nil
         connectionCallbacks.showAlert = false
+        gazeController.streamConfig = streamConfig
 
+        // Kick off stream (internally defers heavy work with asyncAfter)
+        startStreamIfNeeded()
+
+        // Dismiss windows synchronously (no @State involved)
         dismissWindow(id: "mainView")
         dismissWindow(id: "dummy")
-        
-        
-        isMenuOpen = false
-        
-        viewModel.streamSettings.statsOverlay = false
-        statsTimer?.invalidate()
-        statsTimer = nil
-        statsOverlayText = ""
-        
-        dimLevel = 0
-        viewModel.streamSettings.dimPassthrough = false
-        
-        self.targetScale = self.screenScale
-        
-        // Initialize input mode from user preference
-        let defaultMode = UserDefaults.standard.integer(forKey: "immersive.defaultControlMode")
-        inputMode = InputMode(rawValue: defaultMode) ?? .gazeControl
-        print("[StreamView] Initialized input mode from settings: \(inputMode.displayName)")
-        
-        // Initialize gaze controller with stream config
-        gazeController.streamConfig = streamConfig
-        
-        startStreamIfNeeded()
-        spatialAudioMode = true
 
-        if needsHdr {
-            hdrParams.mode = 1
-            safeHDRSettings.value = HDRParams(
-                boost: 1.35,
-                contrast: 1.1,
-                saturation: 1.08,
-                brightness: 0.0,
-                mode: 1
-            )
-            ensureHDRTextureMatchesSetting()
-        }
-        
-        if let sceneID = UIApplication.shared.connectedScenes.first?.session.persistentIdentifier {
-            self.immersiveSpaceSceneID = sceneID
-        }
-        
-        restoreSavedTransform()
-        
-        hideTimer?.invalidate()
-        hideTimer = nil
-        hideControls = false
-        
-        openedMainAfterDisconnect = false
-        
-        applyDefaultDisplayParams()
-
-        // Initialize slider curvature from saved settings
-        sliderCurvature = viewModel.streamSettings.realitykitRendererCurvature
-        
-        // Apply saved display settings to HDR params
-        if viewModel.streamSettings.brightness > 0 || viewModel.streamSettings.gamma > 0 || viewModel.streamSettings.saturation > 0 {
-            updateHDRParams()
-        }
-        
-        // Defer callback setup to next run loop to avoid "modifying state during view update"
+        // Defer all @State mutations to next runloop to avoid
+        // "Modifying state during view update" — onAppear fires mid-update-pass.
         DispatchQueue.main.async { [self] in
+            hasPerformedTeardown = false
+            renderGateOpen = true
+            lastStreamErrorMessage = nil
+
+            isMenuOpen = false
+
+            viewModel.streamSettings.statsOverlay = false
+            statsTimer?.invalidate()
+            statsTimer = nil
+            statsOverlayText = ""
+
+            dimLevel = 0
+            viewModel.streamSettings.dimPassthrough = false
+
+            self.targetScale = self.screenScale
+
+            // Initialize input mode from user preference
+            let defaultMode = UserDefaults.standard.integer(forKey: "immersive.defaultControlMode")
+            inputMode = InputMode(rawValue: defaultMode) ?? .gazeControl
+            print("[StreamView] Initialized input mode from settings: \(inputMode.displayName)")
+
+            spatialAudioMode = true
+
+            if needsHdr {
+                hdrParams.mode = 1
+                safeHDRSettings.value = HDRParams(
+                    boost: 1.0,
+                    contrast: 1.0,
+                    saturation: 1.0,
+                    brightness: 0.0,
+                    pqExposure: viewModel.streamSettings.pqExposure,
+                    mode: 1
+                )
+                ensureHDRTextureMatchesSetting()
+            }
+
+            if let sceneID = UIApplication.shared.connectedScenes.first?.session.persistentIdentifier {
+                self.immersiveSpaceSceneID = sceneID
+            }
+
+            restoreSavedTransform()
+
+            hideTimer?.invalidate()
+            hideTimer = nil
+            hideControls = false
+
+            openedMainAfterDisconnect = false
+
+            applyDefaultDisplayParams()
+
+            // Initialize slider curvature from saved settings
+            sliderCurvature = viewModel.streamSettings.realitykitRendererCurvature
+
+            // Second pass — needs first-pass @State to have settled
             setupControlStateCallbacks()
-            
+
             // Sync rendering state → controlState (so sliders reflect actual values)
             controlState.immersiveScale = screenScale
             controlState.immersivePosition = screenPosition
             controlState.immersionAmount = immersionAmount
             controlState.dimLevel = dimLevel
             controlState.tiltAngle = tiltAngle
-        }
 
-        // Restore persisted environment state from shared control state (immersive only).
-        // Volume window must never load studio - it has no studio, only passthrough.
-        let restoredEnvState: EnvironmentStateType
-        if isImmersive {
-            restoredEnvState = controlState.selectedEnvironmentState
-            selectedEnvironmentState = restoredEnvState
-            immersiveEnvironment.isSemiImmersionEnabled = controlState.isSemiImmersionEnabled
-            controlState.canPinToStage = immersiveEnvironment.dockingAnchor != nil && restoredEnvState != .none
-            // Reset pin state when immersive loads - screen starts unpinned (crown leave/return or fresh session)
-            controlState.isPinnedToStage = false
-            controlState.isPinningTransitioning = false
-        } else {
-            restoredEnvState = .none
-            selectedEnvironmentState = .none
-            immersiveEnvironment.requestEnvironmentState(.none)
-            immersiveEnvironment.isSemiImmersionEnabled = false
-            controlState.canPinToStage = false
-        }
+            // Restore persisted environment state from shared control state (immersive only).
+            // Volume window must never load studio - it has no studio, only passthrough.
+            let restoredEnvState: EnvironmentStateType
+            if isImmersive {
+                restoredEnvState = controlState.selectedEnvironmentState
+                selectedEnvironmentState = restoredEnvState
+                immersiveEnvironment.isSemiImmersionEnabled = controlState.isSemiImmersionEnabled
+                controlState.canPinToStage = immersiveEnvironment.dockingAnchor != nil && restoredEnvState != .none
+                // Reset pin state when immersive loads - screen starts unpinned (crown leave/return or fresh session)
+                controlState.isPinnedToStage = false
+                controlState.isPinningTransitioning = false
+            } else {
+                restoredEnvState = .none
+                selectedEnvironmentState = .none
+                immersiveEnvironment.requestEnvironmentState(.none)
+                immersiveEnvironment.isSemiImmersionEnabled = false
+                controlState.canPinToStage = false
+            }
 
-        if restoredEnvState != .none {
-            immersiveEnvironment.requestEnvironmentState(restoredEnvState)
-            updateImmersionStyle(
-                state: restoredEnvState,
-                semi: immersiveEnvironment.isSemiImmersionEnabled,
-                shouldLock: false
-            )
-        } else {
-            immersiveEnvironment.requestEnvironmentState(.none)
-            updateImmersionStyle(state: .none, semi: false, shouldLock: false)
+            if restoredEnvState != .none {
+                immersiveEnvironment.requestEnvironmentState(restoredEnvState)
+                updateImmersionStyle(
+                    state: restoredEnvState,
+                    semi: immersiveEnvironment.isSemiImmersionEnabled,
+                    shouldLock: false
+                )
+            } else {
+                immersiveEnvironment.requestEnvironmentState(.none)
+                updateImmersionStyle(state: .none, semi: false, shouldLock: false)
+            }
         }
-        
         // Keep previous environment selections across stream restarts (immersive only).
         // Resetting these to `.none`/`0` can leave the dome active but untextured (black)
         // until the user manually toggles environment again.
@@ -1475,18 +1538,27 @@ struct _RealityKitStreamView: View {
         
         controlState.homeAction = { [self] in
             // In immersive mode, "Home" should fully stop stream first.
-            // Keeping stream alive while opening/closing a floating main window can move
-            // the active scene/window and leave audio anchored to a stale scene ID.
-            if streamConfig != nil { viewModel.savedStreamConfigForResume = nil }
+            // IMPORTANT: do NOT set activelyStreaming=false before dismissImmersiveSpace.
+            // Setting it early causes the body to switch to streamStoppedOverlay (with its
+            // own RealityView scaffold), removing the main RealityView while the VT decoder
+            // may still be writing to its Metal textures — a reliable EXC_BAD_ACCESS crash.
             needsResume = false
             hasPerformedTeardown = false
             viewModel.streamState = .stopping
             performCompleteTeardown()
-            viewModel.activelyStreaming = false
             viewModel.shouldCloseStream = false
-            pushWindow(id: "mainView")
             Task {
                 await dismissImmersiveSpace()
+                // MoonlightVisionApp.onDisappear fires when the space is dismissed and
+                // unconditionally saves streamConfig → savedStreamConfigForResume. Clear it
+                // here (after onDisappear) so "return to stream" doesn't appear after an
+                // explicit home action.
+                viewModel.savedStreamConfigForResume = nil
+                // Switch the body AFTER the space is gone; the main RealityView has already
+                // been removed by the system-level space dismissal at this point.
+                viewModel.activelyStreaming = false
+                // Open main menu after immersive teardown — never pushWindow on volumetric scenes.
+                openWindow(id: "mainView")
             }
         }
         controlState.closeAction = { [self] in
@@ -2087,39 +2159,36 @@ struct _RealityKitStreamView: View {
                 surfaceMaterial = mat
                 screen.model?.materials = [mat]
             } else {
-                screen.model?.materials = [UnlitMaterial(texture: texture)]
+                screen.model?.materials = [makeVideoUnlitMaterial(texture)]
             }
         } else {
-            screen.model?.materials = [UnlitMaterial(texture: self.texture)]
+            screen.model?.materials = [makeVideoUnlitMaterial(self.texture)]
         }
+    }
+
+    private func makeVideoUnlitMaterial(_ texture: TextureResource) -> UnlitMaterial {
+        var material = UnlitMaterial(applyPostProcessToneMap: false)
+        material.color = .init(texture: .init(texture))
+        return material
     }
 
     // MARK: - HDR & Material
 
     private func applyDefaultDisplayParams() {
-        var params = safeHDRSettings.value
         if viewModel.streamSettings.enableHdr {
             hdrParams.mode = 1
-            params.boost = 1.00
-            params.saturation = 1.00
-            params.contrast = 1.00
-            params.brightness = 0.00
-            let hrBoost = hdrHeadroomBoost()
-            params.boost = Swift.min(Swift.max(params.boost * hrBoost, 1.0), 1.50)
-            params.contrast = Swift.min(Swift.max(params.contrast, 1.00), 1.20)
-            params.saturation = Swift.min(Swift.max(params.saturation, 0.85), 1.15)
-            params.brightness = 0.0
+            updateHDRParams()
         } else {
+            var params = safeHDRSettings.value
             params.boost = 1.00
             params.saturation = 1.00
             params.contrast = 1.00
             params.brightness = 0.00
+            params.pqExposure = 1.00
             params.mode = 0
+            safeHDRSettings.value = params
         }
-        safeHDRSettings.value = params
     }
-
-    private func hdrHeadroomBoost() -> Float { 1.40 }
 
     private func updateHDRParams() {
         let isHDRPath = viewModel.streamSettings.enableHdr
@@ -2130,6 +2199,7 @@ struct _RealityKitStreamView: View {
             contrast: isHDRPath ? viewModel.streamSettings.gamma : 1.0,
             saturation: isHDRPath ? viewModel.streamSettings.saturation : 1.0,
             brightness: 0.0,
+            pqExposure: isHDRPath ? viewModel.streamSettings.pqExposure : 1.0,
             mode: isHDRPath ? max(hdrParams.mode, 1) : 0
         )
         safeHDRSettings.value = params
@@ -2142,10 +2212,10 @@ struct _RealityKitStreamView: View {
                 surfaceMaterial = mat
                 screen.model?.materials = [mat]
             } else {
-                screen.model?.materials = [UnlitMaterial(texture: texture)]
+                screen.model?.materials = [makeVideoUnlitMaterial(texture)]
             }
         } else {
-            screen.model?.materials = [UnlitMaterial(texture: self.texture)]
+            screen.model?.materials = [makeVideoUnlitMaterial(self.texture)]
         }
     }
     
@@ -2214,9 +2284,9 @@ struct _RealityKitStreamView: View {
         }
         
         if videoMode == .standard2D {
-            screen = ModelEntity(mesh: mesh, materials: [UnlitMaterial(texture: texture)])
+            screen = ModelEntity(mesh: mesh, materials: [makeVideoUnlitMaterial(texture)])
         } else {
-            let material = UnlitMaterial(texture: texture)
+            let material = makeVideoUnlitMaterial(texture)
             screen = ModelEntity(mesh: mesh, materials: [material])
         }
 
@@ -2361,30 +2431,39 @@ struct _RealityKitStreamView: View {
         let currentCurve = effectiveCurvature
         
         
-        let needsMeshUpdate: Bool
+        // Determine whether the mesh needs to be rebuilt.
+        // The time-gate prevents multiple rebuilds per drag step: at 90 Hz, a 60ms gate
+        // keeps rebuilds to ~15/sec max, which is plenty for smooth visual feedback.
+        let now = Date()
+        let timeSinceLastGen = lastMeshGenTimeBox.value.map { now.timeIntervalSince($0) } ?? .infinity
+        let geometryChanged: Bool
         if let lastCurve = lastGeneratedCurveBox.value, let lastAspect = lastGeneratedAspectBox.value, let lastCorner = lastGeneratedCornerBox.value {
-            needsMeshUpdate = abs(currentCurve - lastCurve) > 0.001 || abs(screenAspect - lastAspect) > 0.001 || abs(cornerRadiusFraction - lastCorner) > 0.0001
+            geometryChanged = abs(currentCurve - lastCurve) > 0.001 || abs(screenAspect - lastAspect) > 0.001 || abs(cornerRadiusFraction - lastCorner) > 0.0001
         } else {
-            needsMeshUpdate = true
+            geometryChanged = true
         }
-        
+        let needsMeshUpdate = geometryChanged && timeSinceLastGen >= Self.meshGenMinInterval
+
         if needsMeshUpdate {
+            lastMeshGenTimeBox.value = now
+            // Resolution note: 128×128 gives smooth curvature at any practical viewing distance
+            // on Vision Pro and costs ~4× less than 512×512.  Collision mesh at 32×32 is more
+            // than sufficient for hit-testing a large curved plane.
             if let mesh = try? generateCurvedRoundedPlane(
                 width: CURVED_MAX_WIDTH_METERS,
                 aspectRatio: screenAspect,
-                resolution: (512, 512),
+                resolution: (128, 128),
                 curveMagnitude: currentCurve,
                 cornerRadiusFraction: cornerRadiusFraction
             ) {
                 if let model = screen.model {
                     try? model.mesh.replace(with: mesh.contents)
                 }
-                
-                
+
                 if let collisionMesh = try? generateCurvedRoundedPlane(
                     width: CURVED_MAX_WIDTH_METERS,
                     aspectRatio: screenAspect,
-                    resolution: (256, 256),
+                    resolution: (32, 32),
                     curveMagnitude: currentCurve,
                     cornerRadiusFraction: 0
                 ) {
@@ -2401,7 +2480,7 @@ struct _RealityKitStreamView: View {
                             }
                         }
                     }
-                    
+
                     self.lastGeneratedCurveBox.value = currentCurve
                     self.lastGeneratedAspectBox.value = self.screenAspect
                     self.lastGeneratedCornerBox.value = self.cornerRadiusFraction
@@ -2527,13 +2606,27 @@ struct _RealityKitStreamView: View {
         let minZ = -volHalfDepth + scaledCurveDepth + safePadding
         let safeMaxZ = max(minZ, maxZ)
         let newZLimits: ClosedRange<Float> = minZ...safeMaxZ
-        if volumeYLimits != newYLimits {
-            volumeYLimits = newYLimits
-            volumeHeight = min(max(volumeHeight, newYLimits.lowerBound), newYLimits.upperBound)
-        }
-        if volumeZLimits != newZLimits {
-            volumeZLimits = newZLimits
-            volumeDepthOffset = min(max(volumeDepthOffset, newZLimits.lowerBound), newZLimits.upperBound)
+        // Use epsilon comparison to avoid @State writes on every RealityView.update call
+        // during window drag (window size changes are tiny floating-point updates each frame).
+        // Without this, moving the window triggers constant SwiftUI re-renders of the control panel.
+        let eps: Float = 0.002
+        let needsYUpdate = abs(volumeYLimits.lowerBound - newYLimits.lowerBound) > eps ||
+                           abs(volumeYLimits.upperBound - newYLimits.upperBound) > eps
+        let needsZUpdate = abs(volumeZLimits.lowerBound - newZLimits.lowerBound) > eps ||
+                           abs(volumeZLimits.upperBound - newZLimits.upperBound) > eps
+        // Never write @State from inside RealityView.update — defer to next runloop
+        // to avoid "Modifying state during view update" warnings.
+        if needsYUpdate || needsZUpdate {
+            DispatchQueue.main.async { [self] in
+                if needsYUpdate {
+                    volumeYLimits = newYLimits
+                    volumeHeight = min(max(volumeHeight, newYLimits.lowerBound), newYLimits.upperBound)
+                }
+                if needsZUpdate {
+                    volumeZLimits = newZLimits
+                    volumeDepthOffset = min(max(volumeDepthOffset, newZLimits.lowerBound), newZLimits.upperBound)
+                }
+            }
         }
     }
     
@@ -2642,10 +2735,11 @@ struct _RealityKitStreamView: View {
                         aspectRatio: self.screenAspect,
                         useFramePacing: self.streamConfig.useFramePacing,
                         enableHDR: self.viewModel.streamSettings.enableHdr,
-                        hdrSettingsProvider: { [safeHDRSettings] in safeHDRSettings.value },
-                        enhancementsProvider: { [weak viewModel] in
-                            let warmth: Float = viewModel?.streamSettings.enableHdr ?? false ? 0.03 : 0.0
-                            return (1.0, 1.0, warmth)
+                        hdrSettingsProvider: {
+                            self.safeHDRSettings.value
+                        },
+                        enhancementsProvider: {
+                            (1.0, 1.0, 0.0)
                         },
                         callbackToRender: { textureQueue, correctedResolution in
                             guard self.renderGateOpen else { return }
@@ -2797,6 +2891,10 @@ struct _RealityKitStreamView: View {
         idrWatchdogTimer2?.invalidate(); idrWatchdogTimer2 = nil
         postFirstFrameRebindTimer?.invalidate(); postFirstFrameRebindTimer = nil
         firstFrameReceived = false
+        // Allow the next connection's first frame to re-arm the RKStreamFirstFrameShown
+        // notification. Without this reset the idempotency guard in videoContentShown()
+        // would silently swallow the reconnect signal.
+        connectionCallbacks.videoShown = false
         controllerSupport?.cleanup()
         controllerSupport = nil
         
@@ -3313,6 +3411,11 @@ struct _RealityKitStreamView: View {
     }
 
     private func setupDimmerDomes(content: RealityViewContent) {
+        guard dimmerDome == nil else {
+            updateDimmerDomesState()
+            return
+        }
+
         let sharedDomeMesh: MeshResource = .generateSphere(radius: 60.0)
         
         var blackMat = UnlitMaterial(color: .black)
@@ -3334,7 +3437,8 @@ struct _RealityKitStreamView: View {
 
         updateDimmerDomesState()
 
-        Task {
+        dimmerGradientPreloadTask?.cancel()
+        dimmerGradientPreloadTask = Task {
             purpleGradientTextureColors = try? await makeGradientTexture(size: 1024, gradient: .sunset)
             purpleGradientTexturePurpleBlack = try? await makeGradientTexture(size: 1024, gradient: .midnight)
             eclipseGradientTexture = try? await makeGradientTexture(size: 1024, gradient: .eclipse)
@@ -3344,6 +3448,7 @@ struct _RealityKitStreamView: View {
             woodlandGradientTexture = try? await makeGradientTexture(size: 1024, gradient: .woodland)
             desertGradientTexture = try? await makeGradientTexture(size: 1024, gradient: .desert)
             duskHDRTexture = try? await TextureResource(named: "dusk")
+            await MainActor.run { self.dimmerGradientPreloadTask = nil }
         }
     }
 
@@ -3501,6 +3606,10 @@ struct _RealityKitStreamView: View {
     }
 
     private func setupEnvironment360(content: RealityViewContent) {
+        // RealityView's initial closure can run more than once across SwiftUI updates; guard
+        // so we never stack duplicate 60m spheres or re-fire skybox loads.
+        guard environmentDome == nil else { return }
+
         let sphere = ModelEntity(mesh: .generateSphere(radius: 60.0), materials: [UnlitMaterial(color: .clear)])
         sphere.scale.x = -1.0
         sphere.isEnabled = false
@@ -3549,7 +3658,9 @@ struct _RealityKitStreamView: View {
         do {
             self.texture = try TextureResource(
                 dimensions: .dimensions(width: Int(streamConfig.wrappedValue.width), height: Int(streamConfig.wrappedValue.height)),
-                format: .raw(pixelFormat: needsHdr ? .rgba16Float : .bgra8Unorm_srgb),
+                format: needsHdr
+                    ? .raw(pixelFormat: .rgba16Float)
+                    : .raw(pixelFormat: .bgra8Unorm_srgb),
                 contents: .init(mipmapLevels: [.mip(data: data, bytesPerRow: bytesPerPixel * Int(streamConfig.wrappedValue.width))])
             )
             self.isHDRTexture = needsHdr
@@ -3621,6 +3732,11 @@ struct _RealityKitStreamView: View {
                 if let g = defaults.object(forKey: "realitykitVolumeGamma") as? Float { viewModel.streamSettings.gamma = g }
                 if let s = defaults.object(forKey: "realitykitVolumeSaturation") as? Float { viewModel.streamSettings.saturation = s }
                 if let b = defaults.object(forKey: "realitykitVolumeBrightness") as? Float { viewModel.streamSettings.brightness = b }
+                if let p = defaults.object(forKey: "realitykitVolumePqExposure") as? Float {
+                    viewModel.streamSettings.pqExposure = p
+                } else if let p = defaults.object(forKey: "realitykitPqExposure") as? Float {
+                    viewModel.streamSettings.pqExposure = p
+                }
                 if let dim = defaults.object(forKey: "realitykitVolumeDimPassthrough") as? Bool { viewModel.streamSettings.dimPassthrough = dim }
             }
             return
@@ -3631,6 +3747,7 @@ struct _RealityKitStreamView: View {
             if let g = defaults.object(forKey: "realitykitImmersiveGamma") as? Float { viewModel.streamSettings.gamma = g }
             if let s = defaults.object(forKey: "realitykitImmersiveSaturation") as? Float { viewModel.streamSettings.saturation = s }
             if let b = defaults.object(forKey: "realitykitImmersiveBrightness") as? Float { viewModel.streamSettings.brightness = b }
+            if let p = defaults.object(forKey: "realitykitImmersivePqExposure") as? Float { viewModel.streamSettings.pqExposure = p }
         }
         // Position/scale: only restore when rememberStreamSettings and valid saved data exists
         let defaultImmersivePosition = SIMD3<Float>(0, 1.0, -1.5)
@@ -3814,8 +3931,9 @@ struct _RealityKitStreamView: View {
     
     // MARK: - Preload Skyboxes
     private func loadExtraSkyboxesFromBundle() {
+        extraSkyboxLoadTask?.cancel()
         // Load skyboxes on background thread to avoid blocking main thread during view setup
-        Task.detached(priority: .background) {
+        extraSkyboxLoadTask = Task.detached(priority: .background) {
             let exts = ["jpg", "jpeg", "png"]
             let builtinSet: Set<String> = ["AboveClouds", "Above_Clouds"]
             var names: [String] = []
@@ -3840,12 +3958,61 @@ struct _RealityKitStreamView: View {
             
             // Update state on main thread once loading is complete
             await MainActor.run {
+                guard !Task.isCancelled else { return }
                 self.extraSkyboxNames = names
                 self.extraSkyboxTextures = textures
                 print("[Skybox] Loaded \(names.count) extra skyboxes in background")
                 self.restoreEnvironmentTextureIfNeeded()
+                self.extraSkyboxLoadTask = nil
             }
         }
+    }
+
+    /// Drop large optional GPU resources when immersive session or app backgrounds.
+    /// Studio USDZ is released via `ImmersiveEnvironment`; skybox / dimmer textures are cleared here.
+    private func releaseImmersiveHeavyCachesForBackground() {
+        extraSkyboxLoadTask?.cancel()
+        extraSkyboxLoadTask = nil
+        dimmerGradientPreloadTask?.cancel()
+        dimmerGradientPreloadTask = nil
+
+        extraSkyboxTextures = []
+        extraSkyboxNames = []
+        builtinSkyboxTextures = [:]
+        envPresetSkyboxTextures = [:]
+
+        purpleGradientTextureColors = nil
+        purpleGradientTexturePurpleBlack = nil
+        eclipseGradientTexture = nil
+        twilightGradientTexture = nil
+        dawnGradientTexture = nil
+        sunriseGradientTexture = nil
+        woodlandGradientTexture = nil
+        desertGradientTexture = nil
+        duskHDRTexture = nil
+        jpgAboveTheCloudsTexture = nil
+        jpgAnimeTexture = nil
+        jpgJustSkyTexture = nil
+        jpgNightTimeTexture = nil
+        jpgTest1Texture = nil
+        jpgTest2Texture = nil
+        jpgTest3Texture = nil
+        moonlightMaterial = nil
+        cachedReactiveMaterial = nil
+        environmentFadeTimer?.invalidate()
+
+        if let dome = environmentDome, let mesh = dome.model?.mesh {
+            var clearMat = UnlitMaterial(color: .clear)
+            clearMat.blending = .transparent(opacity: 1.0)
+            dome.model = ModelComponent(mesh: mesh, materials: [clearMat])
+        }
+        if let purple = dimmerDomePurple, let mesh = purple.model?.mesh {
+            var m = UnlitMaterial(color: .black)
+            m.blending = .transparent(opacity: 1.0)
+            purple.model = ModelComponent(mesh: mesh, materials: [m])
+        }
+
+        immersiveEnvironment.unloadStudioRootFromMemory()
     }
     
     // MARK: - Stage Pinning
@@ -3977,6 +4144,7 @@ struct _RealityKitStreamView: View {
             defaults.set(viewModel.streamSettings.gamma, forKey: "realitykitImmersiveGamma")
             defaults.set(viewModel.streamSettings.saturation, forKey: "realitykitImmersiveSaturation")
             defaults.set(viewModel.streamSettings.brightness, forKey: "realitykitImmersiveBrightness")
+            defaults.set(viewModel.streamSettings.pqExposure, forKey: "realitykitImmersivePqExposure")
         } else {
             defaults.set(volumeHeight, forKey: "realitykitHeight")
             defaults.set(volumeDepthOffset, forKey: "realitykitDepthOffset")
