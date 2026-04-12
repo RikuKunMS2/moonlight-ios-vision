@@ -1,4 +1,55 @@
-# Changelog 202511230321
+#Change Log
+
+## Commit b191da8
+*Note: A later commit will address contribution attribution data accidentally cleared from file headers.*
+
+### Concurrency and Network Handling
+- Moved blocking HTTP network calls (`updateHost`, `refreshAppsFor`) to background threads using Swift continuations.
+- Wrapped state updates in `ObservableConnectionManager` with `@mainactor` to ensure execution on the main thread.
+
+### Memory Management
+- Implemented logic to unload 3D assets, including the Studio USDZ and skybox textures, when the application enters the background or switches to passthrough mode.
+
+### HDR and Color Processing
+- Added `pqExposure` (PQ HDR exposure trim) to the settings state, UI panels, and user defaults.
+- Updated `DrawableVideoDecoder` and Metal shaders to calculate Rec.709, BT.2020, and SMPTE-C color spaces.
+- Added explicit 10-bit format checks in the decoder to determine PQ transfer functions and range (full vs. video).
+
+### Window Lifecycle and Stability
+- Added detection for "zombie" streaming windows (scenes restored by visionOS after a reboot without an active stream) and redirection to the main menu.
+- Modified the stream teardown sequence to use `NotificationCenter`, allowing stream views to dismiss themselves.
+- Changed shared singletons from `@StateObject` to `@ObservedObject` to address runtime crashes.
+
+### Performance Optimization
+- Throttled RealityKit mesh generation during slider adjustments to 15 times per second.
+- Reduced the mDNS discovery polling rate for paired hosts to decrease HTTP request frequency.
+
+### Stream Lifecycle and Window Management
+- Added `StreamModeSelectionOverlay` to allow selection of launch modes: UIKit, RealityKit Volume, or RealityKit Immersive.
+- Modified `AppsView` and `MainViewModel` to display "Resume" and "Stop" buttons on the main menu when a stream is running in the background.
+- Centralized stream state management (`StreamLifecycleState`) to handle reconnections, teardown timing, backgrounding, and error recovery.
+
+### Input and Control
+- Replaced `InputCaptureView` with a new implementation.
+- Added `GazeInputController` for eye-tracking and pinch-to-click functionality, including long-press for right-click.
+- Added "Touch Mode" for relative mouse movements.
+- Added support for swapping A/B and X/Y buttons.
+- Implemented fallback logic for controller haptics on visionOS when specific motor localities are unsupported.
+
+### AV1 Video and HDR
+- Added `AV1Parser.swift` for manual parsing of AV1 bitstreams and `av1C` codec configuration.
+- Updated `Shaders.metal` to support HDR, including SMPTE ST.2084 (PQ) curve decoding to EDR, BT.2020 color space matrix conversions, and color grading adjustments for warmth, contrast, and saturation.
+- Set HDR setting default to 1.0.
+- Added shader-based rounded corners for the streaming view.
+
+### Environments and Audio
+- Added logic to load skyboxes and gradient textures for background dimming.
+- Added screen tilt controls.
+- Anchors spatial audio to the 3D scene entity (`fixAudioForScene`) to align sound source with the virtual screen.
+
+---
+
+## Changelog 202511230321
 
 ---
 
