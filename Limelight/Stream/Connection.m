@@ -407,19 +407,46 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
 
 -(void) terminate
 {
-    // Interrupt any action blocking LiStartConnection(). This is
-    // thread-safe and done outside initLock on purpose, since we
-    // won't be able to acquire it if LiStartConnection is in
-    // progress.
+    [self terminateWithCompletion:nil];
+}
+
+-(void) terminateWithCompletion:(void (^)(void))completion
+{
     LiInterruptConnection();
-    
-    // We dispatch this async to get out because this can be invoked
-    // on a thread inside common and we don't want to deadlock. It also avoids
-    // blocking on the caller's thread waiting to acquire initLock.
+
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-        [initLock lock];
-        LiStopConnection();
+        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:10.0];
+        BOOL acquired = [initLock lockBeforeDate:deadline];
+
+        if (!acquired) {
+            Log(LOG_E, @"[Connection] terminateWithCompletion: initLock acquisition timed out after 10s.");
+            if (completion) {
+                dispatch_async(dispatch_get_main_queue(), ^{ completion(); });
+            }
+            return;
+        }
+
+        dispatch_semaphore_t stopSem = dispatch_semaphore_create(0);
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            LiStopConnection();
+            dispatch_semaphore_signal(stopSem);
+        });
+
+        long result = dispatch_semaphore_wait(stopSem, dispatch_time(DISPATCH_TIME_NOW, 10LL * NSEC_PER_SEC));
+        if (result != 0) {
+            Log(LOG_E, @"[Connection] LiStopConnection() timed out after 10s.");
+            LiInterruptConnection();
+            [initLock unlock];
+            if (completion) {
+                dispatch_async(dispatch_get_main_queue(), ^{ completion(); });
+            }
+            return;
+        }
+
         [initLock unlock];
+        if (completion) {
+            dispatch_async(dispatch_get_main_queue(), ^{ completion(); });
+        }
     });
 }
 

@@ -12,6 +12,7 @@ import SwiftUI
 struct MainContentView: View {
     @EnvironmentObject private var viewModel: MainViewModel
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var selectedHost: TemporaryHost?
 
@@ -68,7 +69,37 @@ struct MainContentView: View {
                     .padding() // Add some bottom padding for visual spacing
                     .buttonStyle(.plain) // Remove button styling to make it look like text
                 }
-                .toolbar { // Keep the toolbar as is for now
+                .toolbar {
+                    if viewModel.activelyStreaming {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(viewModel.localized("resume_stream"), systemImage: "play.circle.fill") {
+                                NotificationCenter.default.post(name: Notification.Name("ResumeStreamFromMenu"), object: nil)
+                            }
+                        }
+                        ToolbarItem(placement: .destructiveAction) {
+                            Button(viewModel.localized("stop"), systemImage: "stop.circle.fill") {
+                                Task {
+                                    // Post notification first — RealityKitStreamView/UIKitStreamView
+                                    // receive it and call triggerCloseSequence/teardown which handles
+                                    // dismissing their own window. Avoid calling dismissWindow here for
+                                    // RealityKit volume streams: the stream view dismisses itself via
+                                    // triggerCloseSequence, and a second dismissWindow call racing with
+                                    // an in-flight window animation can cause intermittent crashes.
+                                    NotificationCenter.default.post(name: Notification.Name("RequestStreamCloseFromMainMenu"), object: nil)
+                                    viewModel.userDidRequestDisconnect()
+                                    // Classic UIKit window doesn't observe the notification for self-dismiss,
+                                    // so we still need to dismiss it from here.
+                                    if viewModel.streamSettings.renderer == .classic {
+                                        dismissWindow(id: "classicStreamingWindow")
+                                    }
+                                    await viewModel.waitForTeardown(timeout: 1.2)
+                                    if viewModel.streamState != .idle {
+                                        viewModel.forceResetStreamLifecycleIfNeeded()
+                                    }
+                                }
+                            }
+                        }
+                    }
                     ToolbarItem(placement: .primaryAction) {
                         Button(viewModel.localized("add_server"), systemImage: "plus") {
                             addingHost = true
@@ -117,28 +148,38 @@ struct MainContentView: View {
                 viewModel.loadSavedHosts()
             }
             .onAppear {
+                // Start mDNS discovery immediately when the host list appears —
+                // matching the behaviour of the original iOS/iPad Moonlight app
+                // (beginForegroundRefresh in viewWillAppear:).
+                // This is safe to call multiple times; DiscoveryManager guards against
+                // double-start internally.
+                viewModel.beginRefresh()
+
+                // Also re-start when the app returns from background (crown/home).
+                // We register AFTER the direct call above so we don't double-fire on
+                // a cold launch where didBecomeActive fires before onAppear.
                 NotificationCenter.default.addObserver(
                     self,
                     selector: #selector(viewModel.beginRefresh),
                     name: UIApplication.didBecomeActiveNotification,
                     object: nil
                 )
-                // If we have some hosts in the host list and no host has been selected
-                // try to select the first paired host automatically.
-                // this will usually happen when we close the stream and reopen this window
-                // when we do, the host list won't change but we still want to keep the list looking nice and select something by default
+
+                // Auto-select the first paired host when the view appears so the
+                // split view doesn't look empty after closing a stream.
                 if selectedHost == nil,
                    let firstHost = viewModel.hosts.first(where: { $0.pairState == .paired })
                 {
                     selectedHost = firstHost
                 }
-                //if !isRefreshingDiscovery { // Only begin refresh if not already toggled on
-                //    viewModel.beginRefresh()
-                //}
-            }.onDisappear {
-                //if !isRefreshingDiscovery { // Only stop refresh if not toggled on and still running
-                    viewModel.stopRefresh()
-                //}
+            }
+            .onChange(of: scenePhase) { oldValue, newValue in
+                if oldValue == .active && (newValue == .inactive || newValue == .background) {
+                    NotificationCenter.default.post(name: Notification.Name("MainViewWindowClosed"), object: nil)
+                }
+            }
+            .onDisappear {
+                viewModel.stopRefresh()
                 NotificationCenter.default.removeObserver(self)
             }
 

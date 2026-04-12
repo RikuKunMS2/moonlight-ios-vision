@@ -33,6 +33,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 
 -(id) initWithConfig:(StreamConfiguration*)config renderer:(id<AnyVideoDecoderRenderer> __strong)myRenderer connectionCallbacks:(id<ConnectionCallbacks>)callbacks;
 -(void) terminate;
+-(void) terminateWithCompletion:(void (^)(void))completion;
 -(void) main;
 -(BOOL) getVideoStats:(video_stats_t*)stats;
 -(NSString*) getActiveCodecName;

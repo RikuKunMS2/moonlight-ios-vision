@@ -19,17 +19,16 @@
     NSString* _uniqueId;
 }
 
-static const float POLL_RATE = 2.0f; // Poll every 2 seconds
+static const float POLL_RATE = 2.0f; // Fast poll while unknown/offline
+static const float POLL_RATE_ONLINE_UNPAIRED = 12.0f;
+static const float POLL_RATE_ONLINE_PAIRED = 45.0f; // Paired + reachable: infrequent keepalive only
 
 - (id) initWithHost:(TemporaryHost*)host uniqueId:(NSString*)uniqueId {
     self = [super init];
     _host = host;
     _uniqueId = uniqueId;
     
-    // Log when a DiscoveryWorker is created and the host UUID
-    Log(LOG_I, @"DiscoveryWorker: Created for host: %@, UUID: %@", _host.name, _host.uuid);
-
-    
+    Log(LOG_D, @"DiscoveryWorker: Created for host: %@, UUID: %@", _host.name, _host.uuid);
     return self;
 }
 
@@ -37,11 +36,23 @@ static const float POLL_RATE = 2.0f; // Poll every 2 seconds
     return _host;
 }
 
+- (NSTimeInterval) nextPollInterval {
+    // Once we know a paired machine is online, slow way down — the user asked not to
+    // hammer the same host every 2s (log noise + pointless HTTP).
+    if (_host.state == StateOnline && _host.pairState == PairStatePaired) {
+        return POLL_RATE_ONLINE_PAIRED;
+    }
+    if (_host.state == StateOnline) {
+        return POLL_RATE_ONLINE_UNPAIRED;
+    }
+    return POLL_RATE;
+}
+
 - (void)main {
     while (!self.cancelled) {
         [self discoverHost];
         if (!self.cancelled) {
-            [NSThread sleepForTimeInterval:POLL_RATE];
+            [NSThread sleepForTimeInterval:[self nextPollInterval]];
         }
     }
 }
@@ -90,7 +101,7 @@ static const float POLL_RATE = 2.0f; // Poll every 2 seconds
 }
 
 - (void) discoverHost {
-    Log(LOG_I, @"DiscoveryWorker: discoverHost started for host: %@, UUID: %@", _host.name, _host.uuid);
+    Log(LOG_D, @"DiscoveryWorker: discoverHost for host: %@, UUID: %@", _host.name, _host.uuid);
 
     BOOL receivedResponse = NO;
     NSArray *addresses = [self getHostAddressList];

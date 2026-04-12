@@ -61,6 +61,9 @@
 -(void) setControllerLed:(uint16_t)controllerNumber r:(uint8_t)r g:(uint8_t)g b:(uint8_t)b;
 
 +(int) getConnectedGamepadMask:(StreamConfiguration*)streamConfig settings:(TemporarySettings* _Nullable)settings;
++(int) getGamepadMaskForSlot:(int)slot;
+
+-(void) setSwapABXYButtons:(BOOL)swap;
 
 -(NSUInteger) getConnectedGamepadCount;
 

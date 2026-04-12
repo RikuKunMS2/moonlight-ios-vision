@@ -13,6 +13,7 @@ struct UIKitStreamView: View {
 
     @EnvironmentObject private var viewModel: MainViewModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.pushWindow) private var pushWindow
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.scenePhase) private var scenePhase
 
@@ -22,6 +23,17 @@ struct UIKitStreamView: View {
     @State private var backgroundTask: Task<Void, Never>?
     @State private var windowSizeMonitorTask: Task<Void, Never>? = nil
     @State private var lastSavedWindowSize: CGSize? = nil
+    @State private var lastStreamErrorMessage: String? = nil
+    @State private var uikitReconnectAttemptCount: Int = 0
+    @State private var isUIKitReconnecting: Bool = false
+    @State private var uikitStatsOverlayText: String = ""
+    @State private var isKeyboardActive: Bool = false
+    @State private var showCenterHint: Bool = false
+    @State private var centerHintText: String = ""
+    @State private var centerHintIcon: String = "info.circle"
+    @State private var centerHintTask: Task<Void, Never>?
+    private let uikitMaxReconnectAttempts = 3
+    private let uikitReconnectDelaySeconds: TimeInterval = 2.5
 
     var body: some View {
         Group {
@@ -29,23 +41,93 @@ struct UIKitStreamView: View {
                let configBinding = Binding($streamConfig) {
                 _UIKitStreamView(streamConfig: configBinding)
                     .id(reloadToken)
+                    .onAppear { lastStreamErrorMessage = nil }
                     .clipShape(RoundedRectangle(cornerRadius: CGFloat(viewModel.streamSettings.uikitWindowCornerRadius), style: .continuous))
                     .preferredSurroundingsEffect(
                         // Apply dimming effect when dimPassthrough is enabled
                         viewModel.streamSettings.dimPassthrough ? .systemDark : nil
                     )
                     .persistentSystemOverlays(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
+                    .overlay {
+                        if isUIKitReconnecting {
+                            uikitReconnectingOverlay
+                        }
+                        if showCenterHint {
+                            CenterHintOverlay(
+                                text: centerHintText,
+                                icon: centerHintIcon
+                            )
+                            .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .center)))
+                            .animation(.easeOut(duration: 0.25), value: showCenterHint)
+                            .allowsHitTesting(false)
+                        }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: Notification.Name("UIKitStatsOverlayTextUpdated"))) { notification in
+                        uikitStatsOverlayText = notification.userInfo?["text"] as? String ?? ""
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: Notification.Name("UIKitKeyboardActiveChanged"))) { notification in
+                        let active = (notification.userInfo?["active"] as? Bool) ?? false
+                        isKeyboardActive = active
+                        centerHintTask?.cancel()
+                        if active {
+                            centerHintText = viewModel.localized("uikit_keyboard_hint")
+                            centerHintIcon = "hand.tap.fill"
+                            showCenterHint = true
+                            centerHintTask = Task {
+                                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                                guard !Task.isCancelled else { return }
+                                await MainActor.run {
+                                    withAnimation(.easeOut(duration: 0.25)) {
+                                        showCenterHint = false
+                                    }
+                                }
+                            }
+                        } else {
+                            showCenterHint = false
+                        }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: Notification.Name("UIKitInputModeHintRequested"))) { notification in
+                        guard let text = notification.userInfo?["text"] as? String,
+                              let icon = notification.userInfo?["icon"] as? String else { return }
+                        centerHintTask?.cancel()
+                        centerHintText = text
+                        centerHintIcon = icon
+                        showCenterHint = true
+                        centerHintTask = Task {
+                            try? await Task.sleep(nanoseconds: 1_500_000_000)
+                            guard !Task.isCancelled else { return }
+                            await MainActor.run {
+                                withAnimation(.easeOut(duration: 0.25)) {
+                                    showCenterHint = false
+                                }
+                            }
+                        }
+                    }
                     .ornament(attachmentAnchor: .scene(.top), contentAlignment: .bottom) {
-                        StandardControlPanelView(
-                            closeAction: {
-                                handleHomeButtonClose()
-                            },
+                        VStack(spacing: 12) {
+                            StandardControlPanelView(
+                            homeAction: { pushWindow(id: "mainView") },
+                            closeAction: { handleHomeButtonClose() },
                             toggleKeyboardAction: {
                                 if let streamVC = _UIKitStreamView.controllerReference.object {
                                     streamVC.toggleKeyboard()
                                 }
                             },
-                            isKeyboardActive: false,
+                            isKeyboardActive: isKeyboardActive,
+                            toggleInputModeAction: {
+                                if let streamVC = _UIKitStreamView.controllerReference.object {
+                                    streamVC.setAbsoluteTouchMode(viewModel.streamSettings.absoluteTouchMode)
+                                    let text = viewModel.streamSettings.absoluteTouchMode
+                                        ? viewModel.localized("input_mode_gaze_input")
+                                        : viewModel.localized("input_mode_trackpad")
+                                    let icon = viewModel.streamSettings.absoluteTouchMode ? "eye.fill" : "rectangle"
+                                    NotificationCenter.default.post(
+                                        name: Notification.Name("UIKitInputModeHintRequested"),
+                                        object: nil,
+                                        userInfo: ["text": text, "icon": icon]
+                                    )
+                                }
+                            },
                             needsHdr: viewModel.streamSettings.enableHdr,
                             isRealityKit: false,
                             windowButtonAction: {
@@ -57,6 +139,11 @@ struct UIKitStreamView: View {
                             }
                         )
                         .environmentObject(viewModel)
+                            if viewModel.streamSettings.statsOverlay {
+                                uikitStatsOverlay
+                                    .layoutPriority(1)
+                            }
+                        }
                         .padding(.bottom, 20)
                     }
                     .onAppear {
@@ -95,88 +182,190 @@ struct UIKitStreamView: View {
                             break
                         }
                     }
+                    .onChange(of: viewModel.shouldCloseStream) { _, val in
+                        if val { handleCloseFromViewModel() }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: Notification.Name("RequestStreamCloseFromMainMenu"))) { _ in
+                        handleCloseFromViewModel()
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ResumeStreamFromMenu"))) { _ in
+                        dismissWindow(id: "mainView")
+                        AudioHelpers.fixAudioForSurroundForCurrentWindow()
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MainViewWindowClosed"))) { _ in
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            AudioHelpers.fixAudioForSurroundForCurrentWindow()
+                        }
+                    }
             } else {
                 // Stream Stopped / Error UI [PRESERVED]
-                // This handles edge cases where the stream dies but the window remains.
-                VStack(spacing: 20) {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.largeTitle)
-                    Text(viewModel.localized("stream_stopped"))
-                        .font(.title2)
-                    Text(viewModel.localized("stream_stopped_message"))
-                        .multilineTextAlignment(.center)
+                ZStack {
+                    VStack(spacing: 20) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.largeTitle)
+                        Text(viewModel.localized("stream_stopped"))
+                            .font(.title2)
+                        Text(viewModel.localized("stream_stopped_message"))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                        
+                        Button {
+                            lastStreamErrorMessage = nil
+                            viewModel.streamState = .stopping
+                            openWindow(id: "mainView")
+                            dismissWindow(id: "classicStreamingWindow")
+                            streamConfig = nil
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                NotificationCenter.default.post(name: Notification.Name("StreamDidTeardownNotification"), object: nil)
+                            }
+                        } label: {
+                            Label(viewModel.localized("open_main_menu"), systemImage: "house.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
                         .padding(.horizontal)
-                    
-                    Button {
-                        // Manual Close Button Action
-                        openWindow(id: "mainView")
-                        dismissWindow(id: "classicStreamingWindow")
-                        streamConfig = nil
-                    } label: {
-                        Label(viewModel.localized("open_main_menu"), systemImage: "house.fill")
-                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .padding(.horizontal)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(.thinMaterial)
-                // Ensure we catch zombies here too if they linger
-                .onAppear {
-                    // Optional: You could add auto-close logic here if you wanted,
-                    // but keeping it manual is safer for debugging errors.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.thinMaterial)
+                    
+                    if let errorMsg = lastStreamErrorMessage {
+                        uikitErrorOverlay(message: errorMsg)
+                    }
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("UIKitStreamErrorNotification"))) { notification in
+            if let msg = notification.userInfo?["message"] as? String {
+                lastStreamErrorMessage = msg
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("UIKitConnectionTerminatedForRetry"))) { notification in
+            DispatchQueue.main.async { handleUIKitConnectionTerminatedForRetry(notification: notification) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("StreamFirstFrameShownNotification"))) { _ in
+            if uikitReconnectAttemptCount > 0 {
+                uikitReconnectAttemptCount = 0
+                isUIKitReconnecting = false
+                _UIKitStreamView.controllerReference.object?.uikitReconnectingForRetry = false
+            }
+        }
+    }
+    
+    private func handleUIKitConnectionTerminatedForRetry(notification: Notification) {
+        guard viewModel.activelyStreaming else { return }
+        let msg = (notification.userInfo?["message"] as? String) ?? viewModel.localized("unknown_error")
+        
+        if uikitReconnectAttemptCount < uikitMaxReconnectAttempts {
+            uikitReconnectAttemptCount += 1
+            isUIKitReconnecting = true
+            let streamVC = _UIKitStreamView.controllerReference.object
+            streamVC?.uikitReconnectingForRetry = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + uikitReconnectDelaySeconds) {
+                guard self.viewModel.activelyStreaming else {
+                    self.isUIKitReconnecting = false
+                    _UIKitStreamView.controllerReference.object?.uikitReconnectingForRetry = false
+                    return
+                }
+                NotificationCenter.default.post(name: Notification.Name("UIKitRequestStreamRestart"), object: nil)
+            }
+        } else {
+            uikitReconnectAttemptCount = 0
+            isUIKitReconnecting = false
+            _UIKitStreamView.controllerReference.object?.uikitReconnectingForRetry = false
+            lastStreamErrorMessage = msg
+            _UIKitStreamView.controllerReference.object?.stopStream()
+            NotificationCenter.default.post(name: Notification.Name("UIKitRetriesExhausted"), object: nil)
+        }
+    }
+    
+    @ViewBuilder
+    private func uikitErrorOverlay(message: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(Color(red: 1.0, green: 0.78, blue: 0.32))
+            Text(viewModel.localized("stream_error"))
+                .font(.headline)
+                .foregroundStyle(.white)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.9))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 420)
+            Button {
+                lastStreamErrorMessage = nil
+                openWindow(id: "mainView")
+                dismissWindow(id: "classicStreamingWindow")
+                streamConfig = nil
+                viewModel.streamState = .stopping
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    NotificationCenter.default.post(name: Notification.Name("StreamDidTeardownNotification"), object: nil)
+                }
+            } label: {
+                Label(viewModel.localized("close"), systemImage: "xmark.circle.fill")
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(20)
+        .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+    
+    @ViewBuilder
+    private var uikitReconnectingOverlay: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+                .scaleEffect(1.2)
+                .tint(.white)
+            Text(viewModel.localized("reconnecting"))
+                .font(.headline)
+                .foregroundStyle(.white)
+            Text(String(format: viewModel.localized("reconnect_attempt"), uikitReconnectAttemptCount, uikitMaxReconnectAttempts))
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.85))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.black.opacity(0.6))
+    }
+    
+    /// Stats panel - RealityKit style, in ornament layer below control panel, never on screen content
+    /// fixedSize(vertical: true) prevents compression when control panel collapses
+    @ViewBuilder
+    private var uikitStatsOverlay: some View {
+        VStack(spacing: 6) {
+            Text(uikitStatsOverlayText.isEmpty ? "Collecting stats..." : uikitStatsOverlayText)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .lineLimit(10)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 20)
+        .frame(width: 420)
+        .fixedSize(horizontal: false, vertical: true)
+        .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .allowsHitTesting(false)
     }
 
     // MARK: - Window Management Logic
 
     private func handleHomeButtonClose() {
         print("[UIKitStreamView] Home button pressed.")
-        
-        // 1. Stop Data Stream
-        viewModel.activelyStreaming = false
-        if let streamVC = _UIKitStreamView.controllerReference.object {
-            streamVC.stopStream()
-        }
-        
-        // 2. Open Main Window FIRST (Critical for visionOS window management)
-        openWindow(id: "mainView")
-        
-        // 3. Dismiss THIS window after a short delay
-        // This prevents the OS from ignoring the dismiss if it thinks this is the only window.
-        // During this 0.5s, the user might briefly see the "Stream Stopped" UI, which is expected behavior.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            dismissWindow(id: "classicStreamingWindow")
-            
-            // 4. Clear config cleanup
-            self.streamConfig = nil
-        }
-        
-        // Save settings if needed
-        if viewModel.streamSettings.rememberStreamSettings {
-            saveWindowSizeForRestore()
-        }
+        performUIKitTeardown()
     }
 
-    private func handleWindowDisappearance() {
-        // This handles when the user closes the window via the "X" bar or system gesture
-        guard !hasPerformedTeardown else { return }
-        guard !needsResume else { return }
-        
-        // If we are disappearing but activelyStreaming is true, it means the user closed the window manually.
-        // We should clean up the stream logic.
-        if viewModel.activelyStreaming {
-            tearDownStream(openMainWindow: true)
-        }
+    private func handleCloseFromViewModel() {
+        performUIKitTeardown()
     }
 
-    private func tearDownStream(openMainWindow: Bool) {
+    private func performUIKitTeardown() {
         guard !hasPerformedTeardown else { return }
         hasPerformedTeardown = true
         needsResume = false
 
+        viewModel.streamState = .stopping
         viewModel.activelyStreaming = false
 
         if let streamVC = _UIKitStreamView.controllerReference.object {
@@ -192,11 +381,22 @@ struct UIKitStreamView: View {
         }
 
         streamConfig = nil
-        
-        if openMainWindow {
-            DispatchQueue.main.async {
-                openWindow(id: "mainView")
-            }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            dismissWindow(id: "classicStreamingWindow")
+            NotificationCenter.default.post(name: Notification.Name("StreamDidTeardownNotification"), object: nil)
+        }
+    }
+
+    private func handleWindowDisappearance() {
+        // This handles when the user closes the window via the "X" bar or system gesture
+        guard !hasPerformedTeardown else { return }
+        guard !needsResume else { return }
+
+        // If we are disappearing but activelyStreaming is true, it means the user closed the window manually.
+        // We should clean up the stream logic.
+        if viewModel.activelyStreaming {
+            performUIKitTeardown()
         }
     }
     

@@ -14,6 +14,14 @@ import AVFoundation
 import SwiftUI
 #endif
 
+// Centralized lifecycle state for serialized stream operations
+enum StreamLifecycleState: String {
+    case idle
+    case starting
+    case running
+    case stopping
+}
+
 @MainActor
 class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback, AppAssetCallback {
     @objc
@@ -29,6 +37,13 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     
     @Published var currentStreamConfig = StreamConfiguration()
     @Published var activelyStreaming = false
+    @Published var shouldCloseStream = false
+    @Published var streamState: StreamLifecycleState = .idle
+    @Published var activeSessionToken: String = ""
+    @Published var currentlyStreamingAppId: String? = nil
+    @Published var reconnectCooldownUntil: Date? = nil
+    @Published var isSwappingRenderers: Bool = false
+    
     @Published var showLanguagePrompt = false
     @Published var streamSettings: TemporarySettings
     
@@ -82,6 +97,185 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         super.init()
         appManager = AppAssetManager(callback: self)
         discoveryManager = DiscoveryManager(hosts: hosts, andCallback: self)
+        
+        // Observe first-frame and teardown events to drive lifecycle state
+        let center = NotificationCenter.default
+        center.addObserver(forName: Notification.Name("StreamFirstFrameShownNotification"), object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                guard self.streamState == .starting else { return }
+                self.streamState = .running
+            }
+        }
+        center.addObserver(forName: Notification.Name("RKStreamFirstFrameShown"), object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                guard self.streamState == .starting else { return }
+                self.streamState = .running
+            }
+        }
+        center.addObserver(forName: Notification.Name("StreamDidTeardownNotification"), object: nil, queue: .main) { [weak self] _ in
+            self?.onTeardownComplete()
+        }
+        center.addObserver(forName: Notification.Name("RKStreamDidTeardown"), object: nil, queue: .main) { [weak self] _ in
+            self?.onTeardownComplete()
+        }
+        center.addObserver(forName: Notification.Name("StreamStartFailed"), object: nil, queue: .main) { [weak self] _ in
+            self?.onStreamStartFailed()
+        }
+        center.addObserver(forName: Notification.Name("UIKitRetriesExhausted"), object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.activelyStreaming = false
+            }
+        }
+        center.addObserver(forName: Notification.Name("RealityKitRetriesExhausted"), object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                if self.streamState == .running || self.streamState == .starting {
+                    self.streamState = .stopping
+                }
+                self.activelyStreaming = false
+            }
+        }
+        center.addObserver(forName: Notification.Name("ConnectionLost"), object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                if self.streamState == .running || self.streamState == .starting {
+                    self.streamState = .stopping
+                    self.shouldCloseStream = true
+                }
+            }
+        }
+    }
+    
+    private func onTeardownComplete() {
+        Task { @MainActor in
+            guard streamState == .stopping else { return }
+            shouldCloseStream = false
+            currentlyStreamingAppId = nil
+            streamState = .idle
+            reconnectCooldownUntil = nil
+            if !isSwappingRenderers {
+                activelyStreaming = false
+            }
+        }
+    }
+    
+    private func onStreamStartFailed() {
+        Task { @MainActor in
+            guard streamState == .starting else { return }
+            streamState = .stopping
+            shouldCloseStream = true
+            reconnectCooldownUntil = nil
+            if !isSwappingRenderers {
+                activelyStreaming = false
+            }
+        }
+    }
+    
+    func prepareForNewStream() {
+        activeSessionToken = UUID().uuidString
+        if streamState == .stopping {
+            streamState = .idle
+        }
+        if shouldCloseStream { shouldCloseStream = false }
+        if activelyStreaming && streamState == .idle {
+            activelyStreaming = false
+        }
+        if let cooldown = reconnectCooldownUntil, cooldown.timeIntervalSinceNow <= 0 {
+            reconnectCooldownUntil = nil
+        }
+        if isSwappingRenderers && streamState == .idle {
+            isSwappingRenderers = false
+        }
+    }
+    
+    func userDidRequestDisconnect() {
+        activelyStreaming = false
+        DispatchQueue.main.async { self.beginDisconnect() }
+    }
+    
+    private func beginDisconnect() {
+        guard streamState == .running || streamState == .starting else { return }
+        streamState = .stopping
+        beginReconnectCooldown(1.5)
+        if let appId = currentlyStreamingAppId,
+           let host = hosts.first(where: { $0.appList.contains(where: { $0.id == appId || $0.name == appId }) }) {
+            let httpManager = HttpManager(host: host)
+            let httpResponse = HttpResponse()
+            let quitRequest = HttpRequest(for: httpResponse, with: httpManager?.newQuitAppRequest())
+            DispatchQueue.global(qos: .userInitiated).async {
+                httpManager?.executeRequestSynchronously(quitRequest)
+                DispatchQueue.main.async {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        self.shouldCloseStream = true
+                    }
+                }
+            }
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.shouldCloseStream = true
+            }
+        }
+    }
+    
+    func beginReconnectCooldown(_ seconds: TimeInterval = 1.0) {
+        reconnectCooldownUntil = Date().addingTimeInterval(seconds)
+    }
+
+    func reconnectCooldownRemaining() -> TimeInterval {
+        guard let until = reconnectCooldownUntil else { return 0 }
+        return max(0, until.timeIntervalSinceNow)
+    }
+    
+    func canReconnectNow() -> Bool {
+        reconnectCooldownRemaining() <= 0
+    }
+
+    func waitForTeardown(timeout: TimeInterval = 1.5) async {
+        guard streamState == .stopping else { return }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            let center = NotificationCenter.default
+            var fired = false
+            var obs1: NSObjectProtocol?
+            var obs2: NSObjectProtocol?
+            var obs3: NSObjectProtocol?
+
+            func cleanup(label: String, timedOut: Bool = false) {
+                if fired { return }
+                fired = true
+                if let o = obs1 { center.removeObserver(o) }
+                if let o = obs2 { center.removeObserver(o) }
+                if let o = obs3 { center.removeObserver(o) }
+                Task { @MainActor in
+                    if timedOut { print("[Lifecycle] Teardown wait timed out") }
+                    if streamState == .stopping { streamState = .idle }
+                    cont.resume()
+                }
+            }
+
+            obs1 = center.addObserver(forName: Notification.Name("StreamDidTeardownNotification"), object: nil, queue: .main) { _ in cleanup(label: "StreamDidTeardown") }
+            obs2 = center.addObserver(forName: Notification.Name("RKStreamDidTeardown"), object: nil, queue: .main) { _ in cleanup(label: "RKStreamDidTeardown") }
+            obs3 = center.addObserver(forName: Notification.Name("StreamStartFailed"), object: nil, queue: .main) { _ in cleanup(label: "StreamStartFailed") }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) {
+                cleanup(label: "timeout", timedOut: true)
+            }
+        }
+    }
+
+    /// Fallback for cases where stream view vanished (e.g. crown exit) and teardown
+    /// notifications are missed, leaving lifecycle state stuck and blocking new launches.
+    func forceResetStreamLifecycleIfNeeded() {
+        if streamState != .idle {
+            print("[Lifecycle] Force-reset stream lifecycle from \(streamState.rawValue) to idle")
+        }
+        streamState = .idle
+        shouldCloseStream = false
+        currentlyStreamingAppId = nil
+        reconnectCooldownUntil = nil
+        activelyStreaming = false
     }
 
     // Computed property to filter hosts based on pairState and remove duplicates
@@ -262,71 +456,86 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     // MARK: - Host & App Data Sync
 
     func updateHost(host: TemporaryHost, force: Bool = false) async {
-        await MainActor.run {
-            guard force || host.state != .offline else {
-                print("updateHost: Host \(host.name) is marked offline and force is false. Skipping request.")
-                if host.updatePending { host.updatePending = false }
-                return
-            }
-
-            print("updateHost: Proceeding with server info request for \(host.name). State: \(host.state), Force: \(force)")
-
-            let httpManager = HttpManager(host: host)
-            discoveryManager?.pauseDiscovery(for: host)
-            host.updatePending = true // Mark as pending
-
-            let serverInfoResponse = ServerInfoResponse()
-
-            print("Executing server info request for host: \(host.name) at \(host.activeAddress ?? host.address ?? "N/A")")
-            let request = HttpRequest(for: serverInfoResponse, with: httpManager?.newServerInfoRequest(false), fallbackError: 401, fallbackRequest: httpManager?.newHttpServerInfoRequest())
-            httpManager?.executeRequestSynchronously(request) // BLOCKING CALL
-
-            // --- Process Result ---
-            host.updatePending = false // Clear pending flag regardless of outcome
-
-            guard hosts.contains(where: { $0.uuid == host.uuid }) else {
-                 print("updateHost: Host \(host.name) (UUID: \(host.uuid)) no longer in list after request. Discarding result.")
-                 discoveryManager?.resumeDiscovery(for: host) // Still need to resume discovery
-                 return
-            }
-
-            if serverInfoResponse.isStatusOk() {
-                print("Successfully updated host: \(host.name). Populating host data.")
-                if host.state != .online {
-                     print("updateHost: Host \(host.name) was previously \(host.state), setting to Online after successful update.")
-                     host.state = .online // Ensure state reflects reachability
-                }
-                serverInfoResponse.populateHost(host) // Populate details (like pairState, etc.)
-                
-                // ------------------- FIX -------------------
-                // Save the updated host to persistent storage (Core Data).
-                // This is the critical step to "remember" the pairing.
-                dataManager.update(host)
-                // -------------------------------------------
-                
-            } else {
-                print("Failed to update host: \(host.name) during server info request. Error: \(serverInfoResponse.statusMessage ?? "unknown error"). Setting state to offline.")
-                if host.state != .offline {
-                    host.state = .offline
-                }
-            }
-
-            discoveryManager?.resumeDiscovery(for: host)
+        // --- Main-actor pre-flight (no blocking work here) ---
+        guard force || host.state != .offline else {
+            print("updateHost: Host \(host.name) is marked offline and force is false. Skipping request.")
+            if host.updatePending { host.updatePending = false }
+            return
         }
+
+        print("updateHost: Proceeding with server info request for \(host.name). State: \(host.state), Force: \(force)")
+
+        let httpManager = HttpManager(host: host)
+        discoveryManager?.pauseDiscovery(for: host)
+        host.updatePending = true
+
+        let serverInfoResponse = ServerInfoResponse()
+        print("Executing server info request for host: \(host.name) at \(host.activeAddress ?? host.address ?? "N/A")")
+        let request = HttpRequest(
+            for: serverInfoResponse,
+            with: httpManager?.newServerInfoRequest(false),
+            fallbackError: 401,
+            fallbackRequest: httpManager?.newHttpServerInfoRequest()
+        )
+
+        // Suspend the main actor and run the blocking HTTP call on a background thread.
+        // This keeps the UI fully responsive while waiting for the network response.
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                httpManager?.executeRequestSynchronously(request)
+                continuation.resume()
+            }
+        }
+
+        // --- Back on main actor — process results ---
+        host.updatePending = false
+
+        guard hosts.contains(where: { $0.uuid == host.uuid }) else {
+            print("updateHost: Host \(host.name) (UUID: \(host.uuid)) no longer in list after request. Discarding result.")
+            discoveryManager?.resumeDiscovery(for: host)
+            return
+        }
+
+        if serverInfoResponse.isStatusOk() {
+            print("Successfully updated host: \(host.name). Populating host data.")
+            if host.state != .online {
+                print("updateHost: Host \(host.name) was previously \(host.state), setting to Online after successful update.")
+                host.state = .online
+            }
+            serverInfoResponse.populateHost(host)
+            dataManager.update(host)
+        } else {
+            print("Failed to update host: \(host.name) during server info request. Error: \(serverInfoResponse.statusMessage ?? "unknown error"). Setting state to offline.")
+            if host.state != .offline {
+                host.state = .offline
+            }
+        }
+
+        discoveryManager?.resumeDiscovery(for: host)
     }
 
-    func refreshAppsFor(host: TemporaryHost) {
-        // possibly put loading stuff somewhere?
+    func refreshAppsFor(host: TemporaryHost) async {
         print("refreshAppsFor - Refreshing apps for host: \(host.name)")
         discoveryManager?.pauseDiscovery(for: host)
-        let appListResponse = ConnectionHelper.getAppList(for: host)
+
+        // ConnectionHelper.getAppList retries up to 5 times with 1-second sleeps between
+        // attempts — up to ~5 s of blocking I/O.  Run it on a background thread so the
+        // main actor (and therefore the UI) stays fully responsive.
+        let appListResponse: AppListResponse? = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let response = ConnectionHelper.getAppList(for: host) as? AppListResponse
+                continuation.resume(returning: response)
+            }
+        }
+
+        // --- Back on main actor — process results ---
         discoveryManager?.resumeDiscovery(for: host)
+
         if appListResponse?.isStatusOk() == true {
             let serverApps = (appListResponse!.getAppList() as! Set<TemporaryApp>)
             print("refreshAppsFor - Received \(serverApps.count) apps from server.")
 
             var newAppList = OrderedSet<TemporaryApp>()
-            // Only new apps we have received are valid, but keep the old object and state if it exists.
             for serverApp in serverApps {
                 var matchFound = false
                 for oldApp in host.appList {
@@ -334,7 +543,6 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
                         oldApp.name = serverApp.name
                         oldApp.hdrSupported = serverApp.hdrSupported
                         oldApp.setHost(host)
-                        // Ignore hidden, we want to respect the saved state.
                         matchFound = true
                         newAppList.append(oldApp)
                         break
@@ -353,18 +561,18 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
                 for removedApp in removedApps {
                     database.remove(removedApp)
                 }
-                database.updateApps(forExisting: host) // Persist removals
+                database.updateApps(forExisting: host)
             }
 
             if host.appList != newAppList {
-                 print("refreshAppsFor - App list changed. Updating host.")
-                 host.appList = newAppList // Update the host's app list
+                print("refreshAppsFor - App list changed. Updating host.")
+                host.appList = newAppList
             } else {
-                 print("refreshAppsFor - App list unchanged.")
+                print("refreshAppsFor - App list unchanged.")
             }
 
         } else {
-             print("refreshAppsFor - Failed to retrieve app list for host: \(host.name). Status: \(appListResponse?.statusMessage ?? "Unknown error")")
+            print("refreshAppsFor - Failed to retrieve app list for host: \(host.name). Status: \(appListResponse?.statusMessage ?? "Unknown error")")
             host.state = .offline
         }
     }
@@ -419,7 +627,9 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     // MARK: - Stream Control
 
     func stream(app: TemporaryApp) -> StreamConfiguration? {
+        prepareForNewStream()
         let config = StreamConfiguration()
+        config.sessionUUID = activeSessionToken
 
         guard let host = app.host() else {
             print("stream - ERROR: App \(app.name) has no associated host.")
@@ -508,6 +718,8 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
         currentStreamConfig = config
         activelyStreaming = true
+        streamState = .starting
+        currentlyStreamingAppId = app.id ?? app.name
         print("stream - Stream configuration complete. Ready to start streaming.")
         return currentStreamConfig
     }

@@ -10,6 +10,10 @@ import Foundation
 
 @objcMembers
 class StreamConfiguration: NSObject, Encodable, Decodable {
+    /// Unique ID for each stream session. Used as SwiftUI .id() to force
+    /// a fresh view instance, preventing stale @State from zombie view reuse.
+    var sessionUUID: String = UUID().uuidString
+    
     var host: String!
     var httpsPort: UInt16
     var appVersion: String
@@ -33,6 +37,7 @@ class StreamConfiguration: NSObject, Encodable, Decodable {
     var multiController: Bool
     var useFramePacing: Bool
     var serverCert: Data!
+    var controllerSlotOffset: Int = 0
     
     // Default initializer (required for decoding)
     init(

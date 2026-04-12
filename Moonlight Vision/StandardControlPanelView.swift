@@ -12,6 +12,9 @@ import SwiftUI
 struct StandardControlPanelView: View {
     @EnvironmentObject private var viewModel: MainViewModel
     
+    /// Home: push main (stream stays). Stop: full teardown. If nil, closeAction used for both.
+    var homeAction: (() -> Void)? = nil
+    var stopAction: (() -> Void)? = nil
     let closeAction: () -> Void
     let toggleKeyboardAction: (() -> Void)?
     let isKeyboardActive: Bool
@@ -60,6 +63,7 @@ struct StandardControlPanelView: View {
         .onChange(of: viewModel.streamSettings.brightness) { _, _ in debouncedSave() }
         .onChange(of: viewModel.streamSettings.gamma) { _, _ in debouncedSave() }
         .onChange(of: viewModel.streamSettings.saturation) { _, _ in debouncedSave() }
+        .onChange(of: viewModel.streamSettings.pqExposure) { _, _ in debouncedSave() }
         .onChange(of: viewModel.streamSettings.realitykitRendererCurvature) { _, _ in debouncedSave() }
         .onChange(of: viewModel.streamSettings.dimPassthrough) { _, _ in debouncedSaveDimPassthrough() }
         .onDisappear {
@@ -78,10 +82,16 @@ struct StandardControlPanelView: View {
         VStack(alignment: .leading, spacing: 16) {
             SectionHeader(title: viewModel.localized("quick_actions"), icon: "square.grid.2x2")
             
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                // Home
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                // Home (push main overlay when homeAction set, else full teardown)
                 ModernActionTile(icon: "house.fill", title: viewModel.localized("home")) {
-                    closeAction()
+                    (homeAction ?? closeAction)()
+                }
+                // Stop (full teardown, only when stopAction provided)
+                if stopAction != nil {
+                    ModernActionTile(icon: "stop.circle.fill", title: viewModel.localized("stop")) {
+                        (stopAction ?? closeAction)()
+                    }
                 }
                 
                 // Dimming
@@ -143,21 +153,20 @@ struct StandardControlPanelView: View {
             SectionHeader(title: viewModel.localized("display_effects"), icon: "display")
             
             Grid(horizontalSpacing: 16, verticalSpacing: 20) {
-                // HDR settings
                 if viewModel.streamSettings.enableHdr || needsHdr {
                     SteppedSliderRow(
                         title: viewModel.localized("brightness"),
                         value: $viewModel.streamSettings.brightness,
-                        range: 1.0...10.0,
-                        defaultValue: 2.2,
-                        format: "%.1f",
+                        range: 0.0...5.0,
+                        defaultValue: 1.0,
+                        format: "%.2f",
                         step: 0.01
                     )
                     
                     SteppedSliderRow(
                         title: viewModel.localized("contrast"),
                         value: $viewModel.streamSettings.gamma,
-                        range: 0.5...5.0,
+                        range: 0.0...3.0,
                         defaultValue: 1.0,
                         format: "%.2f",
                         step: 0.01
@@ -166,7 +175,16 @@ struct StandardControlPanelView: View {
                     SteppedSliderRow(
                         title: viewModel.localized("saturation"),
                         value: $viewModel.streamSettings.saturation,
-                        range: 0.0...4.0,
+                        range: 0.0...3.0,
+                        defaultValue: 1.0,
+                        format: "%.2f",
+                        step: 0.01
+                    )
+                    
+                    SteppedSliderRow(
+                        title: viewModel.localized("pq_hdr_exposure"),
+                        value: $viewModel.streamSettings.pqExposure,
+                        range: 0.25...2.5,
                         defaultValue: 1.0,
                         format: "%.2f",
                         step: 0.01
@@ -275,6 +293,7 @@ struct StandardControlPanelView: View {
         let defaults = UserDefaults.standard
         defaults.set(viewModel.streamSettings.gamma, forKey: "realitykitGamma")
         defaults.set(viewModel.streamSettings.saturation, forKey: "realitykitSaturation")
+        defaults.set(viewModel.streamSettings.pqExposure, forKey: "realitykitPqExposure")
         if let height = height {
             defaults.set(height.wrappedValue, forKey: "realitykitHeight")
         }

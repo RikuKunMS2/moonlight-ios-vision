@@ -54,22 +54,19 @@
 #endif
 }
 
-// --- ADD THIS ENTIRE METHOD ---
 - (void)stopStream {
     Log(LOG_I, @"StreamFrameViewController: stopStream() called from SwiftUI.");
 
-    // Stop the stream manager
     if (_streamMan) {
         [_streamMan stopStream];
-        // Don't nil it here, let the view controller manage its lifecycle
+        _streamMan = nil;
     }
 
-    // Clean up controllers
     if (_controllerSupport) {
         [_controllerSupport cleanup];
+        _controllerSupport = nil;
     }
 
-    // Clean up timers
     if (_statsUpdateTimer) {
         [_statsUpdateTimer invalidate];
         _statsUpdateTimer = nil;
@@ -80,16 +77,16 @@
         _inactivityTimer = nil;
     }
 
-    // Allow display to go to sleep
-    [UIApplication sharedApplication].idleTimerDisabled = NO;
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
 
-    // Reset display mode back to default
+    if (_streamView) {
+        [_streamView removeFromSuperview];
+        _streamView = nil;
+    }
+
+    [UIApplication sharedApplication].idleTimerDisabled = NO;
     [self updatePreferredDisplayMode:NO];
     
-    // Do NOT remove observers here, as the view controller is still alive.
-    // [[NSNotificationCenter defaultCenter] removeObserver:self];
-    
-    // Show the spinner and stage label again
     dispatch_async(dispatch_get_main_queue(), ^{
         [self->_spinner startAnimating];
         [self->_stageLabel setText:@"Disconnected"];
@@ -97,8 +94,10 @@
         self->_stageLabel.hidden = NO;
         self->_tipLabel.hidden = NO;
     });
+    
+    self.streamConfig = nil;
+    Log(LOG_I, @"StreamFrameViewController: stopStream() completed");
 }
-// --- END OF NEW METHOD ---
 
 - (void)viewDidAppear:(BOOL)animated
 {
@@ -209,13 +208,7 @@
     [_tipLabel.topAnchor constraintEqualToAnchor:_stageLabel.bottomAnchor constant:20.0].active = YES;
     [_tipLabel.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor].active = YES;
 
-    _streamMan = [[StreamManager alloc] initWithConfig:self.streamConfig
-                                      rendererProvider:^id<AnyVideoDecoderRenderer> __strong {
-        return [[VideoDecoderRenderer alloc] initWithView:self->_streamView callbacks:self streamAspectRatio:(float)self.streamConfig.width / (float)self.streamConfig.height useFramePacing:self.streamConfig.useFramePacing];
-    }
-                                   connectionCallbacks:self];
-    NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
-    [opQueue addOperation:_streamMan];
+    [self startStreamManager];
     
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(applicationWillResignActive:)
@@ -231,6 +224,17 @@
                                              selector: @selector(applicationDidEnterBackground:)
                                                  name: UIApplicationDidEnterBackgroundNotification
                                                object: nil];
+
+#if TARGET_OS_VISION
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(uikitRequestStreamRestart:)
+                                                 name:@"UIKitRequestStreamRestart"
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(uikitStatsOverlayChanged:)
+                                                 name:@"UIKitStatsOverlayChanged"
+                                               object:nil];
+#endif
 
 #if 0
     // FIXME: This doesn't work reliably on iPad for some reason. Showing and hiding the keyboard
@@ -321,11 +325,24 @@
     NSString* overlayText = [self->_streamMan getStatsOverlayText];
     
     dispatch_async(dispatch_get_main_queue(), ^{
+#if TARGET_OS_VISION
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"UIKitStatsOverlayTextUpdated"
+                                                            object:nil
+                                                          userInfo:overlayText ? @{@"text": overlayText} : nil];
+#else
         [self updateOverlayText:overlayText];
+#endif
     });
 }
 
 - (void)updateOverlayText:(NSString*)text {
+#if TARGET_OS_VISION
+    // On visionOS, stats are rendered by SwiftUI overlay; just post notification
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"UIKitStatsOverlayTextUpdated"
+                                                        object:nil
+                                                      userInfo:text.length > 0 ? @{@"text": text} : nil];
+    return;
+#endif
     if (_overlayView == nil) {
         _overlayView = [[UITextView alloc] init];
 #if !TARGET_OS_TV
@@ -376,11 +393,71 @@
     [_statsUpdateTimer invalidate];
     _statsUpdateTimer = nil;
     [_streamMan stopStream];
+    _streamMan = nil;
     [self.navigationController popToRootViewControllerAnimated:YES];
 }
 
+#if TARGET_OS_VISION
+- (void) startStreamManager {
+    if (_streamMan != nil) return;
+    if (!_streamConfig) return;
+    _streamMan = [[StreamManager alloc] initWithConfig:_streamConfig
+                                       rendererProvider:^id<AnyVideoDecoderRenderer> __strong {
+        return [[VideoDecoderRenderer alloc] initWithView:self->_streamView callbacks:self streamAspectRatio:(float)self.streamConfig.width / (float)self.streamConfig.height useFramePacing:self.streamConfig.useFramePacing];
+    }
+                                    connectionCallbacks:self];
+    NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
+    [opQueue addOperation:_streamMan];
+}
+
+- (void) uikitRequestStreamRestart:(NSNotification*)notification {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->_streamMan != nil) {
+            [self->_streamMan stopStream];
+            self->_streamMan = nil;
+        }
+        // Wait 1.2s for Connection/LiStopConnection to fully teardown before starting new stream
+        // (avoids initLock timeout / crash when new connection starts too soon)
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (!self->_streamConfig || !self->_streamView) return;
+            [self startStreamManager];
+        });
+    });
+}
+
+- (void) uikitStatsOverlayChanged:(NSNotification*)notification {
+    BOOL enabled = [notification.userInfo[@"enabled"] boolValue];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (enabled && self->_streamMan != nil) {
+            if (self->_statsUpdateTimer == nil) {
+                self->_statsUpdateTimer = [NSTimer scheduledTimerWithTimeInterval:1.0f
+                                                                           target:self
+                                                                         selector:@selector(updateStatsOverlay)
+                                                                         userInfo:nil
+                                                                          repeats:YES];
+                [self updateStatsOverlay];  // Get first frame immediately
+            }
+        } else {
+            [self->_statsUpdateTimer invalidate];
+            self->_statsUpdateTimer = nil;
+#if TARGET_OS_VISION
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"UIKitStatsOverlayTextUpdated"
+                                                                object:nil
+                                                              userInfo:nil];
+#else
+            [self updateOverlayText:nil];
+#endif
+        }
+    });
+}
+#endif
+
 // This will fire if the user opens control center or gets a low battery message
 - (void)applicationWillResignActive:(NSNotification *)notification {
+#if TARGET_OS_VISION
+    // On visionOS, opening another window (Main menu) may trigger this. Ignore to keep stream running.
+    return;
+#endif
     if (_inactivityTimer != nil) {
         [_inactivityTimer invalidate];
     }
@@ -415,6 +492,10 @@
 
 // This fires when the home button is pressed
 - (void)applicationDidEnterBackground:(UIApplication *)application {
+#if TARGET_OS_VISION
+    // On visionOS, ignore - SwiftUI handles window lifecycle
+    return;
+#endif
     Log(LOG_I, @"Terminating stream immediately for backgrounding");
 
     if (_inactivityTimer != nil) {
@@ -454,6 +535,9 @@
         if (self->_connectedCallback) {
             self->_connectedCallback();
         }
+#if TARGET_OS_VISION
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"StreamFirstFrameShownNotification" object:nil];
+#endif
     });
 }
 
@@ -525,6 +609,15 @@
             }
         }
         
+#if TARGET_OS_VISION
+        // On visionOS, post for Swift to handle retry; Swift will call stopStream when needed
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"UIKitConnectionTerminatedForRetry" object:nil userInfo:@{@"title": title, @"message": message}];
+        // Stop stream so we can restart when Swift posts UIKitRequestStreamRestart
+        if (self->_streamMan) {
+            [self->_streamMan stopStream];
+            self->_streamMan = nil;
+        }
+#else
         UIAlertController* conTermAlert = [UIAlertController alertControllerWithTitle:title
                                                                               message:message
                                                                        preferredStyle:UIAlertControllerStyleAlert];
@@ -533,13 +626,15 @@
             [self returnToMainFrame];
         }]];
         [self presentViewController:conTermAlert animated:YES completion:nil];
-        
         if (self->_disconnectedCallback) {
             self->_disconnectedCallback();
         }
+        [_streamMan stopStream];
+#endif
     });
-
+#if !TARGET_OS_VISION
     [_streamMan stopStream];
+#endif
 }
 
 - (void) stageStarting:(const char*)stageName {
@@ -574,7 +669,19 @@
         if (portTestResults != ML_TEST_RESULT_INCONCLUSIVE && portTestResults != 0) {
             message = [message stringByAppendingString:@"\n\nYour device's network connection is blocking Moonlight. Streaming may not work while connected to this network."];
         }
-        
+#if TARGET_OS_VISION
+        if (self.uikitReconnectingForRetry) {
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"UIKitConnectionTerminatedForRetry" object:nil userInfo:@{@"title": @"Connection Failed", @"message": message}];
+            if (_streamMan) {
+                [_streamMan stopStream];
+                _streamMan = nil;
+            }
+        } else {
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"UIKitStreamErrorNotification" object:nil userInfo:@{@"title": @"Connection Failed", @"message": message}];
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"StreamStartFailed" object:nil];
+            [self returnToMainFrame];
+        }
+#else
         UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Connection Failed"
                                                                        message:message
                                                                 preferredStyle:UIAlertControllerStyleAlert];
@@ -583,25 +690,45 @@
             [self returnToMainFrame];
         }]];
         [self presentViewController:alert animated:YES completion:nil];
+#endif
     });
     
+#if !TARGET_OS_VISION
     [_streamMan stopStream];
+#endif
 }
 
 - (void) launchFailed:(NSString*)message {
     Log(LOG_I, @"Launch failed: %@", message);
 
-        // Allow the display to go to sleep now
+#if TARGET_OS_VISION
+    NSString *msg = message ?: @"Launch failed";
+    BOOL reconnecting = self.uikitReconnectingForRetry;
+    dispatch_async(dispatch_get_main_queue(), ^{
         [UIApplication sharedApplication].idleTimerDisabled = NO;
-        
-        UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Connection Error"
-                                                                       message:message
-                                                                preferredStyle:UIAlertControllerStyleAlert];
-        [Utils addHelpOptionToDialog:alert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:^(UIAlertAction* action){
+        if (reconnecting) {
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"UIKitConnectionTerminatedForRetry" object:nil userInfo:@{@"title": @"Connection Error", @"message": msg}];
+            if (self->_streamMan) {
+                [self->_streamMan stopStream];
+                self->_streamMan = nil;
+            }
+        } else {
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"UIKitStreamErrorNotification" object:nil userInfo:@{@"title": @"Connection Error", @"message": msg}];
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"StreamStartFailed" object:nil];
             [self returnToMainFrame];
-        }]];
-        [self presentViewController:alert animated:YES completion:nil];
+        }
+    });
+#else
+    [UIApplication sharedApplication].idleTimerDisabled = NO;
+    UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Connection Error"
+                                                                   message:message
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [Utils addHelpOptionToDialog:alert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:^(UIAlertAction* action){
+        [self returnToMainFrame];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+#endif
 }
 
 - (void)rumble:(unsigned short)controllerNumber lowFreqMotor:(unsigned short)lowFreqMotor highFreqMotor:(unsigned short)highFreqMotor {
@@ -785,5 +912,10 @@
     [_streamView toggleKeyboard];
 }
 
+#if !TARGET_OS_TV
+- (void)setAbsoluteTouchMode:(BOOL)enabled {
+    [_streamView setAbsoluteTouchMode:enabled];
+}
+#endif
 
 @end

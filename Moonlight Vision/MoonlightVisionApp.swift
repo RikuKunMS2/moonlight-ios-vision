@@ -10,10 +10,11 @@ import SwiftUI
 
 struct MoonlightVisionApp: SwiftUI.App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var immersionManager = ImmersionStyleManager.shared
-    @StateObject private var streamControlState = StreamControlState.shared
-    
-    @Environment(\.pushWindow) private var pushWindow
+    // Shared singletons must NOT use @StateObject — StateObject assumes exclusive
+    // ownership. Using .shared here is undefined across scene churn and can surface as
+    // runtime traps (e.g. EXC_BREAKPOINT in App.main) after repeated window/immersive toggles.
+    @ObservedObject private var immersionManager = ImmersionStyleManager.shared
+    @ObservedObject private var streamControlState = StreamControlState.shared
     
     var body: some Scene {
         WindowGroup("Main view", id: "mainView") {
@@ -37,6 +38,7 @@ struct MoonlightVisionApp: SwiftUI.App {
                          needsHdr: appDelegate.mainViewModel.streamSettings.enableHdr,
                          isImmersive: false // Explicitly false
                      )
+                     .id(streamConfig.wrappedValue?.sessionUUID ?? "none")
                      .environmentObject(appDelegate.mainViewModel)
                      .environmentObject(streamControlState)
                      .task {
@@ -62,7 +64,7 @@ struct MoonlightVisionApp: SwiftUI.App {
                      }
                 }
                 .windowStyle(.volumetric)
-                .defaultSize(width: 2, height: 2, depth: 2, in: .meters)
+                .defaultSize(width: 1.2, height: 1.2, depth: 1.2, in: .meters)
 
                 // 2. Unbounded Immersive Space (New)
                 ImmersiveSpace(id: "realitykitImmersiveSpace", for: StreamConfiguration.self) { streamConfig in
@@ -71,6 +73,7 @@ struct MoonlightVisionApp: SwiftUI.App {
                          needsHdr: appDelegate.mainViewModel.streamSettings.enableHdr,
                          isImmersive: true // Explicitly true
                      )
+                     .id(streamConfig.wrappedValue?.sessionUUID ?? "none")
                      .environmentObject(appDelegate.mainViewModel)
                      .environmentObject(streamControlState)
                      .task {
@@ -100,6 +103,7 @@ struct MoonlightVisionApp: SwiftUI.App {
                 // 3. UIKit Window
                 WindowGroup(id: "classicStreamingWindow", for: StreamConfiguration.self) { streamConfig in
                     UIKitStreamView(streamConfig: streamConfig)
+                    .id(streamConfig.wrappedValue?.sessionUUID ?? "none")
                     .environmentObject(appDelegate.mainViewModel)
                     .task {
                         // Auto-resume: if we have a saved config and current config is nil, restore it
@@ -118,8 +122,8 @@ struct MoonlightVisionApp: SwiftUI.App {
                 }
                 .windowStyle(.plain)
                 .windowResizability(.contentSize)
-            }
-        }
+    }
+}
 
 @main
 struct MainWrapper {

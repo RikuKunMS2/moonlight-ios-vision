@@ -250,9 +250,6 @@ struct SettingsView: View {
                 
                 if (settings.renderer == .realitykit) {
                     Section(header: Text(viewModel.localized("realitykit_settings")), footer: Text(viewModel.localized("realitykit_footer"))) {
-                        // Add this Toggle
-                                Toggle(viewModel.localized("immersive_mode"), isOn: $settings.realitykitImmersiveMode)
-                                    .onChange(of: settings.realitykitImmersiveMode) { _, _ in settings.save() }
                         Toggle(viewModel.localized("animate_screen_curve"), isOn: $settings.realitykitRendererAnimateOpening)
                             .onChange(of: settings.realitykitRendererAnimateOpening) { _, _ in settings.save() }
                         
@@ -266,14 +263,6 @@ struct SettingsView: View {
                                 }
                             }
                         
-                        Toggle(viewModel.localized("high_res_pinned_screen"), isOn: $settings.realitykitHighResPinnedScreen)
-                            .onChange(of: settings.realitykitHighResPinnedScreen) { _, _ in settings.save() }
-                        
-                        if settings.realitykitHighResPinnedScreen {
-                            Text(viewModel.localized("high_res_pinned_screen_footer"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
                     }
                 }
                 

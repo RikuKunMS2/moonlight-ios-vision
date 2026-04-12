@@ -15,6 +15,7 @@
 - (id) initWithConfig:(StreamConfiguration*)config rendererProvider:(id<AnyVideoDecoderRenderer> __strong (^)(void))rendererProvider connectionCallbacks:(id<ConnectionCallbacks>)callback;
 
 - (void) stopStream;
+- (void) stopStreamWithCompletion:(void (^)(void))completion;
 
 - (NSString*) getStatsOverlayText;
 

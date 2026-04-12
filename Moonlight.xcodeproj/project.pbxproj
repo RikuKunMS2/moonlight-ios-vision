@@ -16,6 +16,7 @@
 		04F5ECA62EE09B4E009FF87D /* StreamControlState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F5ECA52EE09B4E009FF87D /* StreamControlState.swift */; };
 		04F5ECAC2EE3759C009FF87D /* ImmersionStyleManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F5ECAB2EE3759C009FF87D /* ImmersionStyleManager.swift */; };
 		04F5ECAF2EE37A7F009FF87D /* StandardControlPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F5ECAD2EE37A7F009FF87D /* StandardControlPanelView.swift */; };
+		04F5ECB12EE37A80009FF87D /* VolumeControlPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F5ECB02EE37A80009FF87D /* VolumeControlPanelView.swift */; };
 		3E3791CA2ED2A4F5004B22A2 /* RealityKitStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E3791C92ED2A4F5004B22A2 /* RealityKitStreamView.swift */; };
 		3E4F94692DC2E2D6006CF0C1 /* ComputerViewWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E4F94682DC2E2D6006CF0C1 /* ComputerViewWrapper.swift */; };
 		3E8100A72ED5666B0011CB9F /* AV1Helper.m in Sources */ = {isa = PBXBuildFile; fileRef = 3E8100A62ED5666B0011CB9F /* AV1Helper.m */; };
@@ -55,6 +56,7 @@
 		98B9CE6D27B2144B00B473C4 /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 98B9CE6C27B2144B00B473C4 /* AVKit.framework */; };
 		98CFB82F1CAD481B0048EF74 /* libmoonlight-common.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98AB2E841CAD46840089BB98 /* libmoonlight-common.a */; };
 		98D585701C0ED0E800F6CC00 /* TemporarySettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 98D5856F1C0ED0E800F6CC00 /* TemporarySettings.m */; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* StreamViewStubs.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E2D3C4B5A6978869504132 /* StreamViewStubs.swift */; };
 		B19362EE2D4ECDD6004F88FA /* NSData+Conversion.m in Sources */ = {isa = PBXBuildFile; fileRef = B19362ED2D4ECDCF004F88FA /* NSData+Conversion.m */; };
 		B19362EF2D4ECDD6004F88FA /* NSData+Conversion.m in Sources */ = {isa = PBXBuildFile; fileRef = B19362ED2D4ECDCF004F88FA /* NSData+Conversion.m */; };
 		B19362F02D4ECDD6004F88FA /* NSData+Conversion.m in Sources */ = {isa = PBXBuildFile; fileRef = B19362ED2D4ECDCF004F88FA /* NSData+Conversion.m */; };
@@ -68,11 +70,13 @@
 		B1EDB13C2D4D95BF00EB1839 /* StreamConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB13B2D4D95BF00EB1839 /* StreamConfiguration.swift */; };
 		B1EDB13D2D4D95BF00EB1839 /* StreamConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB13B2D4D95BF00EB1839 /* StreamConfiguration.swift */; };
 		B1EDB13E2D4D95BF00EB1839 /* StreamConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB13B2D4D95BF00EB1839 /* StreamConfiguration.swift */; };
+		C2769339D74B457E85143624 /* AV1Parser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5924693D218D4AB18BB554DD /* AV1Parser.swift */; };
 		DC1F5A07206436B20037755F /* ConnectionHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = DC1F5A06206436B20037755F /* ConnectionHelper.m */; };
 		E77582CD2D53F3EB00948545 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = E77582CC2D53F3E500948545 /* Shaders.metal */; };
 		E77582CF2D54020700948545 /* CVMetalHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = E77582CE2D54020300948545 /* CVMetalHelpers.swift */; };
 		E77582EB2D5550D500948545 /* AudioHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = E77582EA2D5550D200948545 /* AudioHelpers.swift */; };
 		F71801422B65483D00A9336B /* AppsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71801412B65483D00A9336B /* AppsView.swift */; };
+		F71801572B72FF0000A9336B /* StreamModeSelectionOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71801582B72FF0000A9336B /* StreamModeSelectionOverlay.swift */; };
 		F71801442B654D9100A9336B /* TemporaryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71801432B654D9100A9336B /* TemporaryApp.swift */; };
 		F71801452B65583700A9336B /* TemporaryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71801432B654D9100A9336B /* TemporaryApp.swift */; };
 		F71801462B65583700A9336B /* TemporaryApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F71801432B654D9100A9336B /* TemporaryApp.swift */; };
@@ -299,6 +303,7 @@
 		04F5ECA52EE09B4E009FF87D /* StreamControlState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamControlState.swift; sourceTree = "<group>"; };
 		04F5ECAB2EE3759C009FF87D /* ImmersionStyleManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersionStyleManager.swift; sourceTree = "<group>"; };
 		04F5ECAD2EE37A7F009FF87D /* StandardControlPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandardControlPanelView.swift; sourceTree = "<group>"; };
+		04F5ECB02EE37A80009FF87D /* VolumeControlPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeControlPanelView.swift; sourceTree = "<group>"; };
 		3E0863FF2ECD6BB7006549CB /* Moonlight XrOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Moonlight XrOS.entitlements"; sourceTree = "<group>"; };
 		3E3791C92ED2A4F5004B22A2 /* RealityKitStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealityKitStreamView.swift; sourceTree = "<group>"; };
 		3E4F94682DC2E2D6006CF0C1 /* ComputerViewWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerViewWrapper.swift; sourceTree = "<group>"; };
@@ -306,6 +311,7 @@
 		3E8100A62ED5666B0011CB9F /* AV1Helper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AV1Helper.m; sourceTree = "<group>"; };
 		3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatesView.swift; sourceTree = "<group>"; };
 		566E9D2B2770B23A00EF7BFE /* Moonlight v1.7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.7.xcdatamodel"; sourceTree = "<group>"; };
+		5924693D218D4AB18BB554DD /* AV1Parser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV1Parser.swift; sourceTree = "<group>"; };
 		6581B5F02D5434100022400F /* VideoTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTypes.swift; sourceTree = "<group>"; };
 		659789EB2D55A93A00B88B25 /* SBSMaterial.usda */ = {isa = PBXFileReference; lastKnownFileType = text; path = SBSMaterial.usda; sourceTree = "<group>"; };
 		693B3A9A218638CD00982F7B /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
@@ -361,7 +367,9 @@
 		E77582CC2D53F3E500948545 /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
 		E77582CE2D54020300948545 /* CVMetalHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CVMetalHelpers.swift; sourceTree = "<group>"; };
 		E77582EA2D5550D200948545 /* AudioHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioHelpers.swift; sourceTree = "<group>"; };
+		F1E2D3C4B5A6978869504132 /* StreamViewStubs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamViewStubs.swift; sourceTree = "<group>"; };
 		F71801412B65483D00A9336B /* AppsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppsView.swift; sourceTree = "<group>"; };
+		F71801582B72FF0000A9336B /* StreamModeSelectionOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamModeSelectionOverlay.swift; sourceTree = "<group>"; };
 		F71801432B654D9100A9336B /* TemporaryApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemporaryApp.swift; sourceTree = "<group>"; };
 		F71801492B655C1F00A9336B /* Utils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Utils.swift; sourceTree = "<group>"; };
 		F7199AFA2B72F33000E6D62D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -665,6 +673,7 @@
 			isa = PBXGroup;
 			children = (
 				04F5ECAD2EE37A7F009FF87D /* StandardControlPanelView.swift */,
+				04F5ECB02EE37A80009FF87D /* VolumeControlPanelView.swift */,
 			);
 			path = ControlPanel;
 			sourceTree = "<group>";
@@ -721,6 +730,8 @@
 				3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */,
 				E77582EA2D5550D200948545 /* AudioHelpers.swift */,
 				E77582CE2D54020300948545 /* CVMetalHelpers.swift */,
+				5924693D218D4AB18BB554DD /* AV1Parser.swift */,
+				F1E2D3C4B5A6978869504132 /* StreamViewStubs.swift */,
 				B1EDB1302D4D95A700EB1839 /* DrawableVideoDecoder.swift */,
 				B1EDB1312D4D95A700EB1839 /* ObservableConnectionManager.swift */,
 				3E8100A52ED566510011CB9F /* AV1Helper.h */,
@@ -735,6 +746,7 @@
 				F7A119662B5DE1FD001E868B /* Localizable.strings */,
 				F77B58B12B5EFC9000482BD5 /* ComputerView.swift */,
 				F71801412B65483D00A9336B /* AppsView.swift */,
+				F71801582B72FF0000A9336B /* StreamModeSelectionOverlay.swift */,
 				F7199AFA2B72F33000E6D62D /* SettingsView.swift */,
 				F77B58AF2B5EF94900482BD5 /* SidebarView.swift */,
 				F7A4A4D02B5F216C001591F3 /* MainViewModel.swift */,
@@ -1364,10 +1376,13 @@
 				F7A119152B5DDF73001E8686 /* Connection.m in Sources */,
 				3E3791CA2ED2A4F5004B22A2 /* RealityKitStreamView.swift in Sources */,
 				04F5ECAF2EE37A7F009FF87D /* StandardControlPanelView.swift in Sources */,
+				04F5ECB12EE37A80009FF87D /* VolumeControlPanelView.swift in Sources */,
 				E77582EB2D5550D500948545 /* AudioHelpers.swift in Sources */,
 				F7A119162B5DDF73001E8686 /* AppAssetRetriever.m in Sources */,
 				F7A119172B5DDF73001E8686 /* WakeOnLanManager.m in Sources */,
 				B1EDB1352D4D95A700EB1839 /* StreamControls.swift in Sources */,
+				C2769339D74B457E85143624 /* AV1Parser.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* StreamViewStubs.swift in Sources */,
 				B1EDB1362D4D95A700EB1839 /* DrawableVideoDecoder.swift in Sources */,
 				3E86FC1D2D4FFDF20016BB8E /* UpdatesView.swift in Sources */,
 				B1EDB1372D4D95A700EB1839 /* UIKitStreamView.swift in Sources */,
@@ -1413,6 +1428,7 @@
 				F7A119362B5DDF73001E8686 /* ControllerSupport.m in Sources */,
 				04F5ECAC2EE3759C009FF87D /* ImmersionStyleManager.swift in Sources */,
 				F71801422B65483D00A9336B /* AppsView.swift in Sources */,
+				F71801572B72FF0000A9336B /* StreamModeSelectionOverlay.swift in Sources */,
 				F7199B002B72FC1400E6D62D /* TemporarySettings.swift in Sources */,
 				F7A119372B5DDF73001E8686 /* AppAssetResponse.m in Sources */,
 				F7A119382B5DDF73001E8686 /* DataManager.m in Sources */,

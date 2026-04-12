@@ -70,12 +70,23 @@
 // Stream Status
 "stream_stopped" = "串流已停止";
 "stream_stopped_message" = "在返回主菜单前请先关闭此窗口，之后即可在主菜单重新启动串流。";
+"reconnecting" = "正在重连…";
+"reconnect_attempt" = "第 %d/%d 次尝试";
 "open_main_menu" = "打开主菜单";
+"resume_stream" = "返回串流";
 "stream_error" = "串流错误";
 "unknown_error" = "未知错误";
 "close" = "关闭";
+"select_stream_mode" = "选择串流模式";
+"stream_mode_uikit" = "平面窗口";
+"stream_mode_uikit_desc" = "UIKit";
+"stream_mode_volume" = "体积窗口";
+"stream_mode_volume_desc" = "3D 曲面屏";
+"stream_mode_immersive" = "沉浸式";
+"stream_mode_immersive_desc" = "全空间";
 "keyboard_active" = "键盘已激活";
 "tap_video_to_type" = "点击屏幕以输入";
+"uikit_keyboard_hint" = "点击屏幕打开键盘";
 
 // RealityKit Controls
 "boost_luminance" = "亮度增强 / 亮度";
@@ -119,14 +130,15 @@
 "immersive_mode" = "沉浸式模式（可移动屏幕）";
 "animate_screen_curve" = "动画屏幕曲线";
 "screen_curvature" = "屏幕曲率";
-"high_res_pinned_screen" = "置顶屏幕高分辨率";
-"high_res_pinned_screen_footer" = "⚠️ 可能影响性能。置顶屏幕时提高清晰度。";
+"screen_corner_radius" = "屏幕圆角";
 "uikit_settings" = "UIKit（经典）渲染器设置";
 "window_corner_radius" = "窗口圆角";
 "corner_radius_clarity_warning" = "这可能会影响串流清晰度";
 "touch_mode" = "触摸模式";
 "touchpad" = "触摸板";
 "touchscreen" = "触摸屏";
+"input_mode_trackpad" = "触控板";
+"input_mode_gaze_input" = "注视输入";
 "on_screen_controls" = "屏幕控制";
 "off" = "关闭";
 "auto" = "自动";
@@ -161,10 +173,10 @@
 "unknown" = "未知";
 "running" = "运行中";
 "stop" = "停止";
-"active_stream" = "已有串流窗口";
+"active_stream" = "串流进行中";
 "go_back_to_window" = "回到窗口";
 "force_quit" = "强制结束";
-"active_stream_message" = "检测到已有串流窗口在运行。请选择回到该窗口或强制结束后重新启动应用程序。";
+"active_stream_message" = "检测到已有串流进程在运行。请选择回到该窗口或强制结束后重新启动应用程序。";
 "close_previous_window" = "请先关闭旧窗口";
 "close_previous_window_message" = "上一次串流已停止，但窗口仍保持打开。请在原窗口横条上点击关闭按钮后再重试。";
 "close_realitykit_window" = "请先关闭 RealityKit 窗口";
@@ -195,6 +207,7 @@
 "brightness" = "亮度";
 "contrast" = "对比度";
 "saturation" = "饱和度";
+"pq_hdr_exposure" = "PQ HDR 曝光";
 "spatial_adjustments" = "空间调整";
 "vertical_height" = "垂直高度";
 "passthrough_environment_brightness" = "透视环境亮度";
@@ -211,4 +224,35 @@
 "unpin_studio" = "解除置顶";
 "pin_studio" = "置顶到工作室";
 "gamepad_home" = "游戏手柄 Home";
+"stats_overlay" = "统计信息";
+"screen_tilt" = "屏幕倾斜";
+"hide_panel" = "隐藏面板";
+"semi_short" = "半沉浸";
+"full_short" = "全沉浸";
+"dimming" = "环境调暗";
+"dim_night" = "夜间";
+"dim_reactive_v1" = "自适应 V1";
+"dim_eclipse" = "日食";
+"dim_midnight" = "午夜";
+"dim_twilight" = "黄昏";
+"dim_dawn" = "黎明";
+"dim_sunrise" = "日出";
+"dim_woodland" = "林间";
+"dim_reactive_v2" = "自适应 V2";
+"dim_starfield" = "星空";
+"dim_desert" = "沙漠";
+"dim_off" = "调暗关闭";
 
+// Floating hints & popups
+"tap_reveal_controls" = "点击显示控制，再点击选择";
+"switched_to_screen_adjust" = "已切换到屏幕调整模式";
+"input_mode_screen_adjust" = "屏幕调整模式";
+"input_mode_controller" = "手柄模式";
+"input_mode_gaze" = "注视控制模式";
+"input_mode_touch" = "触控模式";
+"standard_display" = "标准显示";
+"3d_short" = "3D";
+"hide_stats" = "隐藏统计";
+"show_stats" = "显示统计";
+"hide_keyboard" = "隐藏键盘";
+"show_keyboard" = "显示键盘";
