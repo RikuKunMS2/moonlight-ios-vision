@@ -143,6 +143,9 @@ struct _RealityKitStreamView: View {
     @State private var selectedEnvironmentState: EnvironmentStateType = .none
     @State private var isUpdatingImmersion = false
     // Stage Pinning
+    @State private var stagePinnedEntity: Entity? = nil
+    
+    @State private var ambilightTexture: TextureResource?
     @State private var isPinnedToStage = false
     @State private var isPinningTransitioning = false
     @State private var lastFreeformTransform: Transform?
@@ -151,7 +154,7 @@ struct _RealityKitStreamView: View {
     @State private var pinnedStageScale: Float = 1.0
     @State private var screenOriginalParent: Entity?
     @State private var screen: ModelEntity = ModelEntity()
-    @State private var ambilightPlane: ModelEntity? = nil
+    @State private var ambilightLayers: [ModelEntity] = []
     @State private var isInteractive = false
     // Immersive transform (synced with controlState)
     @State private var immersionAmount: Float = 0.0
@@ -574,12 +577,16 @@ struct _RealityKitStreamView: View {
             }
             .onChange(of: viewModel.streamSettings.reactiveLightingEnabled) { _, newValue in
                 updateDimmerDomesState()
+                updateScreenMaterial()
                 if newValue {
                     stopMoonlightCycle()
                     startReactiveLerp()
                 } else if dimLevel != 2 && dimLevel != 10 && dimLevel != 13 {
                     stopReactiveLerp()
                 }
+            }
+            .onChange(of: firstFrameReceived) { _, _ in 
+                updateScreenMaterial() 
             }
 
         return controlStateSynced
@@ -1367,18 +1374,23 @@ struct _RealityKitStreamView: View {
     // Bypasses local coordinate glitches by calculating vector projection in absolute room space.
     
     private func hitToUV(_ value: EntityTargetValue<SpatialTapGesture.Value>) -> SIMD2<Float> {
-        let loc = SIMD3<Float>(Float(value.location3D.x), Float(value.location3D.y), Float(value.location3D.z))
-        return calculateUV(localPosition: loc)
+        let scenePos = value.convert(value.location3D, from: .local, to: .scene)
+        let localPos = screen.convert(position: scenePos, from: nil)
+        return calculateUV(localPos: localPos)
     }
 
     private func hitToUV(_ value: EntityTargetValue<DragGesture.Value>) -> SIMD2<Float> {
-        let loc = SIMD3<Float>(Float(value.location3D.x), Float(value.location3D.y), Float(value.location3D.z))
-        return calculateUV(localPosition: loc)
+        let scenePos = value.convert(value.location3D, from: .local, to: .scene)
+        let localPos = screen.convert(position: scenePos, from: nil)
+        return calculateUV(localPos: localPos)
     }
     
-    private func calculateUV(localPosition: SIMD3<Float>) -> SIMD2<Float> {
-        // Since localPosition is already perfectly relative to the center of the unscaled mesh,
-        // we can simply use the physical constants that generated the mesh directly.
+    private func calculateUV(localPos: SIMD3<Float>) -> SIMD2<Float> {
+        // Since localPos is perfectly mapped to the unscaled mesh's local coordinate space,
+        // we can simply map it back using the physical constants that generated the mesh!
+        let meterX = localPos.x
+        let meterY = localPos.y
+        
         let physicalWidth = CURVED_MAX_WIDTH_METERS // 2.0
         let physicalHeight = physicalWidth * screenAspect
         
@@ -1387,8 +1399,6 @@ struct _RealityKitStreamView: View {
         let currentAngle = maxAngle * max(0.0, min(curveMagnitude, 2.0))
         
         var u: Float = 0.5
-        let meterX = localPosition.x
-        let meterY = localPosition.y
         
         if currentAngle < 0.001 {
             // Flat Mode
@@ -1671,17 +1681,7 @@ struct _RealityKitStreamView: View {
     }
     
     private func rebindScreenMaterial() {
-        if videoMode == .sideBySide3D {
-            if var mat = surfaceMaterial {
-                try? mat.setParameter(name: "texture", value: .textureResource(self.texture))
-                surfaceMaterial = mat
-                screen.model?.materials = [mat]
-            } else {
-                screen.model?.materials = [makeVideoUnlitMaterial(texture)]
-            }
-        } else {
-            screen.model?.materials = [makeVideoUnlitMaterial(self.texture)]
-        }
+        updateScreenMaterial()
     }
 
     private func makeVideoUnlitMaterial(_ texture: TextureResource) -> UnlitMaterial {
@@ -1737,11 +1737,17 @@ struct _RealityKitStreamView: View {
             screen.model?.materials = [mat]
         }
         
-        if let ambPlane = ambilightPlane {
-            var ambMat = UnlitMaterial(texture: self.texture)
-            ambMat.color.tint = UIColor.white.withAlphaComponent(0.4) // Semi-transparent glow
+        // Update the single Ambilight layer
+        let ambAlpha = viewModel.streamSettings.dimPassthrough ? 1.0 : CGFloat(max(0.2, immersionAmount))
+        for ambPlane in ambilightLayers {
+            var ambMat = makeVideoUnlitMaterial(self.ambilightTexture ?? self.texture)
+            ambMat.color.tint = UIColor.white.withAlphaComponent(ambAlpha)
             ambMat.blending = .transparent(opacity: 1.0)
             ambPlane.model?.materials = [ambMat]
+            
+            let isAmbilightEnabled = viewModel.streamSettings.reactiveLightingEnabled && firstFrameReceived
+            ambPlane.components.set(OpacityComponent(opacity: isAmbilightEnabled ? 1.0 : 0.0))
+            print("[Ambilight] Material updated. Opacity: \(isAmbilightEnabled ? 1.0 : 0.0) (reactiveEnabled: \(viewModel.streamSettings.reactiveLightingEnabled), firstFrameReceived: \(firstFrameReceived)). Scale: \(ambPlane.scale.x)")
         }
     }
     
@@ -1852,12 +1858,15 @@ struct _RealityKitStreamView: View {
         content.add(screen)
         if screenOriginalParent == nil { screenOriginalParent = screen.parent }
         
-        // Setup Ambilight Plane
-        if ambilightPlane == nil {
+        // Setup Ambilight Stack (Single layer for smooth bloom)
+        if ambilightLayers.isEmpty {
+            let scaleValue: Float = 1.45
             let ambPlane = ModelEntity()
             ambPlane.components.set(OpacityComponent(opacity: 1.0))
+            ambPlane.scale = SIMD3<Float>(scaleValue, scaleValue, scaleValue)
+            ambPlane.position = SIMD3<Float>(0, 0, -0.04)
             screen.addChild(ambPlane)
-            self.ambilightPlane = ambPlane
+            self.ambilightLayers.append(ambPlane)
         }
 
         let head = AnchorEntity(.head)
@@ -1962,6 +1971,12 @@ struct _RealityKitStreamView: View {
         
         let currentCurve = effectiveCurvature
         
+        // Disable shadow casting on the front video entity when reactive lighting is on
+        if viewModel.streamSettings.reactiveLightingEnabled {
+            screen.components.set(GroundingShadowComponent(castsShadow: false))
+        } else {
+            screen.components.remove(GroundingShadowComponent.self)
+        }
         
         // Determine whether the mesh needs to be rebuilt.
         // The time-gate prevents multiple rebuilds per drag step: at 90 Hz, a 60ms gate
@@ -2017,13 +2032,61 @@ struct _RealityKitStreamView: View {
                     self.lastGeneratedAspectBox.value = self.screenAspect
                     self.lastGeneratedCornerBox.value = self.cornerRadiusFraction
                 }
+                
+                // Update mesh for the Ambilight layer
+                for ambPlane in ambilightLayers {
+                    let scaleValue: Float = isImmersive ? 2.5 : 1.45
+                    
+                    let videoWidth = CURVED_MAX_WIDTH_METERS
+                    let videoHeight = videoWidth * screenAspect
+                    let padding = (videoWidth * scaleValue - videoWidth) / 2.0
+                    let ambWidth = videoWidth * scaleValue
+                    let ambHeight = videoHeight + 2.0 * padding
+                    let ambAspect = ambHeight / ambWidth
+                    
+                    let videoAngle = CURVED_MAX_ANGLE * max(0.0, min(currentCurve, 2.0))
+                    let videoRadius = (videoAngle < 0.0001) ? Float.infinity : (videoWidth / videoAngle)
+                    
+                    // Create a perfectly concentric cylinder behind the video to prevent Z-fighting clipping
+                    let ambRadius = (videoAngle < 0.0001) ? Float.infinity : (videoRadius + 0.02)
+                    
+                    if let ambMesh = try? generateCurvedRoundedPlane(
+                        width: ambWidth,
+                        aspectRatio: ambAspect,
+                        resolution: (32, 32),
+                        curveMagnitude: currentCurve,
+                        cornerRadiusFraction: cornerRadiusFraction,
+                        uvScale: scaleValue,
+                        isAmbilight: true,
+                        forcedRadius: ambRadius
+                    ) {
+                        if let model = ambPlane.model {
+                            try? model.mesh.replace(with: ambMesh.contents)
+                        } else {
+                            var ambMat = makeVideoUnlitMaterial(self.ambilightTexture ?? self.texture)
+                            let ambAlpha = viewModel.streamSettings.dimPassthrough ? 1.0 : CGFloat(max(0.2, immersionAmount))
+                            ambMat.color.tint = UIColor.white.withAlphaComponent(ambAlpha)
+                            ambMat.blending = .transparent(opacity: 1.0)
+                            ambPlane.model = ModelComponent(mesh: ambMesh, materials: [ambMat])
+                        }
+                        ambPlane.scale = [1.0, 1.0, 1.0]
+                        // Push back exactly 2cm to match the radius increase and avoid Z-fighting
+                        ambPlane.position = [0, 0, -0.02]
+                        ambPlane.components.set(GroundingShadowComponent(castsShadow: false))
+                    }
+                }
             }
         }
         
         if !isImmersive {
             let volFrame = content.convert(proxy.frame(in: .local), from: .local, to: .scene)
             let volSize = volFrame.extents
-            let scaleFactor = volSize.x / 2.0
+            var scaleFactor = volSize.x / 2.0
+            
+            // Shrink the screen slightly to allow Ambilight to bleed without hitting the volume bounds
+            if viewModel.streamSettings.reactiveLightingEnabled {
+                scaleFactor *= 0.85
+            }
             screen.scale = [scaleFactor, scaleFactor, scaleFactor]
             let curveDepth = effectiveCurvature * CURVED_MAX_WIDTH_METERS * screenAspect * 0.15
             let zCorrection = curveDepth * scaleFactor * 0.5
@@ -2273,7 +2336,10 @@ struct _RealityKitStreamView: View {
                         enhancementsProvider: {
                             (1.0, 1.0, 0.0)
                         },
-                        callbackToRender: { textureQueue, correctedResolution in
+                        isVolumeModeProvider: {
+                            !self.isImmersive
+                        },
+                        callbackToRender: { textureQueue, ambilightQueue, correctedResolution in
                             guard self.renderGateOpen else { return }
 
                             DispatchQueue.main.async {
@@ -2281,6 +2347,28 @@ struct _RealityKitStreamView: View {
                                     self.correctedResolution = correctedResolution 
                                 }
                                 self.texture.replace(withDrawables: textureQueue)
+                                
+                                if let ambilightQueue {
+                                    if self.ambilightTexture == nil {
+                                        do {
+                                            let targetMipLevel = 6
+                                            let ambWidth = max(1, Int(self.streamConfig.width) >> targetMipLevel)
+                                            let ambHeight = max(1, Int(self.streamConfig.height) >> targetMipLevel)
+                                            let bytesPerPixel = self.viewModel.streamSettings.enableHdr ? 8 : 4
+                                            self.ambilightTexture = try TextureResource(
+                                                dimensions: .dimensions(width: ambWidth, height: ambHeight),
+                                                format: .raw(pixelFormat: self.viewModel.streamSettings.enableHdr ? .rgba16Float : .bgra8Unorm_srgb),
+                                                contents: .init(mipmapLevels: [.mip(data: Data(count: bytesPerPixel * ambWidth * ambHeight), bytesPerRow: bytesPerPixel * ambWidth)])
+                                            )
+                                            self.ambilightTexture?.replace(withDrawables: ambilightQueue)
+                                            self.rebindScreenMaterial()
+                                        } catch {
+                                            print("Failed to init ambilightTexture: \(error)")
+                                        }
+                                    } else {
+                                        self.ambilightTexture?.replace(withDrawables: ambilightQueue)
+                                    }
+                                }
                                 
                                 // First Frame Logic
                                 if !self.firstFrameReceived {
@@ -2732,7 +2820,10 @@ struct _RealityKitStreamView: View {
         aspectRatio: Float,
         resolution: (UInt32, UInt32),
         curveMagnitude: Float,
-        cornerRadiusFraction: Float
+        cornerRadiusFraction: Float,
+        uvScale: Float = 1.0,
+        isAmbilight: Bool = false,
+        forcedRadius: Float? = nil
     ) throws -> MeshResource {
         var descr = MeshDescriptor(name: "curved_rounded_plane")
         let height = width * aspectRatio
@@ -2747,10 +2838,22 @@ struct _RealityKitStreamView: View {
         var indices = [UInt32](repeating: 0, count: indexCount)
         
         let maxCurveAngle: Float = CURVED_MAX_ANGLE
-        let currentAngle = maxCurveAngle * max(0.0, min(curveMagnitude, 2.0))
+        
+        let currentAngle: Float
+        let radius: Float
+        let isFlat: Bool
+        
+        if let fr = forcedRadius {
+            radius = fr
+            isFlat = !radius.isFinite || radius == 0
+            currentAngle = isFlat ? 0.0 : (width / radius)
+        } else {
+            currentAngle = maxCurveAngle * max(0.0, min(curveMagnitude, 2.0))
+            isFlat = currentAngle < 0.0001
+            radius = isFlat ? .infinity : (width / currentAngle)
+        }
+        
         let halfAngle = currentAngle / 2.0
-        let isFlat = currentAngle < 0.0001
-        let radius: Float = isFlat ? .infinity : (width / currentAngle)
         
         let cornerRadius = max(0.0, min(0.25, cornerRadiusFraction)) * height
         let x0 = -width / 2.0
@@ -2797,7 +2900,18 @@ struct _RealityKitStreamView: View {
 
                 positions[vi] = SIMD3<Float>(px, yr, pz)
                 let u_tex = u * (1.0 - 2.0 * texInset) + texInset
-                texcoords[vi] = SIMD2<Float>(u_tex, v_tex)
+                
+                var final_u = u_tex
+                var final_v = v_tex
+                
+                if isAmbilight {
+                    // Do not scale UVs. The texture itself has the video centered 
+                    // and fades to black at the edges via the new ambilight shader.
+                    final_u = u_tex
+                    final_v = v_tex
+                }
+
+                texcoords[vi] = SIMD2<Float>(final_u, final_v)
 
                 if x_v < numQuadsX && y_v < numQuadsY {
                     let current = UInt32(vi), nextRow = current + resolution.0
@@ -2910,7 +3024,11 @@ struct _RealityKitStreamView: View {
 
     private func updateDimmerDomesState() {
         dimmerDome?.isEnabled = (dimLevel > 0)
-        ambilightPlane?.isEnabled = viewModel.streamSettings.reactiveLightingEnabled
+        dimmerDomePurple?.isEnabled = (dimLevel == 2 || dimLevel == 10 || viewModel.streamSettings.reactiveLightingEnabled)
+        // Note: In Volume Mode, the OS clips the outer glow layers to the window bounds.
+        for ambPlane in ambilightLayers {
+            ambPlane.isEnabled = viewModel.streamSettings.reactiveLightingEnabled
+        }
     }
 
     private func updateDimmerDomes(content: RealityViewContent) {
@@ -2958,7 +3076,9 @@ struct _RealityKitStreamView: View {
         content.add(dome)
         self.dimmerDome = dome
 
-        let purpleDome = ModelEntity(mesh: sharedDomeMesh, materials: [])
+        var clearMat = UnlitMaterial(color: .clear)
+        clearMat.blending = .transparent(opacity: 0.0)
+        let purpleDome = ModelEntity(mesh: sharedDomeMesh, materials: [clearMat])
         purpleDome.scale.x = -1.0
         purpleDome.position = .zero
         purpleDome.components.set(InputTargetComponent(allowedInputTypes: []))

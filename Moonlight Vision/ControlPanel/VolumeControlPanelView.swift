@@ -140,6 +140,24 @@ struct VolumeControlPanelView: View {
                 ) {
                     withAnimation { viewModel.streamSettings.statsOverlay.toggle() }
                 }
+                ModernActionTile(
+                    icon: "shareplay",
+                    title: "SharePlay",
+                    isActive: false
+                ) {
+                    SharePlayManager.shared.startSharePlay()
+                }
+                ModernActionTile(
+                    icon: "light.beacon.max.fill",
+                    title: "Reactive Lighting",
+                    isActive: viewModel.streamSettings.reactiveLightingEnabled
+                ) {
+                    withAnimation {
+                        viewModel.streamSettings.reactiveLightingEnabled.toggle()
+                        controlState.reactiveLighting = viewModel.streamSettings.reactiveLightingEnabled
+                        UserDefaults.standard.set(viewModel.streamSettings.reactiveLightingEnabled, forKey: "reactiveLightingEnabled")
+                    }
+                }
                 if let toggle = toggleKeyboardAction {
                     ModernActionTile(icon: "keyboard.fill", title: viewModel.localized("virtual_keyboard"), isActive: isKeyboardActive) {
                         withAnimation { toggle() }

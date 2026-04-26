@@ -29,15 +29,25 @@ struct ImmersiveControlPanelView: View {
     }
     
     private var mainContent: some View {
-        HStack(alignment: .top, spacing: 0) {
-            leftSection
-                .frame(width: 420)
-                .padding(40)
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
+                leftSection
+                    .frame(width: 420)
+                    .padding(40)
+                
+                Divider()
+                    .padding(.vertical, 40)
+                
+                mainCenterColumn
+            }
             
-            Divider()
-                .padding(.vertical, 40)
-            
-            mainCenterColumn
+            if !controlState.isPinnedToStage {
+                Divider()
+                    .padding(.horizontal, 40)
+                
+                bottomSection
+                    .padding(40)
+            }
         }
     }
     
@@ -63,10 +73,9 @@ struct ImmersiveControlPanelView: View {
             .padding(40)
         }
     }
-    
     private var styledContent: some View {
         mainContent
-            .frame(width: isHdrEnabled ? 1600 : 1100, height: showPinnedSliders ? 730 : 650)
+            .frame(width: isHdrEnabled ? 1600 : 1100, height: controlState.isPinnedToStage ? (showPinnedSliders ? 730 : 650) : 1050)
             .glassBackgroundEffect()
             .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
             .overlay(alignment: .topTrailing) {
@@ -422,7 +431,7 @@ struct ImmersiveControlPanelView: View {
                         format: "%.2fx",
                         step: 0.01
                     )
-                    VelocitySlider(
+                    SteppedSliderRow(
                         title: viewModel.localized("pinned_screen_height"),
                         value: $controlState.pinnedStageHeight,
                         range: -2.0...3.0,
@@ -431,49 +440,59 @@ struct ImmersiveControlPanelView: View {
                         step: 0.01
                     )
                 }
+                // Removed VelocitySliders from rightSection; they are now in bottomSection
+            }
+        }
+    }
+    
+    // MARK: - Bottom Section (Spatial Controls)
+    private var bottomSection: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            SectionHeader(title: "Spatial Adjustments", icon: "arrow.up.and.down.and.arrow.left.and.right")
+            HStack(alignment: .top, spacing: 60) {
+                Grid(horizontalSpacing: 20, verticalSpacing: 24) {
+                    SteppedSliderRow(
+                        title: viewModel.localized("viewing_distance"),
+                        value: Binding(
+                            get: { -controlState.immersivePositionZ },
+                            set: { controlState.immersivePositionZ = -$0 }
+                        ),
+                        range: 0.5...5.0,
+                        defaultValue: 2.0,
+                        format: "%.2fm",
+                        step: 0.01
+                    )
+                    
+                    SteppedSliderRow(
+                        title: viewModel.localized("screen_scale"),
+                        value: $controlState.immersiveScale,
+                        range: 0.05...5.0,
+                        defaultValue: 0.8,
+                        format: "%.2fx",
+                        step: 0.01
+                    )
+                }
                 
-                VelocitySlider(
-                    title: viewModel.localized("screen_scale"),
-                    value: $controlState.immersiveScale,
-                    range: 0.05...5.0,
-                    defaultValue: 0.8,
-                    format: "%.2fx",
-                    disabled: controlState.isPinnedToStage,
-                    step: 0.01
-                )
-                
-                VelocitySlider(
-                    title: viewModel.localized("viewing_distance"),
-                    value: Binding(
-                        get: { -controlState.immersivePositionZ },
-                        set: { controlState.immersivePositionZ = -$0 }
-                    ),
-                    range: 0.5...5.0,
-                    defaultValue: 2.0,
-                    format: "%.2fm",
-                    disabled: controlState.isPinnedToStage,
-                    step: 0.01
-                )
-                
-                VelocitySlider(
-                    title: viewModel.localized("vertical_height"),
-                    value: $controlState.immersivePositionY,
-                    range: -2.0...3.0,
-                    defaultValue: 1.0,
-                    format: "%.2fm",
-                    disabled: controlState.isPinnedToStage,
-                    step: 0.01
-                )
-                
-                SteppedSliderRow(
-                    title: viewModel.localized("screen_tilt"),
-                    value: $controlState.tiltAngle,
-                    range: -60.0...60.0,
-                    defaultValue: 0.0,
-                    format: "%.0f°",
-                    disabled: controlState.isPinnedToStage,
-                    step: 1.0
-                )
+                Grid(horizontalSpacing: 20, verticalSpacing: 24) {
+                    SteppedSliderRow(
+                        title: viewModel.localized("vertical_height"),
+                        value: $controlState.immersivePositionY,
+                        range: -2.0...3.0,
+                        defaultValue: 1.0,
+                        format: "%.2fm",
+                        step: 0.01
+                    )
+                    
+                    SteppedSliderRow(
+                        title: viewModel.localized("screen_tilt"),
+                        value: $controlState.tiltAngle,
+                        range: -60.0...60.0,
+                        defaultValue: 0.0,
+                        format: "%.0f°",
+                        disabled: controlState.isPinnedToStage,
+                        step: 1.0
+                    )
+                }
             }
         }
     }

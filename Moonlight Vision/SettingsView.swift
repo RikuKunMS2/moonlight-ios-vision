@@ -20,6 +20,7 @@ struct SettingsView: View {
     
     // Confirmation dialog state for reset
     @State private var showResetConfirmation: Bool = false
+    @State private var showVolumeResetAlert: Bool = false
     
     // Custom framerate and bitrate states
     @State private var isCustomFramerate: Bool = false
@@ -397,6 +398,47 @@ struct SettingsView: View {
                         Label(viewModel.localized("remember_stream_settings"), systemImage: "memorychip")
                     }
                     .onChange(of: settings.rememberStreamSettings) { _, _ in settings.save() }
+                    
+                    Button(action: {
+                        // Reset Immersive View Preferences
+                        let defaults = UserDefaults.standard
+                        defaults.removeObject(forKey: "realitykitImmersiveScale")
+                        defaults.removeObject(forKey: "realitykitImmersivePosX")
+                        defaults.removeObject(forKey: "realitykitImmersivePosY")
+                        defaults.removeObject(forKey: "realitykitImmersivePosZ")
+                        defaults.removeObject(forKey: "realitykitImmersionAmount")
+                        defaults.removeObject(forKey: "realitykitPinnedStageScale")
+                        defaults.removeObject(forKey: "realitykitPinnedStageHeight")
+                        
+                        Task { @MainActor in
+                            StreamControlState.shared.immersiveScale = 0.8
+                            StreamControlState.shared.immersivePositionX = 0
+                            StreamControlState.shared.immersivePositionY = 1.0
+                            StreamControlState.shared.immersivePositionZ = -1.5
+                            StreamControlState.shared.immersionAmount = 0.0
+                            StreamControlState.shared.pinnedStageScale = 5.0
+                            StreamControlState.shared.pinnedStageHeight = 0.75
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "visionpro")
+                            Text("Reset Immersive Position & Size")
+                        }
+                    }
+                    
+                    Button(action: {
+                        showVolumeResetAlert = true
+                    }) {
+                        HStack {
+                            Image(systemName: "cube")
+                            Text("Reset Volume Position & Size")
+                        }
+                    }
+                    .alert("Volume Window Reset", isPresented: $showVolumeResetAlert) {
+                        Button("OK", role: .cancel) { }
+                    } message: {
+                        Text("Volume window positions and sizes are managed natively by visionOS and cannot be reset programmatically.\n\nTo reset a Volume window, close the stream window using the (X) button below the window, then restart the stream.")
+                    }
                     
                     Button(action: {
                         showResetConfirmation = true
