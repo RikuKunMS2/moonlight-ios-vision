@@ -59,6 +59,9 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     // Store saved stream config for auto-resume on window reopen
     @Published var savedStreamConfigForResume: StreamConfiguration? = nil
     
+    // Flag to indicate if we are hiding the stream to resume later
+    @Published var isHidingForResume: Bool = false
+    
     // Stream launch management
     @Published var pendingAppToStream: TemporaryApp? = nil
     @Published var showActiveStreamAlert = false

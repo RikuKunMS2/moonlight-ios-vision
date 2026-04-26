@@ -24,6 +24,7 @@ extension View {
 }
 #endif
 
+@available(visionOS 2.0, *)
 struct MoonlightVisionApp: SwiftUI.App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     // Shared singletons must NOT use @StateObject — StateObject assumes exclusive
@@ -37,10 +38,15 @@ struct MoonlightVisionApp: SwiftUI.App {
         WindowGroup("Main view", id: "mainView") {
             MainContentView()
                 .environmentObject(appDelegate.mainViewModel)
-                .persistentSystemOverlays(.hidden) // Add this line to hide overlays
+                .persistentSystemOverlays(.hidden)
         }
         .windowStyle(.plain)
         .windowResizability(.contentSize)
+        .defaultWindowPlacement { _, context in
+            // .utilityPanel forces the window to spawn centered directly in front of the user,
+            // bypassing the default behavior that pushes it off to the right.
+            return WindowPlacement(.utilityPanel)
+        }
         
         WindowGroup("LoadingStream", id: "dummy") {
             DummyView()
@@ -141,6 +147,10 @@ struct MoonlightVisionApp: SwiftUI.App {
 struct MainWrapper {
     static func main() -> Void {
         SDLMainWrapper.setMainReady();
-        MoonlightVisionApp.main()
+        if #available(visionOS 2.0, *) {
+            MoonlightVisionApp.main()
+        } else {
+            fatalError("Moonlight Vision now requires visionOS 2.0 or newer.")
+        }
     }
 }

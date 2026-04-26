@@ -116,4 +116,13 @@ class StreamConfiguration: NSObject, Encodable, Decodable {
         self.useFramePacing = false
         self.serverCert = Data()
     }
+    
+    override func isEqual(_ object: Any?) -> Bool {
+        guard let other = object as? StreamConfiguration else { return false }
+        return self.sessionUUID == other.sessionUUID
+    }
+    
+    override var hash: Int {
+        return sessionUUID.hashValue
+    }
 }

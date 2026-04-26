@@ -16,8 +16,8 @@ struct UIKitStreamView: View {
 
     @EnvironmentObject private var viewModel: MainViewModel
     @Environment(\.openWindow) private var openWindow
-
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var hasPerformedTeardown = false
@@ -106,10 +106,17 @@ struct UIKitStreamView: View {
                             }
                         }
                     }
-                    .ornament(attachmentAnchor: .scene(.bottom), contentAlignment: .top) {
+                    .ornament(attachmentAnchor: .scene(.top), contentAlignment: .bottom) {
                         VStack(spacing: 12) {
                             StandardControlPanelView(
-                            homeAction: { openWindow(id: "mainView") },
+                            homeAction: { 
+                                viewModel.isHidingForResume = true
+                                viewModel.savedStreamConfigForResume = configBinding.wrappedValue
+                                openWindow(id: "mainView")
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                    dismissWindow(id: "classicStreamingWindow")
+                                }
+                            },
                             closeAction: { handleHomeButtonClose() },
                             toggleKeyboardAction: {
                                 if let streamVC = _UIKitStreamView.controllerReference.object {
@@ -374,10 +381,15 @@ struct UIKitStreamView: View {
         hasPerformedTeardown = true
         needsResume = false
 
+        let wasHidingForResume = viewModel.isHidingForResume
         let isCurrentSession = (viewModel.currentStreamConfig.sessionUUID == streamConfig?.sessionUUID)
         if isCurrentSession {
-            viewModel.streamState = .stopping
-            viewModel.activelyStreaming = false
+            if wasHidingForResume {
+                viewModel.isHidingForResume = false
+            } else {
+                viewModel.streamState = .stopping
+                viewModel.activelyStreaming = false
+            }
         }
 
         if let streamVC = _UIKitStreamView.controllerReference.object {
@@ -388,7 +400,9 @@ struct UIKitStreamView: View {
             saveWindowSizeForRestore()
         }
 
-        viewModel.savedStreamConfigForResume = nil
+        if !wasHidingForResume {
+            viewModel.savedStreamConfigForResume = nil
+        }
 
         streamConfig = nil
 

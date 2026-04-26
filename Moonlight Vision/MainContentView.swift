@@ -14,6 +14,8 @@ import SwiftUI
 struct MainContentView: View {
     @EnvironmentObject private var viewModel: MainViewModel
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var selectedHost: TemporaryHost?
@@ -75,7 +77,23 @@ struct MainContentView: View {
                     if viewModel.activelyStreaming {
                         ToolbarItem(placement: .cancellationAction) {
                             Button(viewModel.localized("resume_stream"), systemImage: "play.circle.fill") {
+                                // If the window is still open, this notification un-hides the controls
                                 NotificationCenter.default.post(name: Notification.Name("ResumeStreamFromMenu"), object: nil)
+                                
+                                // Re-open the window or immersive space in case it was dismissed
+                                let dest = viewModel.getStreamDestination()
+                                switch dest {
+                                case .window(let id):
+                                    if let config = viewModel.savedStreamConfigForResume {
+                                        openWindow(id: id, value: config)
+                                    } else {
+                                        openWindow(id: id)
+                                    }
+                                case .immersiveSpace(let id):
+                                    Task { await openImmersiveSpace(id: id) }
+                                }
+                                
+                                dismissWindow(id: "mainView")
                             }
                         }
                         ToolbarItem(placement: .destructiveAction) {
@@ -150,6 +168,8 @@ struct MainContentView: View {
                 viewModel.loadSavedHosts()
             }
             .onAppear {
+                NotificationCenter.default.post(name: Notification.Name("MainViewDidAppear"), object: nil)
+                
                 // Start mDNS discovery immediately when the host list appears —
                 // matching the behaviour of the original iOS/iPad Moonlight app
                 // (beginForegroundRefresh in viewWillAppear:).
@@ -171,8 +191,19 @@ struct MainContentView: View {
                 // when the view appears so the split view doesn't look empty.
                 if selectedHost == nil {
                     var hostToSelect: TemporaryHost?
-                    if viewModel.activelyStreaming, let appId = viewModel.currentlyStreamingAppId {
-                        hostToSelect = viewModel.hosts.first(where: { $0.appList.contains(where: { $0.id == appId || $0.name == appId }) })
+                    if viewModel.activelyStreaming {
+                        if let streamingIp = viewModel.currentStreamConfig.host ?? viewModel.savedStreamConfigForResume?.host {
+                            hostToSelect = viewModel.hosts.first(where: { 
+                                $0.address == streamingIp || 
+                                $0.localAddress == streamingIp || 
+                                $0.externalAddress == streamingIp || 
+                                $0.ipv6Address == streamingIp || 
+                                $0.activeAddress == streamingIp
+                            })
+                        }
+                        if hostToSelect == nil, let appId = viewModel.currentlyStreamingAppId {
+                            hostToSelect = viewModel.hosts.first(where: { $0.appList.contains(where: { $0.id == appId || $0.name == appId }) })
+                        }
                     }
                     if hostToSelect == nil {
                         hostToSelect = viewModel.hosts.first(where: { $0.pairState == .paired })

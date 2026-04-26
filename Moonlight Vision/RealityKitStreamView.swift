@@ -27,6 +27,7 @@ struct RealityKitStreamView: View {
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.openImmersiveSpace) private var openImmersiveSpace
     @EnvironmentObject private var viewModel: MainViewModel
     @Binding var streamConfig: StreamConfiguration?
@@ -115,6 +116,7 @@ struct _RealityKitStreamView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var viewModel: MainViewModel
     @EnvironmentObject private var controlState: StreamControlState
@@ -419,6 +421,7 @@ struct _RealityKitStreamView: View {
                     if viewModel.activelyStreaming, streamMan != nil {
                         print("Suspending stream due to background")
                         needsResume = true
+                        renderGateOpen = false // CRITICAL: Stop rendering before stopping stream to prevent EXC_BAD_ACCESS
                         streamMan?.stopStream()
                         streamMan = nil
                         controllerSupport?.cleanup()
@@ -838,7 +841,14 @@ struct _RealityKitStreamView: View {
                         VolumeControlPanelView(
                             // openWindow — pushWindow is only valid for Plain/Default WindowGroup;
                             // volumetric streaming windows trigger "PushWindowAction requires…" and can crash.
-                            homeAction: { openWindow(id: "mainView") },
+                            homeAction: { 
+                                viewModel.isHidingForResume = true
+                                viewModel.savedStreamConfigForResume = streamConfig
+                                openWindow(id: "mainView")
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                    dismissWindow(id: "realitykitStreamingWindow")
+                                }
+                            },
                             closeAction: {
                                 viewModel.savedStreamConfigForResume = nil
                                 needsResume = false
@@ -1098,9 +1108,11 @@ struct _RealityKitStreamView: View {
         controlState.controllerSupport = controllerSupport
         
         controlState.homeAction = { [self] in
-            // In immersive mode, "Home" should open the main menu but leave the stream running,
-            // matching the behavior of Volume mode and UIKit mode.
+            // In immersive mode, "Home" should open the main menu and hide the stream
+            viewModel.isHidingForResume = true
+            viewModel.savedStreamConfigForResume = streamConfig
             openWindow(id: "mainView")
+            Task { await dismissImmersiveSpace() }
         }
         controlState.closeAction = { [self] in
             viewModel.savedStreamConfigForResume = nil
@@ -2556,10 +2568,15 @@ struct _RealityKitStreamView: View {
         print("[StreamView] 🔴 TEARDOWN START")
         
         // Ensure MainViewModel isn't stuck in .running if the window was closed via system controls
+        let wasHidingForResume = viewModel.isHidingForResume
         let isCurrentSession = (viewModel.currentStreamConfig.sessionUUID == streamConfig.sessionUUID)
         if isCurrentSession && viewModel.activelyStreaming && viewModel.streamState != .stopping {
-            viewModel.streamState = .stopping
-            viewModel.activelyStreaming = false
+            if wasHidingForResume {
+                viewModel.isHidingForResume = false
+            } else {
+                viewModel.streamState = .stopping
+                viewModel.activelyStreaming = false
+            }
         }
         
         // CRITICAL: Close render gate BEFORE stopping stream
