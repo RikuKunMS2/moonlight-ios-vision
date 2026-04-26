@@ -35,20 +35,28 @@ public struct MoonlightHostQuery: EntityStringQuery {
     
     @MainActor
     public func entities(for identifiers: [String]) async throws -> [TemporaryHost] {
-        return DataManager().getHosts().filter {
-            if identifiers.contains($0.id) {
-                print("FOR QUERY \(identifiers) FOUND HOST \(String(describing: $0))")
-            }
-            return identifiers.contains($0.id)
+        var liveHosts = MainViewModel.shared.hosts
+        if liveHosts.isEmpty {
+            MainViewModel.shared.loadSavedHosts()
+            MainViewModel.shared.beginRefresh()
+            // Give mDNS a brief moment to resolve addresses if the app just woke up
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            liveHosts = MainViewModel.shared.hosts
         }
+        
+        return liveHosts.filter { identifiers.contains($0.id) && $0.pairState == .paired }
     }
     
     public func entities(matching string: String) async throws -> [TemporaryHost] {
-        return DataManager().getHosts().filter { $0.name.contains(string) }
+        var liveHosts = MainViewModel.shared.hosts
+        if liveHosts.isEmpty { MainViewModel.shared.loadSavedHosts() }
+        return liveHosts.filter { $0.name.localizedCaseInsensitiveContains(string) && $0.pairState == .paired }
     }
     
     public func suggestedEntities() async throws -> [TemporaryHost] {
-        return DataManager().getHosts()
+        var liveHosts = MainViewModel.shared.hosts
+        if liveHosts.isEmpty { MainViewModel.shared.loadSavedHosts() }
+        return liveHosts.filter { $0.pairState == .paired }
     }
 }
 

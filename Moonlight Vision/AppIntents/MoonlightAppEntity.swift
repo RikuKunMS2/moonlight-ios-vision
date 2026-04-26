@@ -44,22 +44,63 @@ public struct MoonlightAppQuery: EntityQuery {
     public init() {}
     
     public func entities(for identifiers: [String]) async throws -> [TemporaryApp] {
-        [TemporaryApp](intent?.host.appList ?? [])
+        var matches: [TemporaryApp] = []
+        let hostApps = intent?.host.appList ?? []
+        
+        for id in identifiers {
+            if let match = hostApps.first(where: { $0.id == id }) {
+                matches.append(match)
+            } else if id == "Steam" {
+                matches.append(TemporaryApp(id: "Steam", name: "Steam Big Picture"))
+            } else {
+                // Return exact match for defaults or custom typed inputs
+                matches.append(TemporaryApp(id: id, name: id))
+            }
+        }
+        return matches
     }
     
     public func entities(matching string: String) async throws -> [TemporaryApp] {
-        [TemporaryApp](intent?.host.appList ?? []).filter {
-            $0.name.contains(string)
+        var matches: [TemporaryApp] = []
+        let hostApps = intent?.host.appList ?? []
+        
+        matches = hostApps.filter { $0.name.localizedCaseInsensitiveContains(string) }
+        
+        let defaults = [
+            TemporaryApp(id: "Desktop", name: "Desktop"),
+            TemporaryApp(id: "Steam", name: "Steam Big Picture"),
+            TemporaryApp(id: "Virtual Display", name: "Virtual Display")
+        ]
+        
+        for app in defaults {
+            if app.name.localizedCaseInsensitiveContains(string) && !matches.contains(where: { $0.name == app.name }) {
+                matches.append(app)
+            }
         }
+        
+        // Allow exact custom match
+        if !matches.contains(where: { $0.name.lowercased() == string.lowercased() }) && !string.isEmpty {
+            matches.append(TemporaryApp(id: string, name: string))
+        }
+        
+        return matches
     }
     
     public func suggestedEntities() async throws -> [TemporaryApp] {
-        guard let intent = intent else {
-            print("Missing intent")
-            return []
+        var entities = [
+            TemporaryApp(id: "Desktop", name: "Desktop"),
+            TemporaryApp(id: "Steam", name: "Steam Big Picture"),
+            TemporaryApp(id: "Virtual Display", name: "Virtual Display")
+        ]
+        
+        if let intent = intent {
+            for app in intent.host.appList {
+                if !entities.contains(where: { $0.name == app.name }) {
+                    entities.append(app as! TemporaryApp)
+                }
+            }
         }
         
-        print("Fetching apps for \(String(describing: intent.host.name)) (\(intent.host.appList.count))")
-        return [TemporaryApp](intent.host.appList)
+        return entities
     }
 }
