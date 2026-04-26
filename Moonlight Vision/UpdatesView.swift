@@ -35,6 +35,20 @@ struct UpdatesView: View {
 
                 Section(header: Text(viewModel.localized("latest_updates"))) { // Section for latest updates
                     VStack(alignment: .leading) {
+                        Text("Version 11.0.22 (April 26, 2026)")
+                            .font(.headline)
+                        Text("- Navigation Stability: Fixed a critical bug causing the app to freeze when clicking 'Return to Home' while a second paired computer is offline.")
+                            .font(.body)
+                        Text("- UIKit Stream Recovery: Resolved an issue in UIKit mode where the 'Return to Home' button would occasionally fail to navigate or cause the application to crash by migrating to unified window management APIs.")
+                            .font(.body)
+                        Text("- Control Panel UI: Realigned the UIKit mode control panel ornament to reliably anchor to the top edge of the window, ensuring visual consistency with RealityKit mode.")
+                            .font(.body)
+                        Text("- Virtual Keyboard UI: Fixed an interaction regression in RealityKit mode where the supplementary PC-modifier toolbar (Windows/Esc keys) failed to trigger alongside the virtual keyboard.")
+                            .font(.body)
+                    }
+                    .padding(.vertical)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading) {
                         Text("Version 11.0.21 (April 25, 2026)")
                             .font(.headline)
                         Text("- Audio Pipeline Refactor: Complete migration of the spatial audio pipeline (OutputAU) to pure Objective-C.")

@@ -1,5 +1,15 @@
 #Change Log
 
+## Version 11.0.22 (April 26, 2026)
+
+### Navigation Stability & Bug Fixes
+- **Volume Window Freeze**: Fixed an issue where the main view would select the first paired host (which might be offline) and try to connect to it synchronously, causing a UI freeze. The active host is now correctly prioritized.
+- **UIKit Return to Home Crash**: Addressed intermittent crashes and unpredictable behavior in UIKit mode when pressing "Return to Home" by unifying window navigation logic to use `openWindow` instead of `pushWindow`.
+- **Control Panel UI**: Realigned the UIKit mode control panel ornament to reliably anchor to the top edge of the window, ensuring visual consistency with RealityKit mode.
+- **Virtual Keyboard UI**: Fixed an interaction regression in RealityKit mode where the supplementary PC-modifier toolbar (Windows/Esc keys) failed to trigger alongside the virtual keyboard.
+
+---
+
 ## Version 11.0.21 (April 25, 2026)
 
 ### Audio Pipeline Refactor

@@ -863,6 +863,9 @@ struct _RealityKitStreamView: View {
             Attachment(id: "dimPicker") { dimmingPickerAttachment }
             Attachment(id: "stats") { statsAttachment }
             if showVirtualKeyboard {
+                Attachment(id: "pcModifierToolbar") {
+                    PCModifierToolbar()
+                }
                 Attachment(id: "keyboardTextField") {
                     TextField("", text: $keyboardInput)
                         .focused($isKeyboardFocused)
@@ -1945,6 +1948,28 @@ struct _RealityKitStreamView: View {
                 keyboardEnt.scale = .one
             }
         }
+
+        // PC Modifier Toolbar - positioned below keyboardTextField
+        if let pcModifierEnt = attachments.entity(for: "pcModifierToolbar") {
+            if pcModifierEnt.parent !== screen { screen.addChild(pcModifierEnt) }
+            let screenHeight = CURVED_MAX_WIDTH_METERS * screenAspect
+            
+            let toolbarOffset: Float = 0.16
+            pcModifierEnt.position = [0.0 as Float, -(screenHeight / 2.0) - Float(toolbarOffset), Float(0.05)]
+
+            if showVirtualKeyboard {
+                let bounds = pcModifierEnt.visualBounds(relativeTo: screen)
+                if bounds.extents.x > 0 {
+                    let currentScaleX = max(pcModifierEnt.scale.x, 0.0001)
+                    let unscaledWidth = Float(bounds.extents.x) / currentScaleX
+                    let desiredLocalWidth: Float = 0.45
+                    let scale = desiredLocalWidth / unscaledWidth
+                    pcModifierEnt.scale = [scale, scale, scale]
+                }
+            } else {
+                pcModifierEnt.scale = .one
+            }
+        }
     }
 
     func updateRealityView(content: RealityViewContent, attachments: RealityViewAttachments, proxy: GeometryProxy3D) {
@@ -2284,6 +2309,14 @@ struct _RealityKitStreamView: View {
                 sizeToFit(keyboardEnt, targetWidth: 0.25)
                             } else {
                 keyboardEnt.scale = .one
+            }
+        }
+        if let pcModifierEnt = attachments.entity(for: "pcModifierToolbar") {
+            if pcModifierEnt.parent !== screen { screen.addChild(pcModifierEnt) }
+            if showVirtualKeyboard {
+                sizeToFit(pcModifierEnt, targetWidth: 0.45)
+            } else {
+                pcModifierEnt.scale = .one
             }
         }
     }

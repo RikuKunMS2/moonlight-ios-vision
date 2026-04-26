@@ -13,7 +13,7 @@ struct UIKitStreamView: View {
 
     @EnvironmentObject private var viewModel: MainViewModel
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.pushWindow) private var pushWindow
+
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.scenePhase) private var scenePhase
 
@@ -106,7 +106,7 @@ struct UIKitStreamView: View {
                     .ornament(attachmentAnchor: .scene(.bottom), contentAlignment: .top) {
                         VStack(spacing: 12) {
                             StandardControlPanelView(
-                            homeAction: { pushWindow(id: "mainView") },
+                            homeAction: { openWindow(id: "mainView") },
                             closeAction: { handleHomeButtonClose() },
                             toggleKeyboardAction: {
                                 if let streamVC = _UIKitStreamView.controllerReference.object {
@@ -145,7 +145,7 @@ struct UIKitStreamView: View {
                                     .layoutPriority(1)
                             }
                         }
-                        .padding(.bottom, 20)
+                        .padding(.top, 20)
                     }
                     .onAppear {
                         hasPerformedTeardown = false

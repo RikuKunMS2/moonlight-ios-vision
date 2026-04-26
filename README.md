@@ -44,7 +44,7 @@ The Vision OS Version is not available in the App Store. To download the latest 
 
 ![Curved Screen Support](https://preview.redd.it/moonlight-xros-1-year-anniversary-update-curved-screen-v0-xyro5aozeyge1.jpg?width=2254&format=pjpg&auto=webp&s=df631301423de93f161111df41543154e8fd5b04)
 
-## ChangeLog (Latest: v11.0.21 - April 25, 2026)
+## ChangeLog (Latest: v11.0.22 - April 26, 2026)
 
 > **⚠️ IMPORTANT UPGRADE NOTE:**
 > If you are coming from an older version (pre-11.0.15), please **Uninstall and Reinstall** the app via TestFlight. There are significant code changes regarding settings and localization that may cause crashes if you simply update over the old version.
@@ -53,6 +53,12 @@ The Vision OS Version is not available in the App Store. To download the latest 
 > [RikuKunMS2/Lumanaire](https://ko-fi.com/lumanaire) tests all builds using Apollo. Apollo is a Sunshine fork called [Apollo](https://github.com/ClassicOldSong/Apollo) which on Windows supports a Built-in Virtual Display with HDR support that matches the resolution/framerate config of your client automatically. 
 >* **Apollo Permissions:** *Critical Note* — If using Apollo, you **must** ensure all permissions are enabled after pairing (Click the "Edit" button in Apollo). The developer primarily tests on Apollo.
 
+
+### v11.0.22 (April 26, 2026)
+* **Navigation Stability:** Fixed a bug causing the app to freeze when clicking 'Return to Home' while a second paired computer is offline by prioritizing the actively streaming host.
+* **UIKit Stream Recovery:** Resolved an issue in UIKit mode where the 'Return to Home' button would occasionally fail to navigate or cause the application to crash.
+* **Control Panel UI:** Realigned the UIKit mode control panel ornament to reliably anchor to the top edge of the window, ensuring visual consistency with RealityKit mode.
+* **Virtual Keyboard UI:** Fixed an interaction regression in RealityKit mode where the supplementary PC-modifier toolbar (Windows/Esc keys) failed to trigger alongside the virtual keyboard.
 
 ### v11.0.21 (April 25, 2026)
 * **Audio Pipeline Refactor:** Complete migration of the spatial audio pipeline (`OutputAU`) to pure Objective-C.

@@ -165,12 +165,17 @@ struct MainContentView: View {
                     object: nil
                 )
 
-                // Auto-select the first paired host when the view appears so the
-                // split view doesn't look empty after closing a stream.
-                if selectedHost == nil,
-                   let firstHost = viewModel.hosts.first(where: { $0.pairState == .paired })
-                {
-                    selectedHost = firstHost
+                // Auto-select the actively streaming host, or the first paired host
+                // when the view appears so the split view doesn't look empty.
+                if selectedHost == nil {
+                    var hostToSelect: TemporaryHost?
+                    if viewModel.activelyStreaming, let appId = viewModel.currentlyStreamingAppId {
+                        hostToSelect = viewModel.hosts.first(where: { $0.appList.contains(where: { $0.id == appId || $0.name == appId }) })
+                    }
+                    if hostToSelect == nil {
+                        hostToSelect = viewModel.hosts.first(where: { $0.pairState == .paired })
+                    }
+                    selectedHost = hostToSelect
                 }
             }
             .onChange(of: scenePhase) { oldValue, newValue in
