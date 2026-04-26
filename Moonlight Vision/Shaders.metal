@@ -558,13 +558,20 @@ fragment half4 copyFragmentShaderAmbilight(
     // which causes the top and bottom glow to look unnaturally dark and muddy.
     dynamicBlurRadius = min(dynamicBlurRadius, float2(0.4));
     
+    // Define a small safe inset to avoid sampling the absolute extreme edge pixels of the texture,
+    // which often contain a 1-pixel black border from hardware video decoders.
+    float2 safeInset = float2(0.01);
+    float2 minUV = safeInset;
+    float2 maxUV = 1.0 - safeInset;
+    
     float maxLuma = 0.0;
     
     for (int y = -2; y <= 2; ++y) {
         for (int x = -2; x <= 2; ++x) {
             float2 offset = float2(float(x), float(y)) / 2.0;
             float weight = exp(-2.0 * (offset.x*offset.x + offset.y*offset.y));
-            float2 sampleUV = clamp(zoneCenterUV + offset * dynamicBlurRadius, 0.0, 1.0);
+            // Clamp sample to the safe inner bounds instead of [0, 1] to prevent pulling in black border pixels
+            float2 sampleUV = clamp(zoneCenterUV + offset * dynamicBlurRadius, minUV, maxUV);
             half4 sampleColor = sourceTex.sample(s, sampleUV);
             color += sampleColor * half(weight);
             totalWeight += weight;
