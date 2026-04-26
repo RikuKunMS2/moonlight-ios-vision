@@ -24,7 +24,7 @@ typedef struct {
     int minHostProcessingLatency;
 } video_stats_t;
 
-static volatile int volume = 127;
+extern volatile int volume;
 void setVolume(int newVol);
 
 int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);

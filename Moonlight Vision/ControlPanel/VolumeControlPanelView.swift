@@ -25,7 +25,7 @@ struct VolumeControlPanelView: View {
     var yLimits: ClosedRange<Float>
     var needsHdr: Bool = false
     
-    @State private var spatialAudioMode: Bool = true
+    // Spatial audio mode state is now in viewModel.streamSettings.spatialAudioMode
     @State private var saveTimer: Timer?
     @State private var dimPassthroughSaveTimer: Timer?
     
@@ -112,15 +112,18 @@ struct VolumeControlPanelView: View {
                 ) {
                     withAnimation { viewModel.streamSettings.dimPassthrough.toggle() }
                 }
+                // Spatial audio
+                let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
                 ModernActionTile(
-                    icon: spatialAudioMode ? "speaker.wave.3.fill" : "headphones",
-                    title: spatialAudioMode ? viewModel.localized("spatial_audio") : viewModel.localized("stereo_audio"),
-                    isActive: spatialAudioMode
+                    icon: currentMode == .surround ? "speaker.wave.3.fill" : (currentMode == .window ? "person.fill.viewfinder" : "headphones"),
+                    title: currentMode == .surround ? "7.1 Surround" : (currentMode == .window ? viewModel.localized("spatial_audio") : viewModel.localized("stereo_audio")),
+                    isActive: currentMode != .stereo
                 ) {
                     withAnimation {
-                        spatialAudioMode.toggle()
-                        if spatialAudioMode { AudioHelpers.fixAudioForSurroundForCurrentWindow() }
-                        else { AudioHelpers.fixAudioForDirectStereo() }
+                        let nextModeRaw = (currentMode.rawValue + 1) % 3
+                        viewModel.streamSettings.spatialAudioMode = nextModeRaw
+                        let nextMode = SpatialAudioMode(rawValue: nextModeRaw) ?? .window
+                        AudioHelpers.applySpatialAudioMode(nextMode)
                     }
                 }
                 ModernActionTile(
@@ -136,6 +139,24 @@ struct VolumeControlPanelView: View {
                     isActive: viewModel.streamSettings.statsOverlay
                 ) {
                     withAnimation { viewModel.streamSettings.statsOverlay.toggle() }
+                }
+                ModernActionTile(
+                    icon: "shareplay",
+                    title: "SharePlay",
+                    isActive: false
+                ) {
+                    SharePlayManager.shared.startSharePlay()
+                }
+                ModernActionTile(
+                    icon: "light.beacon.max.fill",
+                    title: "Reactive Lighting",
+                    isActive: viewModel.streamSettings.reactiveLightingEnabled
+                ) {
+                    withAnimation {
+                        viewModel.streamSettings.reactiveLightingEnabled.toggle()
+                        controlState.reactiveLighting = viewModel.streamSettings.reactiveLightingEnabled
+                        UserDefaults.standard.set(viewModel.streamSettings.reactiveLightingEnabled, forKey: "reactiveLightingEnabled")
+                    }
                 }
                 if let toggle = toggleKeyboardAction {
                     ModernActionTile(icon: "keyboard.fill", title: viewModel.localized("virtual_keyboard"), isActive: isKeyboardActive) {

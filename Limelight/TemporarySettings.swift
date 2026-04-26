@@ -27,6 +27,12 @@ private let appLanguageDefaultsKey = "appLanguagePreference"
     }
 }
 
+@objc public enum SpatialAudioMode: Int, CaseIterable, Sendable, Hashable {
+    case stereo = 0
+    case window = 1
+    case surround = 2
+}
+
 #if os(visionOS)
 @Observable
 #endif
@@ -47,6 +53,7 @@ public class TemporarySettings: NSObject {
     @objc public var realitykitRendererCurvature: Float = 0.0
     @objc public var realitykitScreenCornerRadius: Float = 0.018
     @objc public var realitykitImmersiveMode: Bool = false
+    @objc public var reactiveLightingEnabled: Bool = false
 
     @objc public var gazeTouchMode = false
     @objc public var gazeCursorOffsetX: Int = 0
@@ -78,6 +85,8 @@ public class TemporarySettings: NSObject {
     @objc public var appLanguageRaw: Int = AppLanguage.english.rawValue
     @objc public var autoResumeStreamOnReopen = false
     @objc public var rememberStreamSettings = true
+    
+    @objc public var spatialAudioMode: Int = SpatialAudioMode.window.rawValue
 
     @objc public var parent: MoonlightSettings?
 
@@ -94,6 +103,7 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererAnimateOpening = false
         self.realitykitRendererCurvature = 0.0
         self.dimPassthrough = false
+        self.reactiveLightingEnabled = false
         
         // HDR defaults: 1.0 = neutral (correct for shader)
         self.brightness = 1.0
@@ -106,6 +116,8 @@ public class TemporarySettings: NSObject {
         } else {
             self.appLanguageRaw = AppLanguage.english.rawValue
         }
+        
+        self.spatialAudioMode = SpatialAudioMode.window.rawValue
         super.init()
     }
 
@@ -179,6 +191,7 @@ public class TemporarySettings: NSObject {
             self.dimPassthrough = settings.dimPassthrough?.boolValue ?? false
             
             self.realitykitImmersiveMode = UserDefaults.standard.bool(forKey: "realitykitImmersiveMode")
+            self.reactiveLightingEnabled = UserDefaults.standard.bool(forKey: "reactiveLightingEnabled")
             
             // --- HDR / COLOR LOADING ---
             self.brightness = settings.brightness?.floatValue ?? 1.0
@@ -194,6 +207,7 @@ public class TemporarySettings: NSObject {
             self.autoResumeStreamOnReopen = UserDefaults.standard.bool(forKey: "autoResumeStreamOnReopen")
             self.rememberStreamSettings = UserDefaults.standard.object(forKey: "rememberStreamSettings") as? Bool ?? true
             self.uikitWindowCornerRadius = UserDefaults.standard.object(forKey: "uikitWindowCornerRadius") as? Float ?? 0.0
+            self.spatialAudioMode = UserDefaults.standard.object(forKey: "spatialAudioMode") as? Int ?? SpatialAudioMode.window.rawValue
             #endif
 
             super.init()
@@ -208,10 +222,12 @@ public class TemporarySettings: NSObject {
     
     @objc public func save() {
         UserDefaults.standard.set(self.realitykitImmersiveMode, forKey: "realitykitImmersiveMode")
+        UserDefaults.standard.set(self.reactiveLightingEnabled, forKey: "reactiveLightingEnabled")
         UserDefaults.standard.set(self.autoResumeStreamOnReopen, forKey: "autoResumeStreamOnReopen")
         UserDefaults.standard.set(self.rememberStreamSettings, forKey: "rememberStreamSettings")
         UserDefaults.standard.set(self.uikitWindowCornerRadius, forKey: "uikitWindowCornerRadius")
         UserDefaults.standard.set(self.realitykitScreenCornerRadius, forKey: "realitykitScreenCornerRadius")
+        UserDefaults.standard.set(self.spatialAudioMode, forKey: "spatialAudioMode")
 
         // save settings to parent via DataManager
         let dataManager = DataManager()
@@ -308,6 +324,7 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererCurvature = 0.0
         self.realitykitScreenCornerRadius = 0.018
         self.realitykitImmersiveMode = false
+        self.reactiveLightingEnabled = false
         
         // Stream settings
         self.useFramePacing = false
@@ -322,6 +339,7 @@ public class TemporarySettings: NSObject {
         self.dimPassthrough = true
         self.preferredCodec = PreferredCodec.auto
         self.uikitWindowCornerRadius = 0.0
+        self.spatialAudioMode = SpatialAudioMode.window.rawValue
         
         // HDR / Color settings (correct neutral for HDR shader)
         self.brightness = 1.0
@@ -336,6 +354,7 @@ public class TemporarySettings: NSObject {
         // Reset UserDefaults for RealityKit settings
         let defaults = UserDefaults.standard
         defaults.set(false, forKey: "realitykitImmersiveMode")
+        defaults.set(false, forKey: "reactiveLightingEnabled")
         defaults.set(false, forKey: "autoResumeStreamOnReopen")
         defaults.set(true, forKey: "rememberStreamSettings")
         
@@ -362,6 +381,9 @@ public class TemporarySettings: NSObject {
         
         // Reset UIKit window corner radius
         defaults.set(0.0, forKey: "uikitWindowCornerRadius")
+        
+        // Reset spatial audio mode
+        defaults.set(SpatialAudioMode.window.rawValue, forKey: "spatialAudioMode")
         
         // Save the reset values
         self.save()

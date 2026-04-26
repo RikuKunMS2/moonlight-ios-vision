@@ -321,13 +321,20 @@ fragment half4 copyFragmentShaderHDR_EDR(
         }
     }
 
-    if (params.isPQ == 1u) {
-        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE * REALITYKIT_PQ_EXTRA_LINEAR_SCALE;
-    } else if (params.isTargetDisplayP3 == 1u) {
-        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE * REALITYKIT_SDR_ON_DISPLAYP3_EXTRA;
-    } else {
-        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE;
+    if (full.mode == 2) {
+        if (in.uv.y < 0.15) {
+            float stepVal = floor(in.uv.x * 5.0);
+            float targetNits = 0.0;
+            if (stepVal == 1.0) targetNits = 100.0;
+            else if (stepVal == 2.0) targetNits = 203.0;
+            else if (stepVal == 3.0) targetNits = 500.0;
+            else if (stepVal == 4.0) targetNits = 1000.0;
+            
+            float3 testColor = targetNits / PQ_REFERENCE_WHITE_NITS;
+            return half4(half3(testColor), 1.0h);
+        }
     }
+
     return half4(half3(finalColor), 1.0h);
 }
 
@@ -368,13 +375,20 @@ fragment half4 copyFragmentShaderHEVC_EDR(
         }
     }
 
-    if (params.isPQ == 1u) {
-        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE * REALITYKIT_PQ_EXTRA_LINEAR_SCALE;
-    } else if (params.isTargetDisplayP3 == 1u) {
-        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE * REALITYKIT_SDR_ON_DISPLAYP3_EXTRA;
-    } else {
-        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE;
+    if (full.mode == 2) {
+        if (in.uv.y < 0.15) {
+            float stepVal = floor(in.uv.x * 5.0);
+            float targetNits = 0.0;
+            if (stepVal == 1.0) targetNits = 100.0;
+            else if (stepVal == 2.0) targetNits = 203.0;
+            else if (stepVal == 3.0) targetNits = 500.0;
+            else if (stepVal == 4.0) targetNits = 1000.0;
+            
+            float3 testColor = targetNits / PQ_REFERENCE_WHITE_NITS;
+            return half4(half3(testColor), 1.0h);
+        }
     }
+
     return half4(half3(finalColor), 1.0h);
 }
 
@@ -480,4 +494,120 @@ fragment half4 copyFragmentShaderHEVC_EDR_UIKit(
     finalColor = (params.isPQ == 1u) ? min(finalColor, float3(20.0)) : clamp(finalColor, 0.0, 1.0);
 
     return half4(half3(finalColor), 1.0h);
+}
+
+// MARK: - Ambilight Shader (Downsampled + Vignette)
+fragment half4 copyFragmentShaderAmbilight(
+    CopyVertexOut in [[stage_in]],
+    texture2d<half> sourceTex [[texture(0)]],
+    texture2d<half> prevTex [[texture(1)]],
+    constant int &isVolumeMode [[buffer(1)]]
+) {
+    constexpr sampler s(coord::normalized, address::clamp_to_edge, filter::linear);
+    
+    float w = max(float(sourceTex.get_width()), 1.0);
+    float h = max(float(sourceTex.get_height()), 1.0);
+    float aspect = w / h;
+    
+    // The ambPlane is baseScale times larger than the screen physically (padding added to width).
+    // The padding is added uniformly to all 4 sides in physical space.
+    float baseScale = (isVolumeMode == 1) ? 1.45 : 2.5;
+    
+    // To map `in.uv` correctly, Y scale must be larger because padding is a larger percentage of height than width.
+    float2 scale = float2(baseScale, 1.0 + aspect * (baseScale - 1.0));
+    float2 videoUV = (in.uv - 0.5) * scale + 0.5;
+    
+    // Calculate distance from the video box (which is [0, 1] in videoUV space)
+    float2 dist = max(float2(0.0), abs(videoUV - 0.5) * 2.0 - 1.0);
+    
+    // Divide Y by aspect to convert back to true isotropic physical distance.
+    dist.y /= aspect;
+    float distLength = length(dist);
+    
+    // Make the center (under the video mesh) completely hollow.
+    // Shrink the mathematical cutout slightly (inset to 0.85) so the sharp 90-degree 
+    // corners of the hole hide completely behind the physical rounded corners of the video mesh.
+    float2 hollowDist = max(float2(0.0), abs(videoUV - 0.5) * 2.0 - 0.85);
+    if (length(hollowDist) <= 0.0) {
+        return half4(0.0); // Transparent hollow center
+    }
+    
+    // Perimeter Analysis Zones Grid
+    float2 zoneSize = float2(0.12, 0.12 * aspect); 
+    // Inset a bit further to avoid seeing dark edges/vignette around the video
+    float2 letterboxSkip = float2(0.04, 0.04 * aspect);
+    
+    float2 zoneCenterOffset = letterboxSkip + (zoneSize * 0.5);
+    
+    // Map external UVs to the nearest internal perimeter zone
+    float2 zoneCenterUV;
+    zoneCenterUV.x = clamp(videoUV.x, zoneCenterOffset.x, 1.0 - zoneCenterOffset.x);
+    zoneCenterUV.y = clamp(videoUV.y, zoneCenterOffset.y, 1.0 - zoneCenterOffset.y);
+    
+    // Color Averaging calculation per Zone
+    half4 color = half4(0.0);
+    float totalWeight = 0.0;
+    
+    // Dynamically expand the sampling radius based on distance.
+    // This scatters edge pixels over a wider area to prevent stretching artifacts (solid lines).
+    float spreadFactor = 1.0 + distLength * 8.0; 
+    float2 dynamicBlurRadius = (zoneSize * 0.5) * spreadFactor;
+    
+    // Clamp the blur radius to prevent it from sampling past the center of the video.
+    // If the radius grows too large in immersive mode, the top blur samples the bottom of the video,
+    // which causes the top and bottom glow to look unnaturally dark and muddy.
+    dynamicBlurRadius = min(dynamicBlurRadius, float2(0.4));
+    
+    // Define a small safe inset to avoid sampling the absolute extreme edge pixels of the texture,
+    // which often contain a 1-pixel black border from hardware video decoders.
+    float2 safeInset = float2(0.01);
+    float2 minUV = safeInset;
+    float2 maxUV = 1.0 - safeInset;
+    
+    float maxLuma = 0.0;
+    
+    for (int y = -2; y <= 2; ++y) {
+        for (int x = -2; x <= 2; ++x) {
+            float2 offset = float2(float(x), float(y)) / 2.0;
+            float weight = exp(-2.0 * (offset.x*offset.x + offset.y*offset.y));
+            // Clamp sample to the safe inner bounds instead of [0, 1] to prevent pulling in black border pixels
+            float2 sampleUV = clamp(zoneCenterUV + offset * dynamicBlurRadius, minUV, maxUV);
+            half4 sampleColor = sourceTex.sample(s, sampleUV);
+            color += sampleColor * half(weight);
+            totalWeight += weight;
+            
+            float luma = dot(sampleColor.rgb, half3(0.2126, 0.7152, 0.0722));
+            maxLuma = max(maxLuma, luma);
+        }
+    }
+    color /= half(totalWeight);
+    
+    // Saturation Boost
+    float avgLuma = dot(color.rgb, half3(0.2126, 0.7152, 0.0722));
+    float saturationBoost = 2.2; 
+    color.rgb = mix(half3(avgLuma), color.rgb, half(saturationBoost));
+    
+    // Dynamic Luminance Mapping (dimming HDR peaks to LED physical constraints)
+    float powerLimit = 1.0;
+    float dynamicDimming = (maxLuma > powerLimit) ? (powerLimit / maxLuma) : 1.0;
+    color.rgb *= half(dynamicDimming);
+    
+    // Brightness Scalar to achieve Additive Blending intensity
+    color.rgb *= half(2.5); // Emission scalar
+    color.rgb = max(color.rgb, half3(0.0));
+    
+    // The physical distance from edge to mesh boundary is exactly (baseScale - 1.0) on all straight edges.
+    // In Volume Mode, visionOS imposes strict window clipping, so we fade out slightly earlier.
+    float outerBound = (isVolumeMode == 1) ? 0.44 : (baseScale - 1.0);
+    
+    // Power curve fade: smoothly interpolates to 0 exactly at the edges of the mesh.
+    float normalizedDist = clamp(distLength / outerBound, 0.0, 1.0);
+    float fade = pow(1.0 - normalizedDist, 2.0); // Smooth quadratic falloff
+    
+    // explicitly set alpha to fade, keep RGB untampered so RealityKit can composite it properly.
+    half4 currentColor = half4(color.rgb, half(fade));
+    
+    // Temporal Smoothing (Mix 10% new frame with 90% previous frame)
+    half4 previousColor = prevTex.sample(s, in.uv);
+    return mix(previousColor, currentColor, 0.10);
 }

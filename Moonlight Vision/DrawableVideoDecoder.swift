@@ -66,7 +66,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     private var callbacks: ConnectionCallbacks
     private var streamAspectRatio: Float
 
-    let callbackToRender: @MainActor (TextureResource.DrawableQueue, (Int, Int)?) -> Void
+    let callbackToRender: @MainActor (TextureResource.DrawableQueue, TextureResource.DrawableQueue?, (Int, Int)?) -> Void
     let debugInfoCallback: (@MainActor (String) -> Void)?
     private var hdrSettingsProvider: (() -> HDRParams)? = nil
 
@@ -100,6 +100,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     private var region = MTLRegionMake2D(0, 0, 1000, 1000)
     var textureCache: CVMetalTextureCache?
     var drawableQueue: TextureResource.DrawableQueue?
+    var ambilightQueue: TextureResource.DrawableQueue?
 
     var session: VTDecompressionSession?
     var decoderCallback: VTDecompressionOutputCallbackRecord
@@ -120,13 +121,17 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     private var hdrMetadata: SS_HDR_METADATA = SS_HDR_METADATA()
 
     private var enhancementsProvider: (() -> (Float, Float, Float))? = nil
+    private var isVolumeModeProvider: (() -> Bool)? = nil
 
     private var copyPipelineState: MTLRenderPipelineState?
     private var copyPipelineFormat: MTLPixelFormat?
     private var copyPipelineStateYUV: MTLRenderPipelineState?
     private var lastCopyFragment: String?
+    private var ambilightPipelineState: MTLRenderPipelineState?
 
     private var firstFrameEmitted = false
+    private var lastAmbilightLogTime = Date.distantPast
+    private var prevAmbilightTexture: MTLTexture?
 
     // MARK: - Initialization
 
@@ -138,7 +143,8 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         enableHDR: Bool = false,
         hdrSettingsProvider: (() -> HDRParams)? = nil,
         enhancementsProvider: (() -> (Float, Float, Float))? = nil,
-        callbackToRender: @MainActor @escaping (TextureResource.DrawableQueue, (Int, Int)?) -> Void,
+        isVolumeModeProvider: (() -> Bool)? = nil,
+        callbackToRender: @MainActor @escaping (TextureResource.DrawableQueue, TextureResource.DrawableQueue?, (Int, Int)?) -> Void,
         debugInfoCallback: (@MainActor (String) -> Void)? = nil
     ) {
         metalFormat = enableHDR ? .rgba16Float : .bgra8Unorm_srgb
@@ -151,9 +157,10 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         self.callbacks = callbacks
         streamAspectRatio = aspectRatio
         framePacing = useFramePacing
-        hdrEnabled = enableHDR
+        self.hdrEnabled = enableHDR
         self.hdrSettingsProvider = hdrSettingsProvider
         self.enhancementsProvider = enhancementsProvider
+        self.isVolumeModeProvider = isVolumeModeProvider
         self.callbackToRender = callbackToRender
         self.debugInfoCallback = debugInfoCallback
 
@@ -499,6 +506,56 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             blitEncoder.generateMipmaps(for: drawable.texture)
             blitEncoder.endEncoding()
         }
+        
+        if let ambQueue = ambilightQueue, let ambDrawable = try? ambQueue.nextDrawable() {
+            let targetMipLevel = 6
+            let mipLevel = min(targetMipLevel, drawable.texture.mipmapLevelCount - 1)
+            
+            if ambilightPipelineState == nil {
+                ambilightPipelineState = buildCopyPipeline(fragment: "copyFragmentShaderAmbilight")
+            }
+            
+            if prevAmbilightTexture == nil || prevAmbilightTexture!.width != ambDrawable.texture.width || prevAmbilightTexture!.height != ambDrawable.texture.height {
+                let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: ambDrawable.texture.pixelFormat, width: ambDrawable.texture.width, height: ambDrawable.texture.height, mipmapped: false)
+                desc.usage = [.shaderRead, .renderTarget]
+                prevAmbilightTexture = mtlDevice.makeTexture(descriptor: desc)
+            }
+            
+            if let ambPipelineState = ambilightPipelineState {
+                let ambRenderPass = MTLRenderPassDescriptor()
+                ambRenderPass.colorAttachments[0].texture = ambDrawable.texture
+                ambRenderPass.colorAttachments[0].loadAction = .clear
+                ambRenderPass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0)
+                ambRenderPass.colorAttachments[0].storeAction = .store
+                
+                if let ambRenderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: ambRenderPass) {
+                    ambRenderEncoder.setRenderPipelineState(ambPipelineState)
+                    
+                    var isVolumeInt: Int32 = (self.isVolumeModeProvider?() ?? false) ? 1 : 0
+                    ambRenderEncoder.setFragmentBytes(&isVolumeInt, length: MemoryLayout<Int32>.size, index: 1)
+                    
+                    if let mipTextureView = drawable.texture.makeTextureView(pixelFormat: drawable.texture.pixelFormat, textureType: .type2D, levels: mipLevel..<mipLevel+1, slices: 0..<1) {
+                        ambRenderEncoder.setFragmentTexture(mipTextureView, index: 0)
+                        ambRenderEncoder.setFragmentTexture(self.prevAmbilightTexture, index: 1)
+                        ambRenderEncoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+                        
+                        let now = Date()
+                        if now.timeIntervalSince(self.lastAmbilightLogTime) > 5.0 {
+                            print("[Ambilight] Rendered frame. isVolumeMode: \(isVolumeInt == 1). MipLevel: \(mipLevel)")
+                            self.lastAmbilightLogTime = now
+                        }
+                    }
+                    ambRenderEncoder.endEncoding()
+                }
+                
+                if let blitEncoder = commandBuffer.makeBlitCommandEncoder(), let prevTex = self.prevAmbilightTexture {
+                    blitEncoder.copy(from: ambDrawable.texture, to: prevTex)
+                    blitEncoder.endEncoding()
+                }
+            }
+            
+            ambDrawable.present()
+        }
 
         commandBuffer.commit()
         drawable.present()
@@ -538,9 +595,31 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                 }
             }()
 
+            self.ambilightQueue = {
+                let targetMipLevel = 6
+                let ambWidth = max(1, Int(videoWidth) >> targetMipLevel)
+                let ambHeight = max(1, Int(videoHeight) >> targetMipLevel)
+                
+                let descriptor = TextureResource.DrawableQueue.Descriptor(
+                    pixelFormat: metalFormat,
+                    width: ambWidth,
+                    height: ambHeight,
+                    usage: [.renderTarget, .shaderWrite, .shaderRead],
+                    mipmapsMode: .none
+                )
+                do {
+                    let queue = try TextureResource.DrawableQueue(descriptor)
+                    queue.allowsNextDrawableTimeout = true
+                    return queue
+                } catch {
+                    print("Could not create Ambilight DrawableQueue: \(error)")
+                    return nil
+                }
+            }()
+
             region = MTLRegionMake2D(0, 0, videoWidth, videoHeight)
 
-            self.callbackToRender(self.drawableQueue!, (videoWidth, videoHeight))
+            self.callbackToRender(self.drawableQueue!, self.ambilightQueue, (videoWidth, videoHeight))
         }
     }
 

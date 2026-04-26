@@ -5,17 +5,12 @@ class AudioHelpers {
     private static func configureAudioSession(exclusive: Bool) {
         let audioSession = AVAudioSession.sharedInstance()
         do {
-            if exclusive {
-                try audioSession.setCategory(.playAndRecord, options: [.mixWithOthers, .allowBluetoothA2DP, .allowAirPlay])
-                try audioSession.setMode(.voiceChat)
-                try audioSession.setPreferredInputNumberOfChannels(1)
-            } else {
-                try audioSession.setCategory(.playback, options: [.mixWithOthers])
-                try audioSession.setMode(.moviePlayback)
-            }
+            let options: AVAudioSession.CategoryOptions = exclusive ? [] : [.mixWithOthers]
+            try audioSession.setCategory(.playback, options: options)
+            try audioSession.setMode(.moviePlayback)
             try audioSession.setActive(true)
         } catch {
-            print("Failed to set the audio session mic/category configuration?")
+            print("Failed to set the audio session mic/category configuration: \(error)")
         }
     }
 
@@ -78,6 +73,33 @@ class AudioHelpers {
         } catch {
             print("AudioHelpers - Couldn't find UIKit window?")
             print("Failed to set the audio session configuration?")
+        }
+    }
+    
+    static func applySpatialAudioMode(_ mode: SpatialAudioMode, sceneIdentifier: String? = nil, window: UIWindow? = nil, exclusive: Bool = true) {
+        switch mode {
+        case .stereo:
+            fixAudioForDirectStereo(exclusive: exclusive)
+        case .window:
+            if let window = window {
+                fixAudioForSurroundForUIKitWindow(window, exclusive: exclusive)
+            } else if let sceneIdentifier = sceneIdentifier {
+                fixAudioForScene(identifier: sceneIdentifier)
+            } else {
+                fixAudioForSurroundForCurrentWindow(exclusive: exclusive)
+            }
+        case .surround:
+            // Core Audio AUSpatialMixer will handle the 7.1 spatialization.
+            // We bypass the AVAudioSession's RealityKit anchoring so it doesn't double-spatialize.
+            print("AudioHelpers - Applying Surround mode (CoreAudio)")
+            configureAudioSession(exclusive: exclusive)
+            let audioSession = AVAudioSession.sharedInstance()
+            do {
+                try audioSession.setPreferredOutputNumberOfChannels(audioSession.maximumOutputNumberOfChannels)
+                try audioSession.setIntendedSpatialExperience(.bypassed)
+            } catch {
+                print("AudioHelpers - Failed to set bypassed experience for surround: \(error)")
+            }
         }
     }
 }

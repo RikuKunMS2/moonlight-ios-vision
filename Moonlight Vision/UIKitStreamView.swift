@@ -103,7 +103,7 @@ struct UIKitStreamView: View {
                             }
                         }
                     }
-                    .ornament(attachmentAnchor: .scene(.top), contentAlignment: .bottom) {
+                    .ornament(attachmentAnchor: .scene(.bottom), contentAlignment: .top) {
                         VStack(spacing: 12) {
                             StandardControlPanelView(
                             homeAction: { pushWindow(id: "mainView") },
@@ -134,7 +134,8 @@ struct UIKitStreamView: View {
                                 if let streamVC = _UIKitStreamView.controllerReference.object,
                                    let window = streamVC.view.window ?? streamVC.view?.superview?.window {
                                     applyAspectRatioLock(streamConfig: configBinding.wrappedValue, targetWindow: window, useSavedSize: false)
-                                    AudioHelpers.fixAudioForSurroundForUIKitWindow(window)
+                                    let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
+                                    AudioHelpers.applySpatialAudioMode(currentMode, window: window)
                                 }
                             }
                         )
@@ -190,11 +191,13 @@ struct UIKitStreamView: View {
                     }
                     .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ResumeStreamFromMenu"))) { _ in
                         dismissWindow(id: "mainView")
-                        AudioHelpers.fixAudioForSurroundForCurrentWindow()
+                        let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
+                        AudioHelpers.applySpatialAudioMode(currentMode)
                     }
                     .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MainViewWindowClosed"))) { _ in
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                            AudioHelpers.fixAudioForSurroundForCurrentWindow()
+                            let currentMode = SpatialAudioMode(rawValue: MainViewModel.shared.streamSettings.spatialAudioMode) ?? .window
+                            AudioHelpers.applySpatialAudioMode(currentMode)
                         }
                     }
             } else {
@@ -212,6 +215,7 @@ struct UIKitStreamView: View {
                         Button {
                             lastStreamErrorMessage = nil
                             viewModel.streamState = .stopping
+                            viewModel.savedStreamConfigForResume = nil
                             openWindow(id: "mainView")
                             dismissWindow(id: "classicStreamingWindow")
                             streamConfig = nil
@@ -294,6 +298,7 @@ struct UIKitStreamView: View {
                 .frame(maxWidth: 420)
             Button {
                 lastStreamErrorMessage = nil
+                viewModel.savedStreamConfigForResume = nil
                 openWindow(id: "mainView")
                 dismissWindow(id: "classicStreamingWindow")
                 streamConfig = nil
@@ -302,11 +307,12 @@ struct UIKitStreamView: View {
                     NotificationCenter.default.post(name: Notification.Name("StreamDidTeardownNotification"), object: nil)
                 }
             } label: {
-                Label(viewModel.localized("close"), systemImage: "xmark.circle.fill")
+                Label(viewModel.localized("open_main_menu"), systemImage: "house.fill")
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
             }
             .buttonStyle(.borderedProminent)
+            .padding(.top, 8)
         }
         .padding(20)
         .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -391,7 +397,6 @@ struct UIKitStreamView: View {
     private func handleWindowDisappearance() {
         // This handles when the user closes the window via the "X" bar or system gesture
         guard !hasPerformedTeardown else { return }
-        guard !needsResume else { return }
 
         // If we are disappearing but activelyStreaming is true, it means the user closed the window manually.
         // We should clean up the stream logic.
@@ -491,14 +496,17 @@ struct UIKitStreamView: View {
         backgroundTask?.cancel()
         
         backgroundTask = Task {
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            
             guard !Task.isCancelled else { return }
             guard needsResume else { return }
             
             await MainActor.run {
                 needsResume = false
-                reloadToken = UUID()
+                if let streamVC = _UIKitStreamView.controllerReference.object {
+                    streamVC.streamConfig = streamConfig
+                    streamVC.startStream()
+                } else {
+                    reloadToken = UUID()
+                }
             }
         }
     }
@@ -514,7 +522,8 @@ struct _UIKitStreamViewWindowButton: View {
         Button {
             if let window = currentWindow {
                 applyAspectRatioLock(streamConfig: streamConfig, targetWindow: window, useSavedSize: false)
-                AudioHelpers.fixAudioForSurroundForUIKitWindow(window)
+                let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
+                AudioHelpers.applySpatialAudioMode(currentMode, window: window)
             } else {
                 print("Error: No window reference available to apply aspect ratio lock.")
             }
@@ -542,7 +551,8 @@ struct _UIKitStreamViewWindowButton: View {
                 while viewToFindWindow != nil {
                     if let window = viewToFindWindow?.window {
                         currentWindow = window
-                        AudioHelpers.fixAudioForSurroundForUIKitWindow(window)
+                        let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
+                        AudioHelpers.applySpatialAudioMode(currentMode, window: window)
                         return
                     }
                     viewToFindWindow = viewToFindWindow?.superview
@@ -569,7 +579,8 @@ struct _UIKitStreamView: UIViewControllerRepresentable {
         streamView.streamConfig = streamConfig
         streamView.connectedCallback = { [weak streamView] in
             print("Connected in Swift!")
-            AudioHelpers.fixAudioForSurroundForCurrentWindow()
+            let currentMode = SpatialAudioMode(rawValue: MainViewModel.shared.streamSettings.spatialAudioMode) ?? .window
+            AudioHelpers.applySpatialAudioMode(currentMode)
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 guard let window = streamView?.view.window ?? streamView?.view?.superview?.window else { return }

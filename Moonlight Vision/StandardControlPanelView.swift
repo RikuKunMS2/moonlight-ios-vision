@@ -30,9 +30,7 @@ struct StandardControlPanelView: View {
     // UIKit window button (optional)
     var windowButtonAction: (() -> Void)? = nil
     
-    // Spatial audio mode state
-    @State private var spatialAudioMode: Bool = true
-    
+    // Spatial audio mode state is now in viewModel.streamSettings.spatialAudioMode
     // Debounce timer for settings save
     @State private var saveTimer: Timer?
     @State private var dimPassthroughSaveTimer: Timer?
@@ -106,19 +104,39 @@ struct StandardControlPanelView: View {
                     }
                 }
                 
-                // Spatial audio
+                // Reactive Lighting
                 ModernActionTile(
-                    icon: spatialAudioMode ? "speaker.wave.3.fill" : "headphones",
-                    title: spatialAudioMode ? viewModel.localized("spatial_audio") : viewModel.localized("stereo_audio"),
-                    isActive: spatialAudioMode
+                    icon: "wand.and.rays",
+                    title: viewModel.localized("reactive_lighting"),
+                    isActive: viewModel.streamSettings.reactiveLightingEnabled
                 ) {
                     withAnimation {
-                        spatialAudioMode.toggle()
-                        if spatialAudioMode {
-                            AudioHelpers.fixAudioForSurroundForCurrentWindow()
-                        } else {
-                            AudioHelpers.fixAudioForDirectStereo()
-                        }
+                        viewModel.streamSettings.reactiveLightingEnabled.toggle()
+                        viewModel.streamSettings.save()
+                    }
+                }
+                
+                // SharePlay
+                ModernActionTile(
+                    icon: "shareplay",
+                    title: "SharePlay",
+                    isActive: false
+                ) {
+                    SharePlayManager.shared.startSharePlay()
+                }
+                
+                // Spatial audio
+                let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
+                ModernActionTile(
+                    icon: currentMode == .surround ? "speaker.wave.3.fill" : (currentMode == .window ? "person.fill.viewfinder" : "headphones"),
+                    title: currentMode == .surround ? "7.1 Surround" : (currentMode == .window ? viewModel.localized("spatial_audio") : viewModel.localized("stereo_audio")),
+                    isActive: currentMode != .stereo
+                ) {
+                    withAnimation {
+                        let nextModeRaw = (currentMode.rawValue + 1) % 3
+                        viewModel.streamSettings.spatialAudioMode = nextModeRaw
+                        let nextMode = SpatialAudioMode(rawValue: nextModeRaw) ?? .window
+                        AudioHelpers.applySpatialAudioMode(nextMode)
                     }
                 }
                 
@@ -277,6 +295,7 @@ struct StandardControlPanelView: View {
         saveTimer?.invalidate()
         saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
             saveRealityKitSettings()
+            SharePlayManager.shared.broadcastCurrentTransform()
         }
     }
     

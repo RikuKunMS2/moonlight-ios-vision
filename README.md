@@ -35,13 +35,16 @@ The Vision OS Version is not available in the App Store. To download the latest 
 * **SBS 3D Support**: Available in Reality Kit Mode. We are looking into support for uikit sbs.
 * **HDR Support**: Includes a luminance value slider to calibrate for battery levels and environment.
     * *New:* Gamma and Saturation sliders added in v11.0.16.
+    * *New:* Perfect 1:1 HDR EDR mapping and Calibration Mode toggle added in v11.0.21.
 * **AV1 Support**: Confirmed working (including AV1 HDR) on M5 hardware.
 * **Audio Control**: Toggle between Head-Tracked and Non-Head-Tracked audio.
+* **SharePlay & Spatial Personas**: Enjoy immersive co-watching experiences with friends.
+* **Reactive Lighting (Ambilight)**: Dynamic ambient lighting based on stream content in Reality Kit mode.
 * **Localization**: Support for Chinese added (Thanks **linggan-ua**).
 
 ![Curved Screen Support](https://preview.redd.it/moonlight-xros-1-year-anniversary-update-curved-screen-v0-xyro5aozeyge1.jpg?width=2254&format=pjpg&auto=webp&s=df631301423de93f161111df41543154e8fd5b04)
 
-## ChangeLog (Latest: v11.0.17 - Nov 25, 2025)
+## ChangeLog (Latest: v11.0.21 - April 25, 2026)
 
 > **⚠️ IMPORTANT UPGRADE NOTE:**
 > If you are coming from an older version (pre-11.0.15), please **Uninstall and Reinstall** the app via TestFlight. There are significant code changes regarding settings and localization that may cause crashes if you simply update over the old version.
@@ -50,6 +53,14 @@ The Vision OS Version is not available in the App Store. To download the latest 
 > [RikuKunMS2/Lumanaire](https://ko-fi.com/lumanaire) tests all builds using Apollo. Apollo is a Sunshine fork called [Apollo](https://github.com/ClassicOldSong/Apollo) which on Windows supports a Built-in Virtual Display with HDR support that matches the resolution/framerate config of your client automatically. 
 >* **Apollo Permissions:** *Critical Note* — If using Apollo, you **must** ensure all permissions are enabled after pairing (Click the "Edit" button in Apollo). The developer primarily tests on Apollo.
 
+
+### v11.0.21 (April 25, 2026)
+* **Audio Pipeline Refactor:** Complete migration of the spatial audio pipeline (`OutputAU`) to pure Objective-C.
+* **Vision Pro Spatial Audio:** Restored functional audio streaming by properly activating `AVAudioSession` and integrating native `SpatialAudioComponent` for RealityKit. Fixed Opus decoding integration and eliminated "Session lookup failed" crashes.
+* **SharePlay & Spatial Personas:** Integrated SharePlay-based co-watching using Spatial Personas for shared immersive viewing experiences.
+* **Reactive Lighting (Ambilight):** Added a user-configurable Reactive Lighting toggle within the immersive control panel.
+* **HDR Consistency & Calibration:** Re-enabled 1:1 HDR EDR mapping for perfect RealityKit HDR and introduced a Calibration Mode toggle in the immersive control panel.
+* **UIKit Stream Recovery:** Added an "Open Main Menu" recovery button to the error overlay in UIKitStreamView to escape stuck window states on failed stream resumptions.
 
 ### v11.0.17 (Expected Release: Nov 25, 2025)
 * **AV1 & HDR Confirmation:** Confirmed that AV1 and AV1 HDR are working correctly on M5 devices. Special thanks to **u/webheadVR** for testing.
@@ -117,9 +128,18 @@ The Vision OS Version is not available in the App Store. To download the latest 
     * **Bitrate:** 50mbps (Higher is supported but requires M2/M5 and strong network)
     * **Renderer:** Reality Kit
 
+* **How do I configure 5.1 or 7.1 Surround Sound?**
+    * Moonlight Vision natively requests 7.1 surround sound. For this to work, your host PC must output 5.1 or 7.1 audio so that Sunshine/Apollo can capture the discrete channels.
+    * 1. On your Windows Host, open the Sound Control Panel (Press `Win+R`, type `mmsys.cpl`).
+    * 2. Select your default playback device (or virtual audio cable) and click **Configure**.
+    * 3. Choose **7.1 Surround** or **5.1 Surround** and complete the wizard. *(If your physical audio device doesn't support 7.1, you can install a Virtual Audio Cable like VB-Cable, set it to 7.1, and make it the default device).*
+    * 4. Open the **Sunshine / Apollo Web UI** and navigate to the **Audio** tab.
+    * 5. Set the **Channels** configuration to `7.1` or `5.1` (or `Stereo` if you want to bypass surround entirely).
+    * 6. Restart Sunshine/Apollo.
+    * 7. In Moonlight Vision, cycle the audio button to **7.1 Surround** to enable native spatial processing.
+
 ## Feature Requests / Planned Features:
 * Microphone Support.
-* 7.1 Audio.
 * Updates to SDL3 (to fix PS4 touchpad issues).
 * Unpin immersive settings (to allow reset if window becomes too far/small).
 

@@ -17,8 +17,7 @@ struct ImmersiveControlPanelView: View {
     // Debounce timer for settings save
     @State private var saveTimer: Timer?
     
-    // Spatial audio mode state
-    @State private var spatialAudioMode: Bool = true
+    // Spatial audio mode state is now in viewModel.streamSettings.spatialAudioMode
     
     // Delay pinned sliders ~1.5s after pin completes to avoid animation stutter
     @State private var showPinnedSliders = false
@@ -30,15 +29,25 @@ struct ImmersiveControlPanelView: View {
     }
     
     private var mainContent: some View {
-        HStack(alignment: .top, spacing: 0) {
-            leftSection
-                .frame(width: 420)
-                .padding(40)
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
+                leftSection
+                    .frame(width: 420)
+                    .padding(40)
+                
+                Divider()
+                    .padding(.vertical, 40)
+                
+                mainCenterColumn
+            }
             
-            Divider()
-                .padding(.vertical, 40)
-            
-            mainCenterColumn
+            if !controlState.isPinnedToStage {
+                Divider()
+                    .padding(.horizontal, 40)
+                
+                bottomSection
+                    .padding(40)
+            }
         }
     }
     
@@ -64,10 +73,9 @@ struct ImmersiveControlPanelView: View {
             .padding(40)
         }
     }
-    
     private var styledContent: some View {
         mainContent
-            .frame(width: isHdrEnabled ? 1600 : 1100, height: showPinnedSliders ? 730 : 650)
+            .frame(width: isHdrEnabled ? 1600 : 1100, height: controlState.isPinnedToStage ? (showPinnedSliders ? 730 : 650) : 1050)
             .glassBackgroundEffect()
             .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
             .overlay(alignment: .topTrailing) {
@@ -141,6 +149,7 @@ struct ImmersiveControlPanelView: View {
         saveTimer?.invalidate()
         saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
             controlState.saveSettings?()
+            SharePlayManager.shared.broadcastCurrentTransform()
         }
     }
     
@@ -171,7 +180,7 @@ struct ImmersiveControlPanelView: View {
                     controlState.onEnvironmentChange?(newValue)
                 }
                 
-            }
+                }
             
             // Quick actions
             VStack(alignment: .leading, spacing: 16) {
@@ -186,31 +195,30 @@ struct ImmersiveControlPanelView: View {
                     // Dimming
                     ModernActionTile(
                         icon: controlState.dimLevel == 0 ? "moon.fill" : "sun.max.fill",
-                        title: viewModel.localized("toggle_dimming"),
+                        title: viewModel.localized("toggle_dimming") + " (\(controlState.dimLevel == 0 ? "Off" : "\(controlState.dimLevel * 25)%"))",
                         isActive: controlState.dimLevel != 0
                     ) {
                         withAnimation {
-                            if let toggle = controlState.toggleDimmingPickerAction {
-                                toggle()
-                            } else {
-                                viewModel.streamSettings.dimPassthrough.toggle()
-                            }
+                            var nextLevel = controlState.dimLevel + 1
+                            if nextLevel > 4 { nextLevel = 0 }
+                            controlState.dimLevel = nextLevel
+                            viewModel.streamSettings.dimPassthrough = (nextLevel != 0)
+                            viewModel.streamSettings.save()
                         }
                     }
                     
                     // Spatial audio
+                    let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
                     ModernActionTile(
-                        icon: spatialAudioMode ? "speaker.wave.3.fill" : "headphones",
-                        title: spatialAudioMode ? viewModel.localized("spatial_audio") : viewModel.localized("stereo_audio"),
-                        isActive: spatialAudioMode
+                        icon: currentMode == .surround ? "speaker.wave.3.fill" : (currentMode == .window ? "person.fill.viewfinder" : "headphones"),
+                        title: currentMode == .surround ? "7.1 Surround" : (currentMode == .window ? viewModel.localized("spatial_audio") : viewModel.localized("stereo_audio")),
+                        isActive: currentMode != .stereo
                     ) {
                         withAnimation {
-                            spatialAudioMode.toggle()
-                            if spatialAudioMode {
-                                AudioHelpers.fixAudioForSurroundForCurrentWindow()
-                            } else {
-                                AudioHelpers.fixAudioForDirectStereo()
-                            }
+                            let nextModeRaw = (currentMode.rawValue + 1) % 3
+                            viewModel.streamSettings.spatialAudioMode = nextModeRaw
+                            let nextMode = SpatialAudioMode(rawValue: nextModeRaw) ?? .window
+                            AudioHelpers.applySpatialAudioMode(nextMode)
                         }
                     }
                     
@@ -239,6 +247,27 @@ struct ImmersiveControlPanelView: View {
                         isActive: viewModel.streamSettings.statsOverlay
                     ) {
                         withAnimation { viewModel.streamSettings.statsOverlay.toggle() }
+                    }
+                    
+                    // SharePlay
+                    ModernActionTile(
+                        icon: "shareplay",
+                        title: "SharePlay",
+                        isActive: false
+                    ) {
+                        SharePlayManager.shared.startSharePlay()
+                    }
+                    
+                    // Reactive Lighting
+                    ModernActionTile(
+                        icon: viewModel.streamSettings.reactiveLightingEnabled ? "wand.and.rays" : "wand.and.rays.inverse",
+                        title: viewModel.localized("reactive_lighting"),
+                        isActive: viewModel.streamSettings.reactiveLightingEnabled
+                    ) {
+                        withAnimation {
+                            viewModel.streamSettings.reactiveLightingEnabled.toggle()
+                            viewModel.streamSettings.save()
+                        }
                     }
                 }
                 
@@ -291,6 +320,24 @@ struct ImmersiveControlPanelView: View {
                         format: "%.2f",
                         step: 0.01
                     )
+                    
+                    GridRow {
+                        Text(viewModel.localized("hdr_calibration_mode"))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .gridColumnAlignment(.leading)
+                            .padding(.trailing, 8)
+                        
+                        HStack {
+                            Toggle("", isOn: $controlState.isCalibrationModeActive)
+                                .labelsHidden()
+                                .tint(.white)
+                            Spacer()
+                        }
+                        
+                        Color.clear
+                            .frame(width: 60)
+                    }
                 }
                 
                 // Curvature
@@ -393,49 +440,59 @@ struct ImmersiveControlPanelView: View {
                         step: 0.01
                     )
                 }
-                
+                // Removed VelocitySliders from rightSection; they are now in bottomSection
+            }
+        }
+    }
+    
+    // MARK: - Bottom Section (Spatial Controls)
+    private var bottomSection: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            SectionHeader(title: "Spatial Adjustments", icon: "arrow.up.and.down.and.arrow.left.and.right")
+            HStack(alignment: .top, spacing: 60) {
+                Grid(horizontalSpacing: 20, verticalSpacing: 24) {
+                    SteppedSliderRow(
+                        title: viewModel.localized("viewing_distance"),
+                        value: Binding(
+                            get: { -controlState.immersivePositionZ },
+                            set: { controlState.immersivePositionZ = -$0 }
+                        ),
+                        range: 0.5...5.0,
+                        defaultValue: 2.0,
+                        format: "%.2fm",
+                        step: 0.01
+                    )
+                    
                     SteppedSliderRow(
                         title: viewModel.localized("screen_scale"),
                         value: $controlState.immersiveScale,
                         range: 0.05...5.0,
                         defaultValue: 0.8,
-                    format: "%.2fx",
-                    disabled: controlState.isPinnedToStage,
-                    step: 0.01
-                )
+                        format: "%.2fx",
+                        step: 0.01
+                    )
+                }
                 
-                SteppedSliderRow(
-                    title: viewModel.localized("viewing_distance"),
-                    value: Binding(
-                        get: { -controlState.immersivePositionZ },
-                        set: { controlState.immersivePositionZ = -$0 }
-                    ),
-                    range: 1.5...10.5,
-                    defaultValue: 1.5,
-                    format: "%.2fm",
-                    disabled: controlState.isPinnedToStage,
-                    step: 0.01
-                )
-                
-                SteppedSliderRow(
-                    title: viewModel.localized("vertical_height"),
-                    value: $controlState.immersivePositionY,
-                    range: 0.0...8.0,
-                    defaultValue: 1.0,
-                    format: "%.2fm",
-                    disabled: controlState.isPinnedToStage,
-                    step: 0.01
-                )
-                
-                SteppedSliderRow(
-                    title: viewModel.localized("screen_tilt"),
-                    value: $controlState.tiltAngle,
-                    range: -60.0...60.0,
-                    defaultValue: 0.0,
-                    format: "%.0f°",
-                    disabled: controlState.isPinnedToStage,
-                    step: 1.0
-                )
+                Grid(horizontalSpacing: 20, verticalSpacing: 24) {
+                    SteppedSliderRow(
+                        title: viewModel.localized("vertical_height"),
+                        value: $controlState.immersivePositionY,
+                        range: -2.0...3.0,
+                        defaultValue: 1.0,
+                        format: "%.2fm",
+                        step: 0.01
+                    )
+                    
+                    SteppedSliderRow(
+                        title: viewModel.localized("screen_tilt"),
+                        value: $controlState.tiltAngle,
+                        range: -60.0...60.0,
+                        defaultValue: 0.0,
+                        format: "%.0f°",
+                        disabled: controlState.isPinnedToStage,
+                        step: 1.0
+                    )
+                }
             }
         }
     }

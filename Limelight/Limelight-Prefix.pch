@@ -6,6 +6,18 @@
 
 #import <Availability.h>
 #include <TargetConditionals.h>
+#if TARGET_OS_VISION
+// Forward declare nanosleep to bypass the Xcode visionOS SDK bug 
+// and avoid conflicting with FFmpeg's time.h
+#ifdef __cplusplus
+extern "C" {
+#endif
+struct timespec;
+int nanosleep(const struct timespec *req, struct timespec *rem);
+#ifdef __cplusplus
+}
+#endif
+#endif
 
 #ifndef __IPHONE_3_0
 #warning "This project uses features only available in iOS SDK 3.0 and later."
