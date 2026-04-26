@@ -48,7 +48,11 @@ struct UpdatesView: View {
                             .font(.body)
                         Text("- Control Panel UI: Realigned the UIKit mode control panel ornament to reliably anchor to the top edge of the window, ensuring visual consistency with RealityKit mode.")
                             .font(.body)
+                        Text("- Home Screen Panel UI: Set static position of the home screen menu so that it appears in front of the user in a static area (utility panel area) ensuring visual consistency when opening the home screen panel.")
+                            .font(.body)
                         Text("- Virtual Keyboard UI: Fixed an interaction regression in RealityKit mode where the supplementary PC-modifier toolbar (Windows/Esc keys) failed to trigger alongside the virtual keyboard.")
+                            .font(.body)
+                        Text("- Fixed the ability to launch directly into a host via the Shortcuts app (AppIntent) I think this can also help with future siri support but not sure.")
                             .font(.body)
                     }
                     .padding(.vertical)

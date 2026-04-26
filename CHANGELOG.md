@@ -6,7 +6,9 @@
 - **Volume Window Freeze**: Fixed an issue where the main view would select the first paired host (which might be offline) and try to connect to it synchronously, causing a UI freeze. The active host is now correctly prioritized.
 - **UIKit Return to Home Crash**: Addressed intermittent crashes and unpredictable behavior in UIKit mode when pressing "Return to Home" by unifying window navigation logic to use `openWindow` instead of `pushWindow`.
 - **Control Panel UI**: Realigned the UIKit mode control panel ornament to reliably anchor to the top edge of the window, ensuring visual consistency with RealityKit mode.
+- **Home Screen Panel UI**: Set static position of the home screen menu so that it appears in front of the user in a static area (utility panel area) ensuring visual consistency when opening the home screen panel.
 - **Virtual Keyboard UI**: Fixed an interaction regression in RealityKit mode where the supplementary PC-modifier toolbar (Windows/Esc keys) failed to trigger alongside the virtual keyboard.
+- **AppIntent Shortcuts**: Fixed the ability to launch directly into a host via the Shortcuts app (AppIntent).
 
 ---
 

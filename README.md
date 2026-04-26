@@ -58,7 +58,9 @@ The Vision OS Version is not available in the App Store. To download the latest 
 * **Navigation Stability:** Fixed a bug causing the app to freeze when clicking 'Return to Home' while a second paired computer is offline by prioritizing the actively streaming host.
 * **UIKit Stream Recovery:** Resolved an issue in UIKit mode where the 'Return to Home' button would occasionally fail to navigate or cause the application to crash.
 * **Control Panel UI:** Realigned the UIKit mode control panel ornament to reliably anchor to the top edge of the window, ensuring visual consistency with RealityKit mode.
+* **Home Screen Panel UI:** Set static position of the home screen menu so that it appears in front of the user in a static area (utility panel area) ensuring visual consistency when opening the home screen panel.
 * **Virtual Keyboard UI:** Fixed an interaction regression in RealityKit mode where the supplementary PC-modifier toolbar (Windows/Esc keys) failed to trigger alongside the virtual keyboard.
+* **AppIntent Shortcuts:** Fixed the ability to launch directly into a host via the Shortcuts app (AppIntent).
 
 ### v11.0.21 (April 25, 2026)
 * **Audio Pipeline Refactor:** Complete migration of the spatial audio pipeline (`OutputAU`) to pure Objective-C.
