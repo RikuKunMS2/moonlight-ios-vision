@@ -150,6 +150,8 @@ struct _RealityKitStreamView: View {
     @State private var pinStartScale: Float = 1.0
     @State private var pinnedStageScale: Float = 1.0
     @State private var screenOriginalParent: Entity?
+    @State private var screen: ModelEntity = ModelEntity()
+    @State private var ambilightPlane: ModelEntity? = nil
     @State private var isInteractive = false
     // Immersive transform (synced with controlState)
     @State private var immersionAmount: Float = 0.0
@@ -157,7 +159,6 @@ struct _RealityKitStreamView: View {
     @State private var controlPanelEntity: Entity?
     
     @State private var texture: TextureResource
-    @State private var screen: ModelEntity = ModelEntity()
     @State private var videoMode: VideoMode = .standard2D
     @State private var surfaceMaterial: ShaderGraphMaterial?
     
@@ -876,9 +877,10 @@ struct _RealityKitStreamView: View {
                         }
                         .onSubmit {
                             print("[Keyboard] Submit detected, sending Return key and closing keyboard")
-                            LiSendKeyboardEvent(0x0D, 0x03, 0)
+                            let hidReturn = Int16(bitPattern: 0x8000 | 0x0D)
+                            LiSendKeyboardEvent(hidReturn, 0x03, 0)
                             usleep(50 * 1000)
-                            LiSendKeyboardEvent(0x0D, 0x04, 0)
+                            LiSendKeyboardEvent(hidReturn, 0x04, 0)
                             showVirtualKeyboard = false
                             isKeyboardFocused = false
                             keyboardInput = ""
@@ -1266,23 +1268,12 @@ struct _RealityKitStreamView: View {
                     
                 case .gazeControl:
                     // --- GAZE CONTROL LOGIC ---
-                    // Check if using Touch mode (hand drag) or Gaze mode (eye tracking)
-                    if viewModel.streamSettings.gazeTouchMode {
-                        // TOUCH MODE: Relative mouse movement (trackpad style)
-                        let worldPos = value.convert(value.location3D, from: .local, to: .scene)
-                        if !gazeController.pinchActive {
-                            gazeController.onTouchDragBegan(at: worldPos)
-                        } else {
-                            gazeController.onTouchDragChanged(at: worldPos)
-                        }
+                    // ALWAYS use absolute Gaze mode (touchscreen physics)
+                    let uv = hitToUV(value)
+                    if !gazeController.pinchActive {
+                        gazeController.onPinchBegan(at: uv)
                     } else {
-                        // GAZE MODE: Eye tracking (current implementation)
-                        let uv = hitToUV(value)
-                        if !gazeController.pinchActive {
-                            gazeController.onPinchBegan(at: uv)
-                        } else {
-                            gazeController.onPinchChanged(at: uv)
-                        }
+                        gazeController.onPinchChanged(at: uv)
                     }
                     
                 case .controller:
@@ -1303,11 +1294,7 @@ struct _RealityKitStreamView: View {
                 case .gazeControl:
                     // Always cleanup gaze state
                     if gazeController.pinchActive {
-                        if viewModel.streamSettings.gazeTouchMode {
-                            gazeController.onTouchDragEnded()
-                        } else {
-                            gazeController.onPinchEnded()
-                        }
+                        gazeController.onPinchEnded()
                     }
                     
                 case .controller:
@@ -1380,56 +1367,34 @@ struct _RealityKitStreamView: View {
     // Bypasses local coordinate glitches by calculating vector projection in absolute room space.
     
     private func hitToUV(_ value: EntityTargetValue<SpatialTapGesture.Value>) -> SIMD2<Float> {
-        // 1. Get Touch in World Space
-        // We bypass local coordinate confusion entirely.
-        let touchWorld = value.convert(value.location3D, from: .local, to: .scene)
-        
-        return calculateUV(touchWorld: touchWorld)
+        let loc = SIMD3<Float>(Float(value.location3D.x), Float(value.location3D.y), Float(value.location3D.z))
+        return calculateUV(localPosition: loc)
     }
 
     private func hitToUV(_ value: EntityTargetValue<DragGesture.Value>) -> SIMD2<Float> {
-        // 1. Get Touch in World Space
-        // We bypass local coordinate confusion entirely.
-        let touchWorld = value.convert(value.location3D, from: .local, to: .scene)
-        
-        return calculateUV(touchWorld: touchWorld)
+        let loc = SIMD3<Float>(Float(value.location3D.x), Float(value.location3D.y), Float(value.location3D.z))
+        return calculateUV(localPosition: loc)
     }
     
-    private func calculateUV(touchWorld: SIMD3<Float>) -> SIMD2<Float> {
-        // 1. GET SCREEN BASIS VECTORS (Orientation)
-        // This handles rotation/tilt.
-        let screenTransform = screen.transformMatrix(relativeTo: nil)
-        let rightDir = simd_normalize(SIMD3<Float>(screenTransform.columns.0.x, screenTransform.columns.0.y, screenTransform.columns.0.z))
-        let upDir    = simd_normalize(SIMD3<Float>(screenTransform.columns.1.x, screenTransform.columns.1.y, screenTransform.columns.1.z))
-        let center   = SIMD3<Float>(screenTransform.columns.3.x, screenTransform.columns.3.y, screenTransform.columns.3.z)
-        
-        // 2. PROJECT TOUCH (Get Distance in Meters)
-        let delta = touchWorld - center
-        let meterX = simd_dot(delta, rightDir) // e.g., 4.0 meters
-        let meterY = simd_dot(delta, upDir)
-        
-       
-        let globalScale = screen.scale(relativeTo: nil).x
-        let safeScale = globalScale > 0 ? globalScale : 1.0
-        
-    
-        let baseWidth = CURVED_MAX_WIDTH_METERS // 2.0
-        let physicalWidth = baseWidth * safeScale
+    private func calculateUV(localPosition: SIMD3<Float>) -> SIMD2<Float> {
+        // Since localPosition is already perfectly relative to the center of the unscaled mesh,
+        // we can simply use the physical constants that generated the mesh directly.
+        let physicalWidth = CURVED_MAX_WIDTH_METERS // 2.0
         let physicalHeight = physicalWidth * screenAspect
         
-       
         let curveMagnitude = effectiveCurvature
         let maxAngle = CURVED_MAX_ANGLE
         let currentAngle = maxAngle * max(0.0, min(curveMagnitude, 2.0))
         
         var u: Float = 0.5
+        let meterX = localPosition.x
+        let meterY = localPosition.y
         
-      
         if currentAngle < 0.001 {
             // Flat Mode
             u = (meterX / physicalWidth) + 0.5
-                        } else {
-           
+        } else {
+            // Curved Mode
             let scaledRadius = physicalWidth / currentAngle
             let maxTheoreticalX = scaledRadius * sin(currentAngle / 2.0)
             
@@ -1439,7 +1404,7 @@ struct _RealityKitStreamView: View {
             u = (theta / currentAngle) + 0.5
         }
 
-      
+        // v goes from 0 (top) to 1 (bottom)
         let v = 0.5 - (meterY / physicalHeight) - GAZE_VERTICAL_OFFSET
         
         
@@ -1563,11 +1528,12 @@ struct _RealityKitStreamView: View {
             for i in 0..<removedCount {
                 let delayDown = Double(i) * 0.1
                 let delayUp = delayDown + 0.05
+                let hidBackspace = Int16(bitPattern: 0x8000 | 0x08)
                 DispatchQueue.main.asyncAfter(deadline: .now() + delayDown) {
-                    LiSendKeyboardEvent(0x08, 0x03, 0) // Backspace Down
+                    LiSendKeyboardEvent(hidBackspace, 0x03, 0) // Backspace Down
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + delayUp) {
-                    LiSendKeyboardEvent(0x08, 0x04, 0) // Backspace Up
+                    LiSendKeyboardEvent(hidBackspace, 0x04, 0) // Backspace Up
                 }
             }
         }
@@ -1661,10 +1627,12 @@ struct _RealityKitStreamView: View {
     private func cycleInputMode() {
         gazeController.cleanup()
         
-        // Only toggle between screenMove (0) and gazeControl (1)
-        let currentRaw = inputMode.rawValue
-        let nextRaw = (currentRaw + 1) % 2
-        inputMode = InputMode(rawValue: nextRaw) ?? .screenMove
+        // Only toggle between screenMove (0) and gazeControl (2)
+        if inputMode == .screenMove {
+            inputMode = .gazeControl
+        } else {
+            inputMode = .screenMove
+        }
         
         UserDefaults.standard.set(inputMode.rawValue, forKey: "immersiveInputMode")
         let text = (inputMode == .gazeControl && viewModel.streamSettings.gazeTouchMode) ? viewModel.localized("input_mode_touch") : viewModel.localized(inputMode.localizedKey)
@@ -1756,16 +1724,24 @@ struct _RealityKitStreamView: View {
     }
     
     private func updateScreenMaterial() {
+        let mat = makeVideoUnlitMaterial(self.texture)
         if videoMode == .sideBySide3D {
-            if var mat = surfaceMaterial {
-                try? mat.setParameter(name: "texture", value: .textureResource(self.texture))
-                surfaceMaterial = mat
-                screen.model?.materials = [mat]
+            if var sMat = surfaceMaterial {
+                try? sMat.setParameter(name: "texture", value: .textureResource(self.texture))
+                surfaceMaterial = sMat
+                screen.model?.materials = [sMat]
             } else {
-                screen.model?.materials = [makeVideoUnlitMaterial(texture)]
+                screen.model?.materials = [mat]
             }
         } else {
-            screen.model?.materials = [makeVideoUnlitMaterial(self.texture)]
+            screen.model?.materials = [mat]
+        }
+        
+        if let ambPlane = ambilightPlane {
+            var ambMat = UnlitMaterial(texture: self.texture)
+            ambMat.color.tint = UIColor.white.withAlphaComponent(0.4) // Semi-transparent glow
+            ambMat.blending = .transparent(opacity: 1.0)
+            ambPlane.model?.materials = [ambMat]
         }
     }
     
@@ -1876,7 +1852,13 @@ struct _RealityKitStreamView: View {
         content.add(screen)
         if screenOriginalParent == nil { screenOriginalParent = screen.parent }
         
-        // blackOutSphere removed - using dimmerDome for passthrough dimming instead
+        // Setup Ambilight Plane
+        if ambilightPlane == nil {
+            let ambPlane = ModelEntity()
+            ambPlane.components.set(OpacityComponent(opacity: 1.0))
+            screen.addChild(ambPlane)
+            self.ambilightPlane = ambPlane
+        }
 
         let head = AnchorEntity(.head)
         content.add(head)
@@ -2927,20 +2909,23 @@ struct _RealityKitStreamView: View {
     }
 
     private func updateDimmerDomesState() {
-        dimmerDome?.isEnabled = (dimLevel == 1)
-        dimmerDomePurple?.isEnabled = (dimLevel >= 2 && dimLevel <= 14) || viewModel.streamSettings.reactiveLightingEnabled
-        
-        
+        dimmerDome?.isEnabled = (dimLevel > 0)
+        ambilightPlane?.isEnabled = viewModel.streamSettings.reactiveLightingEnabled
     }
 
     private func updateDimmerDomes(content: RealityViewContent) {
-        let isReactiveMode = (dimLevel == 2 || dimLevel == 10 || dimLevel == 12 || viewModel.streamSettings.reactiveLightingEnabled)
-        
         guard dimLevel != lastAppliedDimLevelBox.value else { return }
         lastAppliedDimLevelBox.value = dimLevel
         
         if let dome = dimmerDome {
-            let targetAlpha: Float = viewModel.streamSettings.dimPassthrough ? Float(dimAlphas[1]) : Float(dimAlphas[0])
+            let targetAlpha: Float
+            switch dimLevel {
+            case 1: targetAlpha = 0.25
+            case 2: targetAlpha = 0.50
+            case 3: targetAlpha = 0.75
+            case 4: targetAlpha = 1.00
+            default: targetAlpha = 0.0
+            }
             if let comp = dome.components[OpacityComponent.self], abs(comp.opacity - targetAlpha) > 0.001 {
                 dome.components.set(OpacityComponent(opacity: targetAlpha))
             } else if dome.components[OpacityComponent.self] == nil {
@@ -2952,11 +2937,6 @@ struct _RealityKitStreamView: View {
                 blackMat.blending = .transparent(opacity: 1.0)
                 dome.model = ModelComponent(mesh: mesh, materials: [blackMat])
             }
-        }
-
-        if !isReactiveMode, let purple = self.dimmerDomePurple {
-            let (mat, _) = getDimmerMaterial()
-            purple.model?.materials = [mat]
         }
     }
 
@@ -3747,14 +3727,16 @@ struct PCModifierToolbar: View {
     }
     
     private func sendInstantKey(_ keyCode: Int16) {
-        LiSendKeyboardEvent(keyCode, 0x03, 0)
+        let hidCode = Int16(bitPattern: 0x8000 | UInt16(keyCode))
+        LiSendKeyboardEvent(hidCode, 0x03, 0)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            LiSendKeyboardEvent(keyCode, 0x04, 0)
+            LiSendKeyboardEvent(hidCode, 0x04, 0)
         }
     }
     
     private func sendToggleKey(_ keyCode: Int16, down: Bool) {
-        LiSendKeyboardEvent(keyCode, down ? 0x03 : 0x04, 0)
+        let hidCode = Int16(bitPattern: 0x8000 | UInt16(keyCode))
+        LiSendKeyboardEvent(hidCode, down ? 0x03 : 0x04, 0)
     }
 }
 

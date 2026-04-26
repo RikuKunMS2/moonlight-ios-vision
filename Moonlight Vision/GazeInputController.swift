@@ -124,8 +124,7 @@ class GazeInputController {
     private func sendMousePosition(uv: SIMD2<Float>) {
         guard let config = streamConfig else { return }
         let x = Int16(uv.x * Float(config.width))
-        // RealityKit passes UVs where Y = 1.0 is the top, but Sunshine expects Y = 0 at the top. Invert Y.
-        let y = Int16((1.0 - uv.y) * Float(config.height))
+        let y = Int16(uv.y * Float(config.height))
         LiSendMousePositionEvent(x, y, Int16(config.width), Int16(config.height))
     }
     

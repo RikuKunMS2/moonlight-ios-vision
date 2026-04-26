@@ -9,8 +9,13 @@
 
 ### Vision Pro Spatial Audio & Immersion
 - Integrated SharePlay-based co-watching using Spatial Personas for shared immersive viewing experiences.
-- Added a user-configurable Reactive Lighting (Ambilight) toggle within the immersive control panel.
+- Added a user-configurable Reactive Lighting (Ambilight) toggle within the immersive control panel. The plane now realistically additive-blends a glow into the passthrough environment.
 - Re-enabled 1:1 HDR EDR mapping for perfect RealityKit HDR and introduced a Calibration Mode toggle in the immersive control panel.
+- Implemented velocity-based precision sliders (joystick-pull physics) for viewing distance, height, and scale.
+
+### Input & Controls
+- Fixed hardware support for virtual keyboards, backspace, and modifier keys (Esc, Win, etc.) in immersive mode.
+- Rewrote the RealityKit gaze controller to use absolute local tracking, eliminating cursor drift, fixing Y-axis inversion, and enforcing true touchscreen-style accuracy.
 
 ### UIKit Stream Recovery
 - Added an "Open Main Menu" recovery button to the error overlay in UIKitStreamView to escape stuck window states on failed stream resumptions.

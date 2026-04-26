@@ -215,6 +215,7 @@ struct UIKitStreamView: View {
                         Button {
                             lastStreamErrorMessage = nil
                             viewModel.streamState = .stopping
+                            viewModel.savedStreamConfigForResume = nil
                             openWindow(id: "mainView")
                             dismissWindow(id: "classicStreamingWindow")
                             streamConfig = nil
@@ -297,6 +298,7 @@ struct UIKitStreamView: View {
                 .frame(maxWidth: 420)
             Button {
                 lastStreamErrorMessage = nil
+                viewModel.savedStreamConfigForResume = nil
                 openWindow(id: "mainView")
                 dismissWindow(id: "classicStreamingWindow")
                 streamConfig = nil

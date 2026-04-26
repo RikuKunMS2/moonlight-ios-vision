@@ -186,15 +186,15 @@ struct ImmersiveControlPanelView: View {
                     // Dimming
                     ModernActionTile(
                         icon: controlState.dimLevel == 0 ? "moon.fill" : "sun.max.fill",
-                        title: viewModel.localized("toggle_dimming"),
+                        title: viewModel.localized("toggle_dimming") + " (\(controlState.dimLevel == 0 ? "Off" : "\(controlState.dimLevel * 25)%"))",
                         isActive: controlState.dimLevel != 0
                     ) {
                         withAnimation {
-                            if let toggle = controlState.toggleDimmingPickerAction {
-                                toggle()
-                            } else {
-                                viewModel.streamSettings.dimPassthrough.toggle()
-                            }
+                            var nextLevel = controlState.dimLevel + 1
+                            if nextLevel > 4 { nextLevel = 0 }
+                            controlState.dimLevel = nextLevel
+                            viewModel.streamSettings.dimPassthrough = (nextLevel != 0)
+                            viewModel.streamSettings.save()
                         }
                     }
                     
@@ -250,16 +250,14 @@ struct ImmersiveControlPanelView: View {
                     }
                     
                     // Reactive Lighting
-                    if controlState.selectedEnvironmentState != .none {
-                        ModernActionTile(
-                            icon: viewModel.streamSettings.reactiveLightingEnabled ? "wand.and.rays" : "wand.and.rays.inverse",
-                            title: viewModel.localized("reactive_lighting"),
-                            isActive: viewModel.streamSettings.reactiveLightingEnabled
-                        ) {
-                            withAnimation {
-                                viewModel.streamSettings.reactiveLightingEnabled.toggle()
-                                viewModel.streamSettings.save()
-                            }
+                    ModernActionTile(
+                        icon: viewModel.streamSettings.reactiveLightingEnabled ? "wand.and.rays" : "wand.and.rays.inverse",
+                        title: viewModel.localized("reactive_lighting"),
+                        isActive: viewModel.streamSettings.reactiveLightingEnabled
+                    ) {
+                        withAnimation {
+                            viewModel.streamSettings.reactiveLightingEnabled.toggle()
+                            viewModel.streamSettings.save()
                         }
                     }
                 }
@@ -424,7 +422,7 @@ struct ImmersiveControlPanelView: View {
                         format: "%.2fx",
                         step: 0.01
                     )
-                    SteppedSliderRow(
+                    VelocitySlider(
                         title: viewModel.localized("pinned_screen_height"),
                         value: $controlState.pinnedStageHeight,
                         range: -2.0...3.0,
@@ -434,30 +432,30 @@ struct ImmersiveControlPanelView: View {
                     )
                 }
                 
-                    SteppedSliderRow(
-                        title: viewModel.localized("screen_scale"),
-                        value: $controlState.immersiveScale,
-                        range: 0.05...5.0,
-                        defaultValue: 0.8,
+                VelocitySlider(
+                    title: viewModel.localized("screen_scale"),
+                    value: $controlState.immersiveScale,
+                    range: 0.05...5.0,
+                    defaultValue: 0.8,
                     format: "%.2fx",
                     disabled: controlState.isPinnedToStage,
                     step: 0.01
                 )
                 
-                SteppedSliderRow(
+                VelocitySlider(
                     title: viewModel.localized("viewing_distance"),
                     value: Binding(
                         get: { -controlState.immersivePositionZ },
                         set: { controlState.immersivePositionZ = -$0 }
                     ),
                     range: 0.5...5.0,
-                    defaultValue: 1.5,
+                    defaultValue: 2.0,
                     format: "%.2fm",
                     disabled: controlState.isPinnedToStage,
                     step: 0.01
                 )
                 
-                SteppedSliderRow(
+                VelocitySlider(
                     title: viewModel.localized("vertical_height"),
                     value: $controlState.immersivePositionY,
                     range: -2.0...3.0,
