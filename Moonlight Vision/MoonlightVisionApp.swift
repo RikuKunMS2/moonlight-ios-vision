@@ -61,7 +61,6 @@ struct MoonlightVisionApp: SwiftUI.App {
                          needsHdr: appDelegate.mainViewModel.streamSettings.enableHdr,
                          isImmersive: false // Explicitly false
                      )
-                     .id(streamConfig.wrappedValue?.sessionUUID ?? "none")
                      .environmentObject(appDelegate.mainViewModel)
                      .environmentObject(streamControlState)
                      .task {
@@ -92,7 +91,6 @@ struct MoonlightVisionApp: SwiftUI.App {
                          needsHdr: appDelegate.mainViewModel.streamSettings.enableHdr,
                          isImmersive: true // Explicitly true
                      )
-                     .id(streamConfig.wrappedValue?.sessionUUID ?? "none")
 #if os(visionOS)
                      .applyUpperLimbVisibility()
 #endif
@@ -121,7 +119,6 @@ struct MoonlightVisionApp: SwiftUI.App {
                 // 3. UIKit Window
                 WindowGroup(id: "classicStreamingWindow", for: StreamConfiguration.self) { streamConfig in
                     UIKitStreamView(streamConfig: streamConfig)
-                    .id(streamConfig.wrappedValue?.sessionUUID ?? "none")
                     .environmentObject(appDelegate.mainViewModel)
                     .task {
                         // Auto-resume: if we have a saved config and current config is nil, restore it
