@@ -3,7 +3,10 @@
 //  Moonlight Vision
 //
 //  Created by Alex Haugland on 1/27/24.
-//  Copyright © 2024 Moonlight Game Streaming Project.
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
+//
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
 
 import SwiftUI
@@ -371,8 +374,11 @@ struct UIKitStreamView: View {
         hasPerformedTeardown = true
         needsResume = false
 
-        viewModel.streamState = .stopping
-        viewModel.activelyStreaming = false
+        let isCurrentSession = (viewModel.currentStreamConfig.sessionUUID == streamConfig?.sessionUUID)
+        if isCurrentSession {
+            viewModel.streamState = .stopping
+            viewModel.activelyStreaming = false
+        }
 
         if let streamVC = _UIKitStreamView.controllerReference.object {
             streamVC.stopStream()
@@ -382,9 +388,7 @@ struct UIKitStreamView: View {
             saveWindowSizeForRestore()
         }
 
-        if let config = streamConfig {
-            viewModel.savedStreamConfigForResume = config
-        }
+        viewModel.savedStreamConfigForResume = nil
 
         streamConfig = nil
 

@@ -3,9 +3,11 @@
 //  Moonlight Vision
 //
 //  Created by Alex Haugland on 1/22/24.
-//  Copyright © 2024 Moonlight Game Streaming Project.
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
 //
-
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
+//
 
 import SwiftUI
 

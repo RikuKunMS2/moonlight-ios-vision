@@ -1,13 +1,19 @@
 //
-//  AppEntity.swift
-//  Moonlight
+//  MoonlightAppEntity.swift
+//  Moonlight Vision
 //
 //  Created by tht7 on 06/02/2025.
-//  Copyright © 2025 Moonlight Game Streaming Project. All rights reserved.\
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
+//
+//  AppEntity.swift
+//  Moonlight
 // Ugh Im a little upset by how unoptimized everything in the storage is
 // it's not like CoreData is bad it\s that we dont use any of it's nice (and essential) features >:(
-//
 // Also this file is not optimized at all but it only get's called by the shortcuts app so I don't mind
+//
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
+//
 
 import Foundation
 import OSLog

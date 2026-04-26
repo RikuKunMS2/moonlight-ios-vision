@@ -2,7 +2,13 @@
 //  RealityKitStreamView.swift
 //  Moonlight Vision
 //
+//  Created by Lumanaire (RikuKunMS2).
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
+//
 //  Moonlight Vision - Immersive streaming view
+//
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
 
 import SwiftUI
@@ -834,7 +840,7 @@ struct _RealityKitStreamView: View {
                             // volumetric streaming windows trigger "PushWindowAction requires…" and can crash.
                             homeAction: { openWindow(id: "mainView") },
                             closeAction: {
-                                viewModel.savedStreamConfigForResume = streamConfig
+                                viewModel.savedStreamConfigForResume = nil
                                 needsResume = false
                                 hasPerformedTeardown = false
                                 viewModel.streamState = .stopping
@@ -1092,32 +1098,12 @@ struct _RealityKitStreamView: View {
         controlState.controllerSupport = controllerSupport
         
         controlState.homeAction = { [self] in
-            // In immersive mode, "Home" should fully stop stream first.
-            // IMPORTANT: do NOT set activelyStreaming=false before dismissImmersiveSpace.
-            // Setting it early causes the body to switch to streamStoppedOverlay (with its
-            // own RealityView scaffold), removing the main RealityView while the VT decoder
-            // may still be writing to its Metal textures — a reliable EXC_BAD_ACCESS crash.
-            needsResume = false
-            hasPerformedTeardown = false
-            viewModel.streamState = .stopping
-            performCompleteTeardown()
-            viewModel.shouldCloseStream = false
-            Task {
-                await dismissImmersiveSpace()
-                // MoonlightVisionApp.onDisappear fires when the space is dismissed and
-                // unconditionally saves streamConfig → savedStreamConfigForResume. Clear it
-                // here (after onDisappear) so "return to stream" doesn't appear after an
-                // explicit home action.
-                viewModel.savedStreamConfigForResume = nil
-                // Switch the body AFTER the space is gone; the main RealityView has already
-                // been removed by the system-level space dismissal at this point.
-                viewModel.activelyStreaming = false
-                // Open main menu after immersive teardown — never pushWindow on volumetric scenes.
-                openWindow(id: "mainView")
-            }
+            // In immersive mode, "Home" should open the main menu but leave the stream running,
+            // matching the behavior of Volume mode and UIKit mode.
+            openWindow(id: "mainView")
         }
         controlState.closeAction = { [self] in
-            if streamConfig != nil { viewModel.savedStreamConfigForResume = streamConfig }
+            viewModel.savedStreamConfigForResume = nil
             needsResume = false
             hasPerformedTeardown = false
             viewModel.streamState = .stopping
@@ -2568,6 +2554,13 @@ struct _RealityKitStreamView: View {
         hasPerformedTeardown = true
         
         print("[StreamView] 🔴 TEARDOWN START")
+        
+        // Ensure MainViewModel isn't stuck in .running if the window was closed via system controls
+        let isCurrentSession = (viewModel.currentStreamConfig.sessionUUID == streamConfig.sessionUUID)
+        if isCurrentSession && viewModel.activelyStreaming && viewModel.streamState != .stopping {
+            viewModel.streamState = .stopping
+            viewModel.activelyStreaming = false
+        }
         
         // CRITICAL: Close render gate BEFORE stopping stream
         renderGateOpen = false

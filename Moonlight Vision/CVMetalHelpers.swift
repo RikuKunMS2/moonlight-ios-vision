@@ -1,10 +1,15 @@
 //
 //  CVMetalHelpers.swift
+//  Moonlight Vision
 //
-//  Created by Max Thomas
+//  Created by Max Thomas.
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
+//
 //  No license, do whatever you want with this file
 //
-
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
+//
 
 #if !targetEnvironment(simulator)
 let forceFastSecretTextureFormats = true

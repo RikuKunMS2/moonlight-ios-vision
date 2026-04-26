@@ -1,42 +1,36 @@
 //
 //  TPCircularBuffer.h
-//  Circular/Ring buffer implementation
-//
-//  https://github.com/michaeltyson/TPCircularBuffer
+//  Moonlight Vision
 //
 //  Created by Michael Tyson on 10/12/2011.
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
+//  Based on files created by Andy Grundman https://github.com/andygrundman
 //
-//
+//  Circular/Ring buffer implementation
+//  https://github.com/michaeltyson/TPCircularBuffer
 //  This implementation makes use of a virtual memory mapping technique that inserts a virtual copy
 //  of the buffer memory directly after the buffer's end, negating the need for any buffer wrap-around
 //  logic. Clients can simply use the returned memory address as if it were contiguous space.
-//
 //  The implementation is thread-safe in the case of a single producer and single consumer.
-//
 //  Virtual memory technique originally proposed by Philip Howard (http://vrb.slashusr.org/), and
 //  adapted to Darwin by Kurt Revis (http://www.snoize.com,
 //  http://www.snoize.com/Code/PlayBufferedSoundFile.tar.gz)
-//
-//
-//  Copyright (C) 2012-2013 A Tasty Pixel
-//
 //  This software is provided 'as-is', without any express or implied
 //  warranty.  In no event will the authors be held liable for any damages
 //  arising from the use of this software.
-//
 //  Permission is granted to anyone to use this software for any purpose,
 //  including commercial applications, and to alter it and redistribute it
 //  freely, subject to the following restrictions:
-//
 //  1. The origin of this software must not be misrepresented; you must not
 //     claim that you wrote the original software. If you use this software
 //     in a product, an acknowledgment in the product documentation would be
 //     appreciated but is not required.
-//
 //  2. Altered source versions must be plainly marked as such, and must not be
 //     misrepresented as being the original software.
-//
 //  3. This notice may not be removed or altered from any source distribution.
+//
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
 
 #ifndef TPCircularBuffer_h

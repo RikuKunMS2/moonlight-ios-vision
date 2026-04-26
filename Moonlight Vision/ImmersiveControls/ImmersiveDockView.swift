@@ -2,8 +2,13 @@
 //  ImmersiveDockView.swift
 //  Moonlight Vision
 //
-//  Global Dock - fixed below user's line of sight
 //  Created by Linggan-ua on 2025/12/03.
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
+//
+//  Global Dock - fixed below user's line of sight
+//
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
 
 import SwiftUI

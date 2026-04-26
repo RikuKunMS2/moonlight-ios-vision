@@ -1,9 +1,14 @@
 //
 //  UpdatesView.swift
-//  Moonlight
+//  Moonlight Vision
 //
 //  Created by camy on 2/2/25.
-//  Copyright © 2025 Moonlight Game Streaming Project. All rights reserved.
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
+//
+//  Moonlight
+//
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
 
 import SwiftUI

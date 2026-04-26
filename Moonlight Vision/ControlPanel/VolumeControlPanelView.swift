@@ -2,9 +2,15 @@
 //  VolumeControlPanelView.swift
 //  Moonlight Vision
 //
+//  Created by Lumanaire (RikuKunMS2).
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
+//
 //  Control panel for volumetric (non-immersive) RealityKit window.
 //  Horizontal layout like immersive; depth/height/tilt + curvature + UIKit-style dimming.
 //  No: environment picker, pin to stage, immersion amount.
+//
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
 
 import SwiftUI

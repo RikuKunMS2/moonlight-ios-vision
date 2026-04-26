@@ -2,7 +2,13 @@
 //  StreamModeSelectionOverlay.swift
 //  Moonlight Vision
 //
+//  Created by Lumanaire (RikuKunMS2).
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
+//
 //  Overlay for selecting stream mode (UIKit / RealityKit Volume / RealityKit Immersive) when launching.
+//
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
 
 import SwiftUI

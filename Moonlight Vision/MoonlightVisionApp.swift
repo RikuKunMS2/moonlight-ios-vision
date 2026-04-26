@@ -3,6 +3,9 @@
 //  Moonlight Vision
 //
 //  Created by Alex Haugland on 1/27/24.
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
+//
 //  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
 
@@ -70,10 +73,6 @@ struct MoonlightVisionApp: SwiftUI.App {
                          }
                      }
                      .onDisappear { 
-                         // Save config for auto-resume when window closes
-                         if let config = streamConfig.wrappedValue {
-                             appDelegate.mainViewModel.savedStreamConfigForResume = config
-                         }
                          streamConfig.wrappedValue = nil
                      }
                 }
@@ -108,10 +107,6 @@ struct MoonlightVisionApp: SwiftUI.App {
                          }
                      }
                      .onDisappear { 
-                         // Save config for auto-resume when immersive space closes
-                         if let config = streamConfig.wrappedValue {
-                             appDelegate.mainViewModel.savedStreamConfigForResume = config
-                         }
                          streamConfig.wrappedValue = nil
                      }
                 }

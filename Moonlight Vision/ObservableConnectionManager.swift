@@ -1,11 +1,15 @@
 //
 //  ObservableConnectionManager.swift
-//  Moonlight
+//  Moonlight Vision
 //
 //  Created by tht7 on 29/12/2024.
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
+//
+//  Moonlight
+//
 //  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
-
 
 import Foundation
 import Combine

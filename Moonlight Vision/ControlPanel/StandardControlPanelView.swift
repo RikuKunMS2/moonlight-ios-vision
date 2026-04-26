@@ -2,8 +2,14 @@
 //  StandardControlPanelView.swift
 //  Moonlight Vision
 //
-//  Standard mode (non-immersive) control panel - uses the same design style as immersive control panel
 //  Created by Linggan-ua on 2025/12/03.
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
+//
+//  Standard mode (non-immersive) control panel - uses the same design style as immersive control panel
+//
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
+//
 
 import SwiftUI
 

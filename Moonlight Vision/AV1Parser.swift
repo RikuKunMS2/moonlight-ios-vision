@@ -1,15 +1,20 @@
 //
 //  AV1Parser.swift
+//  Moonlight Vision
+//
+//  Created by Lumanaire (RikuKunMS2).
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
 //
 // I gotta be real, I ChatGPT'd like 70% of this.
 // Of course, it didn't work and I had to parse the bitstream by hand anyway,
 // but it at least left some nice comments on the AV1 atoms.
-//
 // Everyone has my (Max T's) personal permission to use this file specifically,
 // with or without attribution, bc nobody deserves to parse bitstream video formats.
 // But attribution would be nice if this saved you some time.
-//
 // Original: https://github.com/alvr-org/alvr-visionos/blob/main/ALVRClient/AV1Parser.swift
+//
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
 
 import Foundation

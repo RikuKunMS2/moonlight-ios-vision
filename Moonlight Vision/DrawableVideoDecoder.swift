@@ -1,9 +1,14 @@
 //
 //  DrawableVideoDecoder.swift
+//  Moonlight Vision
+//
+//  Created by tht7 on 30/12/2024. Updated 2026/02/28 by Linggan-ua.
+//  Updated by Lumanaire (RikuKunMS2) on 4/26/26.
+//  Notice: If you are missing from the contributor list, please contact Lumanaire (RikuKunMS2).
+//
 //  Moonlight
 //
-//  Created by tht7 on 30/12/2024. Updated 2026/02/28 by Linggan-ua
-//  Copyright © 2025 Moonlight Game Streaming Project. All rights reserved.
+//  Copyright © 2024 Moonlight Game Streaming Project. All rights reserved.
 //
 
 import AVFoundation
