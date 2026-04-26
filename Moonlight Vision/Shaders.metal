@@ -321,13 +321,20 @@ fragment half4 copyFragmentShaderHDR_EDR(
         }
     }
 
-    if (params.isPQ == 1u) {
-        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE * REALITYKIT_PQ_EXTRA_LINEAR_SCALE;
-    } else if (params.isTargetDisplayP3 == 1u) {
-        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE * REALITYKIT_SDR_ON_DISPLAYP3_EXTRA;
-    } else {
-        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE;
+    if (full.mode == 2) {
+        if (in.uv.y < 0.15) {
+            float stepVal = floor(in.uv.x * 5.0);
+            float targetNits = 0.0;
+            if (stepVal == 1.0) targetNits = 100.0;
+            else if (stepVal == 2.0) targetNits = 203.0;
+            else if (stepVal == 3.0) targetNits = 500.0;
+            else if (stepVal == 4.0) targetNits = 1000.0;
+            
+            float3 testColor = targetNits / PQ_REFERENCE_WHITE_NITS;
+            return half4(half3(testColor), 1.0h);
+        }
     }
+
     return half4(half3(finalColor), 1.0h);
 }
 
@@ -368,13 +375,20 @@ fragment half4 copyFragmentShaderHEVC_EDR(
         }
     }
 
-    if (params.isPQ == 1u) {
-        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE * REALITYKIT_PQ_EXTRA_LINEAR_SCALE;
-    } else if (params.isTargetDisplayP3 == 1u) {
-        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE * REALITYKIT_SDR_ON_DISPLAYP3_EXTRA;
-    } else {
-        finalColor *= REALITYKIT_UNLIT_HDR_LINEAR_SCALE;
+    if (full.mode == 2) {
+        if (in.uv.y < 0.15) {
+            float stepVal = floor(in.uv.x * 5.0);
+            float targetNits = 0.0;
+            if (stepVal == 1.0) targetNits = 100.0;
+            else if (stepVal == 2.0) targetNits = 203.0;
+            else if (stepVal == 3.0) targetNits = 500.0;
+            else if (stepVal == 4.0) targetNits = 1000.0;
+            
+            float3 testColor = targetNits / PQ_REFERENCE_WHITE_NITS;
+            return half4(half3(testColor), 1.0h);
+        }
     }
+
     return half4(half3(finalColor), 1.0h);
 }
 

@@ -117,9 +117,18 @@ The Vision OS Version is not available in the App Store. To download the latest 
     * **Bitrate:** 50mbps (Higher is supported but requires M2/M5 and strong network)
     * **Renderer:** Reality Kit
 
+* **How do I configure 5.1 or 7.1 Surround Sound?**
+    * Moonlight Vision natively requests 7.1 surround sound. For this to work, your host PC must output 5.1 or 7.1 audio so that Sunshine/Apollo can capture the discrete channels.
+    * 1. On your Windows Host, open the Sound Control Panel (Press `Win+R`, type `mmsys.cpl`).
+    * 2. Select your default playback device (or virtual audio cable) and click **Configure**.
+    * 3. Choose **7.1 Surround** or **5.1 Surround** and complete the wizard. *(If your physical audio device doesn't support 7.1, you can install a Virtual Audio Cable like VB-Cable, set it to 7.1, and make it the default device).*
+    * 4. Open the **Sunshine / Apollo Web UI** and navigate to the **Audio** tab.
+    * 5. Set the **Channels** configuration to `7.1` or `5.1` (or `Stereo` if you want to bypass surround entirely).
+    * 6. Restart Sunshine/Apollo.
+    * 7. In Moonlight Vision, cycle the audio button to **7.1 Surround** to enable native spatial processing.
+
 ## Feature Requests / Planned Features:
 * Microphone Support.
-* 7.1 Audio.
 * Updates to SDL3 (to fix PS4 touchpad issues).
 * Unpin immersive settings (to allow reset if window becomes too far/small).
 

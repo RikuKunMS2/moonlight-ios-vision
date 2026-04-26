@@ -34,6 +34,32 @@ struct UpdatesView: View {
 
 
                 Section(header: Text(viewModel.localized("latest_updates"))) { // Section for latest updates
+                    VStack(alignment: .leading) {
+                        Text("Version 11.0.20 (Commit b191da8)")
+                            .font(.headline)
+                        Text("- Concurrency and Network Handling: Moved blocking HTTP network calls (updateHost, refreshAppsFor) to background threads using Swift continuations. Wrapped state updates in ObservableConnectionManager with @mainactor.")
+                            .font(.body)
+                        Text("- Memory Management: Implemented logic to unload 3D assets, including the Studio USDZ and skybox textures, when the application enters the background or switches to passthrough mode.")
+                            .font(.body)
+                        Text("- HDR and Color Processing: Added pqExposure to settings. Updated DrawableVideoDecoder and Metal shaders for Rec.709, BT.2020, and SMPTE-C color spaces. Added explicit 10-bit format checks.")
+                            .font(.body)
+                        Text("- Window Lifecycle and Stability: Added detection for zombie streaming windows and redirection to main menu. Modified stream teardown sequence to use NotificationCenter. Changed shared singletons from @StateObject to @ObservedObject.")
+                            .font(.body)
+                        Text("- Performance Optimization: Throttled RealityKit mesh generation. Reduced the mDNS discovery polling rate.")
+                            .font(.body)
+                        Text("- Stream Lifecycle and Window Management: Added StreamModeSelectionOverlay (UIKit, RealityKit Volume, RealityKit Immersive). Resume and Stop buttons on main menu. Centralized stream state management (StreamLifecycleState).")
+                            .font(.body)
+                        Text("- Input and Control: Replaced InputCaptureView. Added GazeInputController for eye-tracking and pinch-to-click. Added Touch Mode. Support for swapping A/B and X/Y buttons. Fallback logic for controller haptics.")
+                            .font(.body)
+                        Text("- AV1 Video and HDR: Added AV1Parser.swift. Updated Shaders.metal for HDR (PQ curve, EDR, BT.2020, color grading). Set HDR setting default to 1.0. Shader-based rounded corners.")
+                            .font(.body)
+                        Text("- Environments and Audio: Added skyboxes and gradient textures for background dimming. Added screen tilt controls. Anchors spatial audio to the 3D scene entity (fixAudioForScene).")
+                            .font(.body)
+                        Text("- Credit this update to linggan-ua. Note: A later commit will address contribution attribution data accidentally cleared from file headers.")
+                            .font(.body)
+                    }
+                    .padding(.vertical)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     VStack(alignment: .leading) { // Original VStack for text alignment
                         Text("Version 11.0.17 (Nov 24, 2025)")
                                                     .font(.headline)

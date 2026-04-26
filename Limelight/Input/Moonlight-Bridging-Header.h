@@ -2,6 +2,10 @@
 //  Use this file to import your target's public headers that you would like to expose to Swift.
 //
 
+#if TARGET_OS_VISION
+#include <time.h>
+#endif
+
 #import "AppAssetManager.h"
 #import "AppDelegate.h"
 #import "ConnectionHelper.h"

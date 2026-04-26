@@ -6,7 +6,12 @@
 //  Copyright (c) 2015 Moonlight Stream. All rights reserved.
 //
 
+// 1. Import Connection.h FIRST (which imports Foundation.h to set up the environment properly)
 #import "Connection.h"
+
+// 2. NOW include time.h to resolve the nanosleep error without breaking cwchar
+#include <time.h>
+
 #import "Utils.h"
 
 #import <VideoToolbox/VideoToolbox.h>
@@ -19,6 +24,11 @@
 
 #include "Limelight.h"
 #include "opus_multistream.h"
+
+// FIX 1: Import CoreAudioRenderer OUTSIDE the @implementation block
+#ifdef TARGET_OS_VISION
+#import "CoreAudioRenderer.h"
+#endif
 
 @implementation Connection {
     SERVER_INFORMATION _serverInfo;
@@ -47,12 +57,23 @@ static void* audioBuffer;
 static void* rawAudioBuffer;
 static int audioFrameSize;
 
+#ifdef TARGET_OS_VISION
+static CoreAudioRenderer* audioRenderer;
+static OPUS_MULTISTREAM_CONFIGURATION visionOpusConfig;
+static OpusMSDecoder* visionOpusDecoder;
+static bool audioIsStopping;
+#endif // TARGET_OS_VISION
+
+// FIX 2: Define 'volume' so setVolume() compiles correctly
+volatile int volume = 127;
 
 void setVolume(int newVol) {
     volume = newVol;
 }
 
 static id<AnyVideoDecoderRenderer> __strong renderer;
+
+void ArCleanup(void);
 
 int DrDecoderSetup(int videoFormat, int width, int height, int redrawRate, void* context, int drFlags)
 {
@@ -199,6 +220,31 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
 int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, void* context, int flags)
 {
     int err;
+    
+#ifdef TARGET_OS_VISION
+    audioRenderer = [[CoreAudioRenderer alloc] initWithConfig:opusConfig];
+    if (!audioRenderer) {
+        Log(LOG_E, @"Failed to initialize audio subsystem\n");
+        return -1;
+    }
+
+    visionOpusConfig = *opusConfig;
+    visionOpusDecoder = opus_multistream_decoder_create(visionOpusConfig.sampleRate,
+                                                  visionOpusConfig.channelCount,
+                                                  visionOpusConfig.streams,
+                                                  visionOpusConfig.coupledStreams,
+                                                  visionOpusConfig.mapping,
+                                                  &err);
+
+    if (visionOpusDecoder == NULL) {
+        Log(LOG_E, @"Failed to create Opus decoder");
+        ArCleanup();
+        return -1;
+    }
+    
+    // CoreAudioRenderer handles its own start/stop logic and AVAudioSession
+    return 0;
+#else
     SDL_AudioSpec want, have;
     
     if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
@@ -244,21 +290,35 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     // Start playback
     SDL_PauseAudioDevice(audioDevice, 0);
     
-#ifdef TARGET_OS_VISION
-    // Force direct stereo and voice chat microphone by default
-    [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback withOptions:AVAudioSessionCategoryOptionMixWithOthers error:nil];
-    [[AVAudioSession sharedInstance] setMode:AVAudioSessionModeVoiceChat error:nil];
-    [[AVAudioSession sharedInstance] setIntendedSpatialExperience:AVAudioSessionSpatialExperienceBypassed options:@{} error:nil];
-#else
     // Disable lowering volume of other audio streams (SDL sets AVAudioSessionCategoryOptionDuckOthers by default)
     [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback withOptions:AVAudioSessionCategoryOptionMixWithOthers error:nil];
-#endif
     
     return 0;
+#endif // TARGET_OS_VISION
+}
+
+void ArStart(void) {
+#ifdef TARGET_OS_VISION
+    audioIsStopping = false;
+    [audioRenderer start];
+#endif // TARGET_OS_VISION
+}
+
+void ArStop(void) {
+#ifdef TARGET_OS_VISION
+    [audioRenderer stop];
+    audioIsStopping = true;
+#endif // TARGET_OS_VISION
 }
 
 void ArCleanup(void)
 {
+#ifdef TARGET_OS_VISION
+    if (visionOpusDecoder != NULL) {
+        opus_multistream_decoder_destroy(visionOpusDecoder);
+        visionOpusDecoder = NULL;
+    }
+#else
     if (opusDecoder != NULL) {
         opus_multistream_decoder_destroy(opusDecoder);
         opusDecoder = NULL;
@@ -280,12 +340,36 @@ void ArCleanup(void)
     }
     
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
+#endif // TARGET_OS_VISION
 }
 
 void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
 {
     int decodeLen;
     
+#ifdef TARGET_OS_VISION
+    if (audioIsStopping) return;
+
+    CFTimeInterval decodeStartTime = CACurrentMediaTime();
+
+    int desiredBufferSize;
+    void* buffer = [audioRenderer getAudioBuffer:&desiredBufferSize];
+
+    if (!buffer) {
+        // Drop the sample
+        return;
+    }
+
+    int decodeRet = opus_multistream_decode_float(visionOpusDecoder, (unsigned char *)sampleData, sampleLength,
+                                            (float*)buffer, desiredBufferSize / sizeof(float) / visionOpusConfig.channelCount, 0);
+
+    if (decodeRet > 0) {
+        int bytesWritten = decodeRet * sizeof(float) * visionOpusConfig.channelCount;
+        if (![audioRenderer submitAudio:bytesWritten opusBytes:sampleLength decodeStartTime:decodeStartTime]) {
+            // Also drop the sample
+        }
+    }
+#else
     // Don't queue if there's already more than 30 ms of audio data waiting
     // in Moonlight's audio queue.
     if (LiGetPendingAudioDuration() > 30) {
@@ -317,6 +401,7 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
             Log(LOG_E, @"Failed to queue audio sample: %s\n", SDL_GetError());
         }
     }
+#endif // TARGET_OS_VISION
 }
 
 void ClStageStarting(int stage)
@@ -543,6 +628,7 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _arCallbacks.init = ArInit;
     _arCallbacks.cleanup = ArCleanup;
     _arCallbacks.decodeAndPlaySample = ArDecodeAndPlaySample;
+    // We use arbitrary duration because Opus packets may vary in size/duration
     _arCallbacks.capabilities = CAPABILITY_SUPPORTS_ARBITRARY_AUDIO_DURATION;
 
     LiInitializeConnectionCallbacks(&_clCallbacks);

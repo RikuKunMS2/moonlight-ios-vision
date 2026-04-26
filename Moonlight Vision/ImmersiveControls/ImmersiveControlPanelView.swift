@@ -17,8 +17,7 @@ struct ImmersiveControlPanelView: View {
     // Debounce timer for settings save
     @State private var saveTimer: Timer?
     
-    // Spatial audio mode state
-    @State private var spatialAudioMode: Bool = true
+    // Spatial audio mode state is now in viewModel.streamSettings.spatialAudioMode
     
     // Delay pinned sliders ~1.5s after pin completes to avoid animation stutter
     @State private var showPinnedSliders = false
@@ -141,6 +140,7 @@ struct ImmersiveControlPanelView: View {
         saveTimer?.invalidate()
         saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
             controlState.saveSettings?()
+            SharePlayManager.shared.broadcastCurrentTransform()
         }
     }
     
@@ -171,6 +171,21 @@ struct ImmersiveControlPanelView: View {
                     controlState.onEnvironmentChange?(newValue)
                 }
                 
+                if controlState.selectedEnvironmentState != .none {
+                    Toggle(isOn: Binding(
+                        get: { viewModel.streamSettings.reactiveLightingEnabled },
+                        set: { newValue in
+                            viewModel.streamSettings.reactiveLightingEnabled = newValue
+                            viewModel.streamSettings.save()
+                        }
+                    )) {
+                        Label(viewModel.localized("reactive_lighting"), systemImage: "wand.and.rays")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .tint(.white)
+                }
+                
             }
             
             // Quick actions
@@ -199,18 +214,17 @@ struct ImmersiveControlPanelView: View {
                     }
                     
                     // Spatial audio
+                    let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
                     ModernActionTile(
-                        icon: spatialAudioMode ? "speaker.wave.3.fill" : "headphones",
-                        title: spatialAudioMode ? viewModel.localized("spatial_audio") : viewModel.localized("stereo_audio"),
-                        isActive: spatialAudioMode
+                        icon: currentMode == .surround ? "speaker.wave.3.fill" : (currentMode == .window ? "person.fill.viewfinder" : "headphones"),
+                        title: currentMode == .surround ? "7.1 Surround" : (currentMode == .window ? viewModel.localized("spatial_audio") : viewModel.localized("stereo_audio")),
+                        isActive: currentMode != .stereo
                     ) {
                         withAnimation {
-                            spatialAudioMode.toggle()
-                            if spatialAudioMode {
-                                AudioHelpers.fixAudioForSurroundForCurrentWindow()
-                            } else {
-                                AudioHelpers.fixAudioForDirectStereo()
-                            }
+                            let nextModeRaw = (currentMode.rawValue + 1) % 3
+                            viewModel.streamSettings.spatialAudioMode = nextModeRaw
+                            let nextMode = SpatialAudioMode(rawValue: nextModeRaw) ?? .window
+                            AudioHelpers.applySpatialAudioMode(nextMode)
                         }
                     }
                     
@@ -239,6 +253,15 @@ struct ImmersiveControlPanelView: View {
                         isActive: viewModel.streamSettings.statsOverlay
                     ) {
                         withAnimation { viewModel.streamSettings.statsOverlay.toggle() }
+                    }
+                    
+                    // SharePlay
+                    ModernActionTile(
+                        icon: "shareplay",
+                        title: "SharePlay",
+                        isActive: false
+                    ) {
+                        SharePlayManager.shared.startSharePlay()
                     }
                 }
                 
@@ -291,6 +314,24 @@ struct ImmersiveControlPanelView: View {
                         format: "%.2f",
                         step: 0.01
                     )
+                    
+                    GridRow {
+                        Text(viewModel.localized("hdr_calibration_mode"))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .gridColumnAlignment(.leading)
+                            .padding(.trailing, 8)
+                        
+                        HStack {
+                            Toggle("", isOn: $controlState.isCalibrationModeActive)
+                                .labelsHidden()
+                                .tint(.white)
+                            Spacer()
+                        }
+                        
+                        Color.clear
+                            .frame(width: 60)
+                    }
                 }
                 
                 // Curvature

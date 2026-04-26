@@ -63,6 +63,7 @@ class StreamControlState: ObservableObject {
     
     // MARK: - HDR State
     var needsHdr: Bool = false
+    @Published var isCalibrationModeActive: Bool = false
     
     private init() {
         // Load saved immersive screen settings

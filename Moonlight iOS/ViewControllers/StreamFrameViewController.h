@@ -29,6 +29,7 @@ typedef void (^noargCallbackType)(void);
 
 -(void)updatePreferredDisplayMode:(BOOL)streamActive;
 - (void)stopStream;
+- (void)startStream;
 - (void)toggleKeyboard;
 - (void)setAbsoluteTouchMode:(BOOL)enabled;
 

@@ -110,6 +110,8 @@
 "starting_stream" = "Starting %@...";
 
 // Settings
+"general_settings" = "General Settings";
+"input_audio_settings" = "Input & Audio";
 "app_language" = "App Language";
 "video_settings" = "Video settings";
 "resolution" = "Resolution";
@@ -218,6 +220,7 @@
 "collapse_panel" = "Collapse Panel";
 "full_immersion" = "Full Immersion";
 "lock_aspect_ratio" = "Lock Aspect Ratio";
+"reactive_lighting" = "Reactive Lighting";
 "locked" = "Locked";
 "lock_position" = "Lock Position";
 "unpin_studio" = "Unpin to Studio";

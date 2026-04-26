@@ -17,510 +17,6 @@ import ImageIO
 import os
 
 
-
-final class ThreadSafeHDRSettings: @unchecked Sendable {
-    private var params: HDRParams
-    private let lock = NSLock()
-    init(params: HDRParams) { self.params = params }
-    var value: HDRParams {
-        get { lock.lock(); defer { lock.unlock() }; return params }
-        set { lock.lock(); defer { lock.unlock() }; params = newValue }
-    }
-}
-
-class HeadPositionStorage {
-    var positionInScreenSpace: SIMD3<Float> = .zero
-}
-
-class SIMD3Storage {
-    var value: SIMD3<Float> = .zero
-}
-
-class MutableBox<T> {
-    var value: T
-    init(_ value: T) { self.value = value }
-}
-
-struct InputCaptureView: UIViewRepresentable {
-    let controllerSupport: ControllerSupport
-    @Binding var showKeyboard: Bool
-    var isControllerMode: Bool  // True only when inputMode == .controller
-    var curvature: Float
-    var streamConfig: StreamConfiguration
-    let headStorage: HeadPositionStorage
-    
-    func makeUIView(context: Context) -> InputCaptureUIView {
-        let view = InputCaptureUIView()
-        view.curvature = curvature
-        view.controllerSupport = controllerSupport
-        view.streamConfig = streamConfig
-        view.headStorage = headStorage
-        view.allowTouchPassthrough = !showKeyboard && !isControllerMode
-        
-        view.isMultipleTouchEnabled = true
-        view.isUserInteractionEnabled = true
-        view.backgroundColor = UIColor.black.withAlphaComponent(0.01)
-        
-        return view
-    }
-    
-    func updateUIView(_ uiView: InputCaptureUIView, context: Context) {
-        uiView.curvature = curvature
-        uiView.streamConfig = streamConfig
-        uiView.headStorage = headStorage
-        uiView.allowTouchPassthrough = !showKeyboard && !isControllerMode
-        uiView.showVirtualKeyboard = showKeyboard
-        
-        // ALWAYS aggressively reclaim first responder (needed for controller input)
-        if !uiView.isFirstResponder {
-            _ = uiView.becomeFirstResponder()
-            
-            // Double-check and force if needed
-            if !uiView.isFirstResponder {
-                DispatchQueue.main.async {
-                    _ = uiView.becomeFirstResponder()
-                }
-            }
-        }
-    }
-}
-
-class InputCaptureUIView: UIView, UIKeyInput {
-    var controllerSupport: ControllerSupport?
-    var curvature: Float = 0.0
-    var streamConfig: StreamConfiguration?
-    var headStorage: HeadPositionStorage?
-    var allowTouchPassthrough: Bool = true
-    var firstResponderCheckTimer: Timer?
-    var showVirtualKeyboard: Bool = false {
-        didSet {
-            if oldValue != showVirtualKeyboard {
-                reloadInputViews()
-            }
-        }
-    }
-    
-    private let maxCurveAngle: Float = 1.3
-    
-    // Suppress software keyboard if showVirtualKeyboard is false, but still allow hardware input
-    override var inputView: UIView? {
-        return showVirtualKeyboard ? nil : UIView()
-    }
-    
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        setupGestures()
-        startFirstResponderMonitoring()
-    }
-    
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        setupGestures()
-        startFirstResponderMonitoring()
-    }
-    
-    private func startFirstResponderMonitoring() {
-        // Periodically check and reclaim first responder if lost (needed for controller input)
-        firstResponderCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            if !self.isFirstResponder {
-                _ = self.becomeFirstResponder()
-            }
-        }
-    }
-    
-    deinit {
-        firstResponderCheckTimer?.invalidate()
-    }
-    
-    private func setupGestures() {
-        // From commit 12250ee: Attach GCEventInteraction for reliable controller input
-        DispatchQueue.main.async {
-            self.controllerSupport?.attachGCEventInteraction(to: self)
-        }
-    }
-    
-    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        if allowTouchPassthrough {
-            return nil
-        }
-        return super.hitTest(point, with: event)
-    }
-    
-    override var canBecomeFocused: Bool { true }
-    override var canBecomeFirstResponder: Bool { true }
-    var hasText: Bool { true }
-    
-    func insertText(_ text: String) {
-        let cString = text.cString(using: .utf8)
-        cString?.withUnsafeBufferPointer { ptr in
-            if let base = ptr.baseAddress {
-                LiSendUtf8TextEvent(base, UInt32(text.utf8.count))
-            }
-        }
-    }
-    
-    func deleteBackward() {
-        LiSendKeyboardEvent(0x08, 0x03, 0)
-        usleep(50 * 1000)
-        LiSendKeyboardEvent(0x08, 0x04, 0)
-    }
-    
-    // Handle special keys like Return/Enter
-    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        var handled = false
-        
-        for press in presses {
-            if KeyboardSupport.sendKeyEvent(for: press, down: true) {
-                handled = true
-            }
-        }
-        
-        if !handled {
-            super.pressesBegan(presses, with: event)
-        }
-    }
-    
-    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        var handled = false
-        
-        for press in presses {
-            if KeyboardSupport.sendKeyEvent(for: press, down: false) {
-                handled = true
-            }
-        }
-        
-        if !handled {
-            super.pressesEnded(presses, with: event)
-        }
-    }
-}
-
-let MAX_WIDTH_METERS: Float = 2.0
-let MAX_CURVE_ANGLE: Float = 1.3
-let CURVED_MAX_WIDTH_METERS: Float = MAX_WIDTH_METERS
-let CURVED_MAX_ANGLE: Float = MAX_CURVE_ANGLE
-let GAZE_VERTICAL_OFFSET: Float = 0.015  // Small upward offset to compensate for eye-to-cursor alignment
-
-extension CollisionGroup {
-    static let screenEntity = CollisionGroup(rawValue: 1 << 0)
-    static let uiElements = CollisionGroup(rawValue: 1 << 1)
-}
-
-
-enum InputMode: Int, CaseIterable {
-    case screenMove = 0
-    case controller = 1
-    case gazeControl = 2
-    
-    var localizedKey: String {
-        switch self {
-        case .screenMove: return "input_mode_screen_adjust"
-        case .controller: return "input_mode_controller"
-        case .gazeControl: return "input_mode_gaze"
-        }
-    }
-    
-    var displayName: String {
-        switch self {
-        case .screenMove: return "Screen Adjust Mode"
-        case .controller: return "Controller Mode"
-        case .gazeControl: return "Gaze Control Mode"
-        }
-    }
-    
-    var icon: String {
-        switch self {
-        case .screenMove: return "arrow.up.and.down.and.arrow.left.and.right"
-        case .controller: return "gamecontroller.fill"
-        case .gazeControl: return "eye.fill"
-        }
-    }
-    
-    func next() -> InputMode {
-        let allCases = InputMode.allCases
-        let idx = allCases.firstIndex(of: self) ?? 0
-        return allCases[(idx + 1) % allCases.count]
-    }
-}
-
-
-class GazeInputController {
-    private let longPressActivationDelay: TimeInterval = 0.650
-    private let doubleTapDeadZoneDelay: TimeInterval = 0.250  // 250ms
-    private let doubleTapDeadZoneDelta: Float = 0.025  // 2.5% of screen (normalized)
-    // Threshold to cancel long press (roughly size of a button in UV space)
-    private let movementTolerance: Float = 0.015
-
-    // State
-    private(set) var pinchActive = false
-    private var longPressTimer: Timer?
-    private var startUV: SIMD2<Float> = .zero
-    private var isRightClickMode = false  // Track if we swapped to right-click
-    private var lastClickTime: TimeInterval = 0  // Track last click for double-tap detection
-    private var lastClickUV: SIMD2<Float> = .zero  // Track last click position
-
-    var streamConfig: StreamConfiguration?
-    
-    // Button Constants (matching moonlight-common-c)
-    private let ACTION_PRESS: Int8 = 0x07
-    private let ACTION_RELEASE: Int8 = 0x08
-    private let BUTTON_LEFT: Int32 = 0x01
-    private let BUTTON_RIGHT: Int32 = 0x03
-    
-    func onPinchBegan(at uv: SIMD2<Float>) {
-        guard !pinchActive else { return }
-        pinchActive = true
-        startUV = uv
-        isRightClickMode = false
-
-        // Check if we're in the double-tap dead zone
-        let now = CACurrentMediaTime()
-        let timeSinceLastClick = now - lastClickTime
-        
-        // Calculate distance from last click
-        let dx = uv.x - lastClickUV.x
-        let dy = uv.y - lastClickUV.y
-        let distance = sqrt(dx * dx + dy * dy)
-        
-        // Don't reposition mouse for clicks within the double-tap deadzone
-        // This is critical for double-clicking to work properly
-        if timeSinceLastClick > doubleTapDeadZoneDelay || distance > doubleTapDeadZoneDelta {
-            sendMousePosition(uv: uv)
-        }
-
-        // Press Left Button Immediately ("Shoot First")
-        // This makes clicks instant and drags seamless.
-        sendMouseButton(action: ACTION_PRESS, button: BUTTON_LEFT)
-
-        // Start Long Press Timer (for Right Click)
-        // Always start the timer - it will be cancelled if we're dragging
-        longPressTimer?.invalidate()
-        longPressTimer = Timer.scheduledTimer(withTimeInterval: longPressActivationDelay, repeats: false) { [weak self] _ in
-            self?.triggerLongPress()
-        }
-        
-        lastClickTime = now
-        lastClickUV = uv
-    }
-    
-    func onPinchChanged(at uv: SIMD2<Float>) {
-        // Always update position (Dragging happens naturally because Left is already Down)
-        sendMousePosition(uv: uv)
-        
-        // Check distance to see if we should cancel the "Right Click" timer
-        if longPressTimer != nil {
-            let dx = uv.x - startUV.x
-            let dy = uv.y - startUV.y
-            let dist = sqrt(dx*dx + dy*dy)
-            
-            if dist > movementTolerance {
-                // Moved too far, user is dragging. Cancel Right Click timer.
-                longPressTimer?.invalidate()
-                longPressTimer = nil
-            }
-        }
-    }
-    
-    func onPinchEnded() {
-        guard pinchActive else { return }
-        pinchActive = false
-        
-        // Cancel timer if it hasn't fired yet
-        longPressTimer?.invalidate()
-        longPressTimer = nil
-        
-        // Release buttons based on what mode we're in
-        if isRightClickMode {
-            // Release Right Button
-            sendMouseButton(action: ACTION_RELEASE, button: BUTTON_RIGHT)
-        } else {
-            // Release Left Button (Standard Click / Drag End)
-            sendMouseButton(action: ACTION_RELEASE, button: BUTTON_LEFT)
-        }
-        
-        isRightClickMode = false
-    }
-    
-    private func triggerLongPress() {
-        // User held still! Swap Left Click for Right Click.
-        isRightClickMode = true
-        
-        // 1. Release Left (Cancel the click/drag we started)
-        sendMouseButton(action: ACTION_RELEASE, button: BUTTON_LEFT)
-        
-        // 2. Press Right
-        sendMouseButton(action: ACTION_PRESS, button: BUTTON_RIGHT)
-    }
-    
-    private func sendMousePosition(uv: SIMD2<Float>) {
-        guard let config = streamConfig else { return }
-        let x = Int16(uv.x * Float(config.width))
-        let y = Int16(uv.y * Float(config.height))
-        LiSendMousePositionEvent(x, y, Int16(config.width), Int16(config.height))
-    }
-    
-    // MARK: - Touch Mode (Relative Mouse Movement)
-    // For trackpad-style cursor control
-    // Works like a real trackpad:
-    // - Drag = move cursor only (no click)
-    // - Quick tap = click
-    // - Tap + hold + drag = click and drag
-    
-    private var lastTouchPosition: SIMD3<Float>? = nil
-    private var touchStartPosition: SIMD3<Float>? = nil
-    private var touchStartTime: TimeInterval = 0
-    private var hasMovedInTouch = false
-    private var touchClickTimer: Timer? = nil
-    private var touchModeInitialized = false  // Track if cursor has been centered
-    private let touchTapThreshold: Float = 0.01  // 1cm movement = drag, not tap
-    private let touchTapTimeThreshold: TimeInterval = 0.2  // 200ms = quick tap
-    
-    func onTouchDragBegan(at worldPos: SIMD3<Float>) {
-        guard !pinchActive else { return }
-        pinchActive = true
-        lastTouchPosition = worldPos
-        touchStartPosition = worldPos
-        touchStartTime = CACurrentMediaTime()
-        hasMovedInTouch = false
-        isRightClickMode = false
-        
-        // On first touch in Touch mode, center the cursor
-        if !touchModeInitialized {
-            forceCursorToCenter()
-            touchModeInitialized = true
-        }
-        
-        // DON'T press any button yet - wait to see if it's a tap or drag
-        // Start a timer to detect "tap and hold" for click-drag
-        touchClickTimer?.invalidate()
-        touchClickTimer = Timer.scheduledTimer(withTimeInterval: touchTapTimeThreshold, repeats: false) { [weak self] _ in
-            guard let self = self else { return }
-            // If still holding after 200ms and haven't moved much, it's a click-drag
-            if !self.hasMovedInTouch {
-                self.sendMouseButton(action: self.ACTION_PRESS, button: self.BUTTON_LEFT)
-            }
-        }
-    }
-    
-    func onTouchDragChanged(at worldPos: SIMD3<Float>) {
-        guard let lastPos = lastTouchPosition,
-              let startPos = touchStartPosition else { return }
-        
-        // Calculate delta in world space
-        let delta = worldPos - lastPos
-        
-        // Check if we've moved significantly from start
-        let totalDelta = worldPos - startPos
-        let totalDist = simd_length(totalDelta)
-        
-        if totalDist > touchTapThreshold {
-            hasMovedInTouch = true
-            // Cancel the click timer - this is a drag, not a tap
-            touchClickTimer?.invalidate()
-            touchClickTimer = nil
-        }
-        
-        // Convert 3D delta to 2D screen movement
-        // Scale factor: adjust sensitivity (higher = more sensitive)
-        let sensitivity: Float = 800.0
-        let deltaX = delta.x * sensitivity
-        let deltaY = -delta.y * sensitivity  // Invert Y for natural movement
-        
-        // Send relative mouse movement (cursor moves, no button pressed)
-        sendRelativeMouseMovement(dx: deltaX, dy: deltaY)
-        
-        lastTouchPosition = worldPos
-    }
-    
-    func onTouchDragEnded() {
-        guard pinchActive else { return }
-        pinchActive = false
-        
-        let now = CACurrentMediaTime()
-        let holdDuration = now - touchStartTime
-        
-        // Cancel timers
-        touchClickTimer?.invalidate()
-        touchClickTimer = nil
-        longPressTimer?.invalidate()
-        longPressTimer = nil
-        
-        // Determine what kind of gesture this was
-        if !hasMovedInTouch && holdDuration < touchTapTimeThreshold {
-            // Quick tap without movement = CLICK
-            sendMouseButton(action: ACTION_PRESS, button: BUTTON_LEFT)
-            // Release after a tiny delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                self?.sendMouseButton(action: self?.ACTION_RELEASE ?? 0x08, button: self?.BUTTON_LEFT ?? 0x01)
-            }
-        } else if !hasMovedInTouch && holdDuration >= touchTapTimeThreshold {
-            // Held still for a while = click was already sent by timer, now release
-            sendMouseButton(action: ACTION_RELEASE, button: BUTTON_LEFT)
-        } else {
-            // Movement happened = just cursor movement, no click needed
-            // (unless click timer fired for click-drag, in which case release it)
-            if holdDuration >= touchTapTimeThreshold {
-                sendMouseButton(action: ACTION_RELEASE, button: BUTTON_LEFT)
-            }
-        }
-        
-        lastTouchPosition = nil
-        touchStartPosition = nil
-        hasMovedInTouch = false
-        isRightClickMode = false
-    }
-    
-    private var currentMouseX: Int16 = 0
-    private var currentMouseY: Int16 = 0
-    
-    private func sendRelativeMouseMovement(dx: Float, dy: Float) {
-        guard let config = streamConfig else { return }
-        
-        // Update internal cursor position
-        currentMouseX = Int16(max(0, min(Float(config.width), Float(currentMouseX) + dx)))
-        currentMouseY = Int16(max(0, min(Float(config.height), Float(currentMouseY) + dy)))
-        
-        LiSendMousePositionEvent(currentMouseX, currentMouseY, Int16(config.width), Int16(config.height))
-    }
-    
-    func forceCursorToCenter() {
-        guard let config = streamConfig else { return }
-        
-        // Calculate exact center pixels
-        let centerX = Int16(config.width / 2)
-        let centerY = Int16(config.height / 2)
-        
-        // Update internal tracking
-        currentMouseX = centerX
-        currentMouseY = centerY
-        
-        print("🎯 Forcing Mouse to Center: \(centerX), \(centerY)")
-        LiSendMousePositionEvent(centerX, centerY, Int16(config.width), Int16(config.height))
-    }
-
-    private func sendMouseButton(action: Int8, button: Int32) {
-        LiSendMouseButtonEvent(action, button)
-    }
-    
-    func cleanup() {
-        longPressTimer?.invalidate()
-        longPressTimer = nil
-        touchClickTimer?.invalidate()
-        touchClickTimer = nil
-        lastTouchPosition = nil
-        touchStartPosition = nil
-        touchModeInitialized = false  // Reset for next time
-        if pinchActive {
-            // Safety release both buttons
-            sendMouseButton(action: ACTION_RELEASE, button: BUTTON_LEFT)
-            sendMouseButton(action: ACTION_RELEASE, button: BUTTON_RIGHT)
-        }
-        pinchActive = false
-        isRightClickMode = false
-    }
-}
-
 struct RealityKitStreamView: View {
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @Environment(\.openWindow) private var openWindow
@@ -558,13 +54,38 @@ struct RealityKitStreamView: View {
             // Zombie window: visionOS restored this scene after a reboot or long
             // sleep but the process has no active stream (StreamConfiguration was
             // never persisted across a process kill).  Redirect to main menu.
-            Color.black
-                .ignoresSafeArea()
-                .task {
-                    guard !viewModel.activelyStreaming else { return }
-                    print("[RealityKitStreamView] Zombie scene detected (nil config, not streaming). Redirecting to main menu.")
-                    redirectZombieToMainMenu()
+            ZStack {
+                Color.black
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 20) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 64))
+                        .foregroundStyle(Color(red: 1.0, green: 0.78, blue: 0.32))
+                    Text(viewModel.localized("stream_stopped"))
+                        .font(.title)
+                        .bold()
+                        .foregroundStyle(.white)
+                    Text("The stream window could not be automatically resumed.")
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.8))
+                    
+                    Button {
+                        redirectZombieToMainMenu()
+                    } label: {
+                        Label(viewModel.localized("open_main_menu"), systemImage: "house.fill")
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .padding(.top, 16)
                 }
+            }
+            .task {
+                guard !viewModel.activelyStreaming else { return }
+                print("[RealityKitStreamView] Zombie scene detected (nil config, not streaming). Redirecting to main menu.")
+                redirectZombieToMainMenu()
+            }
         }
     }
 
@@ -671,7 +192,7 @@ struct _RealityKitStreamView: View {
     @State private var shouldClose = false
     @State private var hasPerformedTeardown = false
     @State private var needsResume = false
-    @State private var spatialAudioMode: Bool = true
+    // spatialAudioMode is now in viewModel.streamSettings.spatialAudioMode
     @State private var statsOverlayText: String = ""
     @State private var statsTimer: Timer?
     @State private var showScaleHUD: Bool = false
@@ -842,6 +363,11 @@ struct _RealityKitStreamView: View {
             .volumeBaseplateVisibility(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
             .supportedVolumeViewpoints(.front)
             .preferredSurroundingsEffect(!isImmersive && viewModel.streamSettings.dimPassthrough ? .systemDark : nil)
+            .ornament(attachmentAnchor: .scene(.bottom)) {
+                if showVirtualKeyboard {
+                    PCModifierToolbar()
+                }
+            }
         
         let lifecycleApplied = baseView
             .task { await setupMaterial() }
@@ -980,7 +506,7 @@ struct _RealityKitStreamView: View {
             }
         
         // Split into a second chain to help the type checker
-        let controlStateSynced = stateChangesApplied
+        let controlStateSyncedPart1 = stateChangesApplied
             .onChange(of: tiltAngle) { _, newValue in
                 controlState.tiltAngle = newValue
             }
@@ -1018,6 +544,11 @@ struct _RealityKitStreamView: View {
                     updateDimmerDomesState()
                 }
             }
+            
+        let controlStateSynced = controlStateSyncedPart1
+            .onChange(of: controlState.isCalibrationModeActive) { _, _ in
+                if viewModel.streamSettings.enableHdr { updateHDRParams() }
+            }
             .onChange(of: viewModel.streamSettings.realitykitRendererCurvature) { _, newValue in
                 sliderCurvature = newValue
             }
@@ -1035,6 +566,15 @@ struct _RealityKitStreamView: View {
             }
             .onChange(of: viewModel.streamSettings.pqExposure) { _, _ in
                 if viewModel.streamSettings.enableHdr { updateHDRParams() }
+            }
+            .onChange(of: viewModel.streamSettings.reactiveLightingEnabled) { _, newValue in
+                updateDimmerDomesState()
+                if newValue {
+                    stopMoonlightCycle()
+                    startReactiveLerp()
+                } else if dimLevel != 2 && dimLevel != 10 && dimLevel != 13 {
+                    stopReactiveLerp()
+                }
             }
 
         return controlStateSynced
@@ -1390,11 +930,8 @@ struct _RealityKitStreamView: View {
                 controlsHighlighted = true
             }
             startHighlightTimer()
-            if self.spatialAudioMode {
-                AudioHelpers.fixAudioForSurroundForCurrentWindow()
-            } else {
-                AudioHelpers.fixAudioForDirectStereo()
-            }
+            let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
+            AudioHelpers.applySpatialAudioMode(currentMode)
         }
     }
 
@@ -1454,7 +991,7 @@ struct _RealityKitStreamView: View {
             inputMode = InputMode(rawValue: defaultMode) ?? .gazeControl
             print("[StreamView] Initialized input mode from settings: \(inputMode.displayName)")
 
-            spatialAudioMode = true
+            // Spatial audio is read from streamSettings, no need to reset it here
 
             if needsHdr {
                 hdrParams.mode = 1
@@ -1755,6 +1292,7 @@ struct _RealityKitStreamView: View {
                     startHighlightTimer()
                     // Sync position back to controlState for slider display
                     controlState.immersivePosition = screenPosition
+                    SharePlayManager.shared.broadcastCurrentTransform()
                     
                 case .gazeControl:
                     // Always cleanup gaze state
@@ -1808,6 +1346,7 @@ struct _RealityKitStreamView: View {
                 startHighlightTimer()
                 // Sync scale back to controlState for slider display
                 controlState.immersiveScale = screenScale
+                SharePlayManager.shared.broadcastCurrentTransform()
             }
     }
     
@@ -2200,7 +1739,7 @@ struct _RealityKitStreamView: View {
             saturation: isHDRPath ? viewModel.streamSettings.saturation : 1.0,
             brightness: 0.0,
             pqExposure: isHDRPath ? viewModel.streamSettings.pqExposure : 1.0,
-            mode: isHDRPath ? max(hdrParams.mode, 1) : 0
+            mode: isHDRPath ? (controlState.isCalibrationModeActive ? 2 : max(hdrParams.mode, 1)) : 0
         )
         safeHDRSettings.value = params
     }
@@ -3378,13 +2917,13 @@ struct _RealityKitStreamView: View {
 
     private func updateDimmerDomesState() {
         dimmerDome?.isEnabled = (dimLevel == 1)
-        dimmerDomePurple?.isEnabled = (dimLevel >= 2 && dimLevel <= 14)
+        dimmerDomePurple?.isEnabled = (dimLevel >= 2 && dimLevel <= 14) || viewModel.streamSettings.reactiveLightingEnabled
         
         
     }
 
     private func updateDimmerDomes(content: RealityViewContent) {
-        let isReactiveMode = (dimLevel == 2 || dimLevel == 10 || dimLevel == 12)
+        let isReactiveMode = (dimLevel == 2 || dimLevel == 10 || dimLevel == 12 || viewModel.streamSettings.reactiveLightingEnabled)
         
         guard dimLevel != lastAppliedDimLevelBox.value else { return }
         lastAppliedDimLevelBox.value = dimLevel
@@ -3819,7 +3358,7 @@ struct _RealityKitStreamView: View {
         }
         
         reactiveLerpTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { _ in
-            guard (self.dimLevel == 2 || self.dimLevel == 10), let purple = self.dimmerDomePurple else { return }
+            guard (self.dimLevel == 2 || self.dimLevel == 10 || self.viewModel.streamSettings.reactiveLightingEnabled), let purple = self.dimmerDomePurple else { return }
             
             let lerpFactor: CGFloat = 0.15
             
@@ -3887,11 +3426,8 @@ struct _RealityKitStreamView: View {
     }
     
     private func fixAudioForCurrentMode() {
-        if self.spatialAudioMode {
-            AudioHelpers.fixAudioForSurroundForCurrentWindow()
-        } else {
-            AudioHelpers.fixAudioForDirectStereo()
-        }
+        let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
+        AudioHelpers.applySpatialAudioMode(currentMode)
     }
 
     private func updateScreenInteractivity() {
@@ -4162,4 +3698,61 @@ extension Notification.Name {
     static let resumeStreamFromMenu = Notification.Name("ResumeStreamFromMenu")
     static let rkStreamDidTeardown = Notification.Name("RKStreamDidTeardown")
     static let immersiveScreenWakeRequested = Notification.Name("ImmersiveScreenWakeRequested")
+}
+
+struct PCModifierToolbar: View {
+    @State private var ctrlActive = false
+    @State private var altActive = false
+    @State private var shiftActive = false
+    @State private var winActive = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button("Esc") { sendInstantKey(0x1B) }
+                .buttonStyle(.bordered)
+            Button("Tab") { sendInstantKey(0x09) }
+                .buttonStyle(.bordered)
+            
+            Divider().frame(height: 24)
+            
+            Toggle("Win", isOn: Binding(get: { winActive }, set: { val in
+                winActive = val; sendToggleKey(0x5B, down: val)
+            })).toggleStyle(.button)
+            
+            Toggle("Ctrl", isOn: Binding(get: { ctrlActive }, set: { val in
+                ctrlActive = val; sendToggleKey(0xA2, down: val)
+            })).toggleStyle(.button)
+            
+            Toggle("Alt", isOn: Binding(get: { altActive }, set: { val in
+                altActive = val; sendToggleKey(0xA4, down: val)
+            })).toggleStyle(.button)
+            
+            Toggle("Shift", isOn: Binding(get: { shiftActive }, set: { val in
+                shiftActive = val; sendToggleKey(0xA0, down: val)
+            })).toggleStyle(.button)
+        }
+        .padding(12)
+        .glassBackgroundEffect()
+    }
+    
+    private func sendInstantKey(_ keyCode: Int16) {
+        LiSendKeyboardEvent(keyCode, 0x03, 0)
+        usleep(50 * 1000)
+        LiSendKeyboardEvent(keyCode, 0x04, 0)
+    }
+    
+    private func sendToggleKey(_ keyCode: Int16, down: Bool) {
+        LiSendKeyboardEvent(keyCode, down ? 0x03 : 0x04, 0)
+    }
+}
+
+let MAX_WIDTH_METERS: Float = 2.0
+let MAX_CURVE_ANGLE: Float = 1.3
+let CURVED_MAX_WIDTH_METERS: Float = MAX_WIDTH_METERS
+let CURVED_MAX_ANGLE: Float = MAX_CURVE_ANGLE
+let GAZE_VERTICAL_OFFSET: Float = 0.015
+
+extension CollisionGroup {
+    static let screenEntity = CollisionGroup(rawValue: 1 << 0)
+    static let uiElements = CollisionGroup(rawValue: 1 << 1)
 }

@@ -19,7 +19,6 @@ struct StreamControls<Additions: View>: View {
     let closeAction: () -> Void
     let toggleKeyboardAction: (() -> Void)?
 
-    @State private var spatialAudioMode: Bool = true // From Razorub
     @State private var volumeBeforeMute: Float = 127
     
     @ViewBuilder var additions: () -> Additions
@@ -64,18 +63,15 @@ struct StreamControls<Additions: View>: View {
                 Text(viewModel.localized("toggle_dimming"))
             }
             
-            // --- SPATIAL AUDIO TOGGLE (From Razorub) ---
+            // --- SPATIAL AUDIO TOGGLE ---
+            let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
             Button(action: {
-                spatialAudioMode.toggle()
-                if spatialAudioMode {
-                    // Switch to spatial audio (sound from screen)
-                    AudioHelpers.fixAudioForSurroundForCurrentWindow()
-                } else {
-                    // Switch to direct audio (sound from ears)
-                    AudioHelpers.fixAudioForDirectStereo()
-                }
+                let nextModeRaw = (currentMode.rawValue + 1) % 3
+                viewModel.streamSettings.spatialAudioMode = nextModeRaw
+                let nextMode = SpatialAudioMode(rawValue: nextModeRaw) ?? .window
+                AudioHelpers.applySpatialAudioMode(nextMode)
             }) {
-                Text(spatialAudioMode ? viewModel.localized("spatial_audio") : viewModel.localized("direct_audio"))
+                Text(currentMode == .surround ? "7.1 Surround" : (currentMode == .window ? "Head Tracked" : "Window Source"))
             }
             // -------------------------------------
             

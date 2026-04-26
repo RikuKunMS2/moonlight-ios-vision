@@ -99,6 +99,17 @@
     Log(LOG_I, @"StreamFrameViewController: stopStream() completed");
 }
 
+- (void)startStream {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->_streamMan == nil && self->_streamConfig != nil) {
+            Log(LOG_I, @"StreamFrameViewController: startStream() called from SwiftUI. Resuming stream...");
+            [self startStreamManager];
+        } else {
+            Log(LOG_W, @"StreamFrameViewController: startStream() ignored (streamMan exists: %d, streamConfig exists: %d)", self->_streamMan != nil, self->_streamConfig != nil);
+        }
+    });
+}
+
 - (void)viewDidAppear:(BOOL)animated
 {
     [super viewDidAppear:animated];

@@ -98,16 +98,18 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text(viewModel.localized("video_settings"))) {
+                Section(header: Label(viewModel.localized("video_settings"), systemImage: "tv")) {
                     NavigationLink {
                         Form {
-                            Picker(viewModel.localized("resolution"), selection: $settings.resolution) {
+                            Picker(selection: $settings.resolution) {
                                 ForEach(Self.resolutionsGroupedByType, id: \.0) { aspectRatio, resolutions in
                                     ForEach(resolutions, id: \.self) { resolution in
                                         Text(resolution.description)
                                             .badge(aspectRatio.casualDescription)
                                     }
                                 }
+                            } label: {
+                                Label(viewModel.localized("resolution"), systemImage: "rectangle.inset.filled")
                             }
                             .labelsHidden()
                             .pickerStyle(.inline)
@@ -139,7 +141,7 @@ struct SettingsView: View {
                         .navigationTitle(viewModel.localized("resolution"))
                     } label: {
                         HStack {
-                            Text(viewModel.localized("resolution"))
+                            Label(viewModel.localized("resolution"), systemImage: "rectangle.inset.filled")
                             Spacer()
                             Text(settings.resolution.description)
                         }
@@ -147,10 +149,12 @@ struct SettingsView: View {
                     
                     NavigationLink {
                         Form {
-                            Picker(viewModel.localized("aspect_ratio"), selection: $selectedAspectRatio) {
+                            Picker(selection: $selectedAspectRatio) {
                                 ForEach(Self.resolutionsGroupedByType.map { $0.0 }, id: \.self) { aspectRatio in
                                     Text(aspectRatio.casualDescription).tag(aspectRatio as AspectRatio?)
                                 }
+                            } label: {
+                                Label(viewModel.localized("aspect_ratio"), systemImage: "aspectratio")
                             }
                             .labelsHidden()
                             .pickerStyle(.inline)
@@ -177,24 +181,26 @@ struct SettingsView: View {
                         .navigationTitle(viewModel.localized("aspect_ratio"))
                     } label: {
                         HStack {
-                            Text(viewModel.localized("aspect_ratio"))
+                            Label(viewModel.localized("aspect_ratio"), systemImage: "aspectratio")
                             Spacer()
                             Text(settings.resolution.aspectRatio.casualDescription)
                         }
                     }
                     
                     // Framerate picker with custom option
-                    Picker(viewModel.localized("framerate"), selection: framerateBinding) {
+                    Picker(selection: framerateBinding) {
                         ForEach(Self.framerateTable, id: \.self) { framerate in
                             Text("\(framerate)").tag(framerate as Int32)
                         }
                         Text(viewModel.localized("custom")).tag(-1 as Int32)
+                    } label: {
+                        Label(viewModel.localized("framerate"), systemImage: "waveform.path.ecg")
                     }
                     
                     // Custom framerate controls
                     if isCustomFramerate {
                         HStack {
-                            Text(viewModel.localized("custom_framerate"))
+                            Label(viewModel.localized("custom_framerate"), systemImage: "dial.min")
                             Spacer()
                             TextField("", value: $customFramerateValue, format: .number)
                                 .textFieldStyle(.roundedBorder)
@@ -213,17 +219,19 @@ struct SettingsView: View {
                     }
                     
                     // Bitrate picker with custom option
-                    Picker(viewModel.localized("bitrate"), selection: bitrateBinding) {
+                    Picker(selection: bitrateBinding) {
                         ForEach(Self.bitrateTable, id: \.self) { bitrate in
                             Text("\(bitrate / 1000)Mbps").tag(bitrate as Int32)
                         }
                         Text(viewModel.localized("custom")).tag(-1 as Int32)
+                    } label: {
+                        Label(viewModel.localized("bitrate"), systemImage: "speedometer")
                     }
                     
                     // Custom bitrate controls
                     if isCustomBitrate {
                         HStack {
-                            Text(viewModel.localized("custom_bitrate"))
+                            Label(viewModel.localized("custom_bitrate"), systemImage: "dial.max")
                             Spacer()
                             TextField("", value: $customBitrateValue, format: .number)
                                 .textFieldStyle(.roundedBorder)
@@ -241,34 +249,154 @@ struct SettingsView: View {
                         Slider(value: customBitrateSliderBinding, in: 1...1000, step: 1)
                     }
                     
-                    Picker(viewModel.localized("renderer"), selection: $settings.renderer) {
-                        Text(viewModel.localized("uikit_classic")).tag(Renderer.classic)
-                        Text(viewModel.localized("realitykit_native")).tag(Renderer.realitykit)
+                    Picker(selection: $settings.preferredCodec) {
+                        Text(viewModel.localized("h264")).tag(PreferredCodec.h264)
+                        Text(viewModel.localized("hevc")).tag(PreferredCodec.hevc)
+                        
+                        // Only show AV1 option if the hardware explicitly supports it
+                        if VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1) {
+                            Text(viewModel.localized("av1")).tag(PreferredCodec.av1)
+                        }
+                        
+                        Text(viewModel.localized("auto")).tag(PreferredCodec.auto)
+                    } label: {
+                        Label(viewModel.localized("preferred_codec"), systemImage: "video")
                     }
-                    .onChange(of: settings.renderer) { _, _ in settings.save() }
+                    .onChange(of: settings.preferredCodec) { _, _ in settings.save() }
+                    
+                    Toggle(isOn: $settings.enableHdr) {
+                        Label(viewModel.localized("enable_hdr"), systemImage: "hdr")
+                    }
+                    .onChange(of: settings.enableHdr) { _, _ in settings.save() }
+                    
+                    Picker(selection: $settings.useFramePacing) {
+                        Text(viewModel.localized("lowest_latency")).tag(false)
+                        Text(viewModel.localized("smoothest_video")).tag(true)
+                    } label: {
+                        Label(viewModel.localized("frame_pacing"), systemImage: "clock.arrow.circlepath")
+                    }
+                    .onChange(of: settings.useFramePacing) { _, _ in settings.save() }
                 }
                 
-                if (settings.renderer == .realitykit) {
-                    Section(header: Text(viewModel.localized("realitykit_settings")), footer: Text(viewModel.localized("realitykit_footer"))) {
-                        Toggle(viewModel.localized("animate_screen_curve"), isOn: $settings.realitykitRendererAnimateOpening)
-                            .onChange(of: settings.realitykitRendererAnimateOpening) { _, _ in settings.save() }
-                        
-                        Text(viewModel.localized("screen_curvature"))
-                        Slider(value: $settings.realitykitRendererCurvature, in: (0...1), step: 0.001)
-                            .onChange(of: settings.realitykitRendererCurvature) { _, _ in
-                                // Debounce: delay save to avoid frequent writes
-                                saveTimer?.invalidate()
-                                saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-                                    settings.save()
-                                }
+                Section(header: Label(viewModel.localized("realitykit_settings"), systemImage: "visionpro"), footer: Text(viewModel.localized("realitykit_footer"))) {
+                    Toggle(isOn: $settings.realitykitRendererAnimateOpening) {
+                        Label(viewModel.localized("animate_screen_curve"), systemImage: "view.3d")
+                    }
+                    .onChange(of: settings.realitykitRendererAnimateOpening) { _, _ in settings.save() }
+                    
+                    Label(viewModel.localized("screen_curvature"), systemImage: "pano")
+                    Slider(value: $settings.realitykitRendererCurvature, in: (0...1), step: 0.001)
+                        .onChange(of: settings.realitykitRendererCurvature) { _, _ in
+                            // Debounce: delay save to avoid frequent writes
+                            saveTimer?.invalidate()
+                            saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                                settings.save()
                             }
-                        
+                        }
+                    
+                    Toggle(isOn: $settings.dimPassthrough) {
+                        Label(viewModel.localized("dim_passthrough"), systemImage: "moon.fill")
+                    }
+                    .onChange(of: settings.dimPassthrough) { _, _ in settings.save() }
+                }
+                
+                Section(header: Label(viewModel.localized("input_audio_settings"), systemImage: "gamecontroller")) {
+                    Picker(selection: $settings.multiController) {
+                        Text(viewModel.localized("single")).tag(false)
+                        Text(viewModel.localized("auto")).tag(true)
+                    } label: {
+                        Label(viewModel.localized("multi_controller_mode"), systemImage: "gamecontroller.fill")
+                    }
+                    .onChange(of: settings.multiController) { _, _ in settings.save() }
+                    
+                    Toggle(isOn: $settings.swapABXYButtons) {
+                        Label(viewModel.localized("swap_abxy_buttons"), systemImage: "arrow.up.arrow.down.circle")
+                    }
+                    .onChange(of: settings.swapABXYButtons) { _, _ in settings.save() }
+                    
+                    Toggle(isOn: $settings.playAudioOnPC) {
+                        Label(viewModel.localized("play_audio_on_pc"), systemImage: "speaker.wave.2")
+                    }
+                    .onChange(of: settings.playAudioOnPC) { _, _ in settings.save() }
+                }
+                
+                Section(header: Label(viewModel.localized("uikit_settings"), systemImage: "window.casement")) {
+                    Picker(selection: $settings.absoluteTouchMode) {
+                        Text(viewModel.localized("touchpad")).tag(false)
+                        Text(viewModel.localized("touchscreen")).tag(true)
+                    } label: {
+                        Label(viewModel.localized("touch_mode"), systemImage: "hand.tap")
+                    }
+                    .onChange(of: settings.absoluteTouchMode) { _, _ in settings.save() }
+                    
+                    Picker(selection: $settings.onscreenControls) {
+                        Text(viewModel.localized("off")).tag(OnScreenControlsLevel.off)
+                        Text(viewModel.localized("auto")).tag(OnScreenControlsLevel.auto)
+                        Text(viewModel.localized("simple")).tag(OnScreenControlsLevel.simple)
+                        Text(viewModel.localized("full")).tag(OnScreenControlsLevel.full)
+                    } label: {
+                        Label(viewModel.localized("on_screen_controls"), systemImage: "dpad")
+                    }
+                    .onChange(of: settings.onscreenControls) { _, _ in settings.save() }
+                    
+                    Toggle(isOn: $settings.btMouseSupport) {
+                        Label(viewModel.localized("citrix_x1_mouse"), systemImage: "mouse")
+                    }
+                    .onChange(of: settings.btMouseSupport) { _, _ in settings.save() }
+                    
+                    Toggle(isOn: $settings.statsOverlay) {
+                        Label(viewModel.localized("statistics_overlay"), systemImage: "chart.bar.xaxis")
+                    }
+                    .onChange(of: settings.statsOverlay) { _, _ in settings.save() }
+                    
+                    HStack {
+                        Label(viewModel.localized("window_corner_radius"), systemImage: "rectangle.roundedtop")
+                        Spacer()
+                        Text("\(Int(settings.uikitWindowCornerRadius))px")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(value: $settings.uikitWindowCornerRadius, in: 0...50, step: 1)
+                        .onChange(of: settings.uikitWindowCornerRadius) { _, _ in
+                            // Debounce: delay save to avoid frequent writes
+                            saveTimer?.invalidate()
+                            saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                                settings.save()
+                            }
+                        }
+                    
+                    if settings.uikitWindowCornerRadius > 0 {
+                        Text(viewModel.localized("corner_radius_clarity_warning"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 
-                Section(header: Text(viewModel.localized("stream_settings"))) {
-                    Toggle(viewModel.localized("remember_stream_settings"), isOn: $settings.rememberStreamSettings)
-                        .onChange(of: settings.rememberStreamSettings) { _, _ in settings.save() }
+                Section(header: Label(viewModel.localized("general_settings"), systemImage: "gear")) {
+                    Toggle(isOn: $settings.optimizeGames) {
+                        Label(viewModel.localized("optimize_game_settings"), systemImage: "wand.and.stars")
+                    }
+                    .onChange(of: settings.optimizeGames) { _, _ in settings.save() }
+                    
+                    Picker(selection: Binding(get: { settings.appLanguage }, set: { newLanguage in
+                        settings.appLanguage = newLanguage
+                        settings.save()
+                        // Trigger view update when language changes
+                        viewModel.objectWillChange.send()
+                    })) {
+                        ForEach(Array(AppLanguage.allCases), id: \.self) { lang in
+                            Text(lang.displayName).tag(lang)
+                        }
+                    } label: {
+                        Label(viewModel.localized("app_language"), systemImage: "globe")
+                    }
+                }
+                
+                Section(header: Label(viewModel.localized("stream_settings"), systemImage: "play.desktopcomputer")) {
+                    Toggle(isOn: $settings.rememberStreamSettings) {
+                        Label(viewModel.localized("remember_stream_settings"), systemImage: "memorychip")
+                    }
+                    .onChange(of: settings.rememberStreamSettings) { _, _ in settings.save() }
                     
                     Button(action: {
                         showResetConfirmation = true
@@ -290,104 +418,8 @@ struct SettingsView: View {
                         Text(viewModel.localized("reset_to_defaults_message"))
                     }
                 }
-                
-                if (settings.renderer == .classic) {
-                    Section(header: Text(viewModel.localized("uikit_settings"))) {
-                        Picker(viewModel.localized("touch_mode"), selection: $settings.absoluteTouchMode) {
-                            Text(viewModel.localized("touchpad")).tag(false)
-                            Text(viewModel.localized("touchscreen")).tag(true)
-                        }
-                        .onChange(of: settings.absoluteTouchMode) { _, _ in settings.save() }
-                        
-                        Picker(viewModel.localized("on_screen_controls"), selection: $settings.onscreenControls) {
-                            Text(viewModel.localized("off")).tag(OnScreenControlsLevel.off)
-                            Text(viewModel.localized("auto")).tag(OnScreenControlsLevel.auto)
-                            Text(viewModel.localized("simple")).tag(OnScreenControlsLevel.simple)
-                            Text(viewModel.localized("full")).tag(OnScreenControlsLevel.full)
-                        }
-                        .onChange(of: settings.onscreenControls) { _, _ in settings.save() }
-                        
-                        Toggle(viewModel.localized("citrix_x1_mouse"), isOn: $settings.btMouseSupport)
-                            .onChange(of: settings.btMouseSupport) { _, _ in settings.save() }
-                        
-                        Toggle(viewModel.localized("statistics_overlay"), isOn: $settings.statsOverlay)
-                            .onChange(of: settings.statsOverlay) { _, _ in settings.save() }
-                        
-                        HStack {
-                            Text(viewModel.localized("window_corner_radius"))
-                            Spacer()
-                            Text("\(Int(settings.uikitWindowCornerRadius))px")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                        }
-                        Slider(value: $settings.uikitWindowCornerRadius, in: 0...50, step: 1)
-                            .onChange(of: settings.uikitWindowCornerRadius) { _, _ in
-                                // Debounce: delay save to avoid frequent writes
-                                saveTimer?.invalidate()
-                                saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
-                                    settings.save()
-                                }
-                            }
-                        
-                        if settings.uikitWindowCornerRadius > 0 {
-                            Text(viewModel.localized("corner_radius_clarity_warning"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                
-                Toggle(viewModel.localized("optimize_game_settings"), isOn: $settings.optimizeGames)
-                    .onChange(of: settings.optimizeGames) { _, _ in settings.save() }
-                
-                Picker(viewModel.localized("multi_controller_mode"), selection: $settings.multiController) {
-                    Text(viewModel.localized("single")).tag(false)
-                    Text(viewModel.localized("auto")).tag(true)
-                }
-                .onChange(of: settings.multiController) { _, _ in settings.save() }
-                
-                Toggle(viewModel.localized("swap_abxy_buttons"), isOn: $settings.swapABXYButtons)
-                    .onChange(of: settings.swapABXYButtons) { _, _ in settings.save() }
-                
-                Toggle(viewModel.localized("play_audio_on_pc"), isOn: $settings.playAudioOnPC)
-                    .onChange(of: settings.playAudioOnPC) { _, _ in settings.save() }
-                
-                Picker(viewModel.localized("preferred_codec"), selection: $settings.preferredCodec) {
-                    Text(viewModel.localized("h264")).tag(PreferredCodec.h264)
-                    Text(viewModel.localized("hevc")).tag(PreferredCodec.hevc)
-                    
-                    // Only show AV1 option if the hardware explicitly supports it
-                    if VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1) {
-                        Text(viewModel.localized("av1")).tag(PreferredCodec.av1)
-                    }
-                    
-                    Text(viewModel.localized("auto")).tag(PreferredCodec.auto)
-                }
-                .onChange(of: settings.preferredCodec) { _, _ in settings.save() }
-                
-                Toggle(viewModel.localized("enable_hdr"), isOn: $settings.enableHdr)
-                    .onChange(of: settings.enableHdr) { _, _ in settings.save() }
-                
-                Picker(viewModel.localized("frame_pacing"), selection: $settings.useFramePacing) {
-                    Text(viewModel.localized("lowest_latency")).tag(false)
-                    Text(viewModel.localized("smoothest_video")).tag(true)
-                }
-                .onChange(of: settings.useFramePacing) { _, _ in settings.save() }
-                
-                Toggle(viewModel.localized("dim_passthrough"), isOn: $settings.dimPassthrough)
-                    .onChange(of: settings.dimPassthrough) { _, _ in settings.save() }
-                
-                Picker(viewModel.localized("app_language"), selection: Binding(get: { settings.appLanguage }, set: { newLanguage in
-                    settings.appLanguage = newLanguage
-                    settings.save()
-                    // Trigger view update when language changes
-                    viewModel.objectWillChange.send()
-                })) {
-                    ForEach(Array(AppLanguage.allCases), id: \.self) { lang in
-                        Text(lang.displayName).tag(lang)
-                    }
-                }
             }
+            .formStyle(.grouped)
             .navigationTitle(viewModel.localized("settings"))
             .onDisappear {
                 // Cancel pending save timer and save immediately

@@ -111,6 +111,8 @@
 "starting_stream" = "正在启动 %@...";
 
 // Settings
+"general_settings" = "通用设置";
+"input_audio_settings" = "输入与音频";
 "app_language" = "应用语言";
 "video_settings" = "视频设置";
 "resolution" = "分辨率";
@@ -218,7 +220,8 @@
 "control_panel" = "控制面板";
 "collapse_panel" = "收起面板";
 "full_immersion" = "全沉浸";
-"lock_aspect_ratio" = "重置宽高比";
+"lock_aspect_ratio" = "锁定纵横比";
+"reactive_lighting" = "自适应光照";
 "locked" = "已锁定";
 "lock_position" = "锁定位置";
 "unpin_studio" = "解除置顶";
