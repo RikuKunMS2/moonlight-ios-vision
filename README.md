@@ -35,13 +35,16 @@ The Vision OS Version is not available in the App Store. To download the latest 
 * **SBS 3D Support**: Available in Reality Kit Mode. We are looking into support for uikit sbs.
 * **HDR Support**: Includes a luminance value slider to calibrate for battery levels and environment.
     * *New:* Gamma and Saturation sliders added in v11.0.16.
+    * *New:* Perfect 1:1 HDR EDR mapping and Calibration Mode toggle added in v11.0.21.
 * **AV1 Support**: Confirmed working (including AV1 HDR) on M5 hardware.
 * **Audio Control**: Toggle between Head-Tracked and Non-Head-Tracked audio.
+* **SharePlay & Spatial Personas**: Enjoy immersive co-watching experiences with friends.
+* **Reactive Lighting (Ambilight)**: Dynamic ambient lighting based on stream content in Reality Kit mode.
 * **Localization**: Support for Chinese added (Thanks **linggan-ua**).
 
 ![Curved Screen Support](https://preview.redd.it/moonlight-xros-1-year-anniversary-update-curved-screen-v0-xyro5aozeyge1.jpg?width=2254&format=pjpg&auto=webp&s=df631301423de93f161111df41543154e8fd5b04)
 
-## ChangeLog (Latest: v11.0.17 - Nov 25, 2025)
+## ChangeLog (Latest: v11.0.21 - April 25, 2026)
 
 > **⚠️ IMPORTANT UPGRADE NOTE:**
 > If you are coming from an older version (pre-11.0.15), please **Uninstall and Reinstall** the app via TestFlight. There are significant code changes regarding settings and localization that may cause crashes if you simply update over the old version.
@@ -50,6 +53,14 @@ The Vision OS Version is not available in the App Store. To download the latest 
 > [RikuKunMS2/Lumanaire](https://ko-fi.com/lumanaire) tests all builds using Apollo. Apollo is a Sunshine fork called [Apollo](https://github.com/ClassicOldSong/Apollo) which on Windows supports a Built-in Virtual Display with HDR support that matches the resolution/framerate config of your client automatically. 
 >* **Apollo Permissions:** *Critical Note* — If using Apollo, you **must** ensure all permissions are enabled after pairing (Click the "Edit" button in Apollo). The developer primarily tests on Apollo.
 
+
+### v11.0.21 (April 25, 2026)
+* **Audio Pipeline Refactor:** Complete migration of the spatial audio pipeline (`OutputAU`) to pure Objective-C.
+* **Vision Pro Spatial Audio:** Restored functional audio streaming by properly activating `AVAudioSession` and integrating native `SpatialAudioComponent` for RealityKit. Fixed Opus decoding integration and eliminated "Session lookup failed" crashes.
+* **SharePlay & Spatial Personas:** Integrated SharePlay-based co-watching using Spatial Personas for shared immersive viewing experiences.
+* **Reactive Lighting (Ambilight):** Added a user-configurable Reactive Lighting toggle within the immersive control panel.
+* **HDR Consistency & Calibration:** Re-enabled 1:1 HDR EDR mapping for perfect RealityKit HDR and introduced a Calibration Mode toggle in the immersive control panel.
+* **UIKit Stream Recovery:** Added an "Open Main Menu" recovery button to the error overlay in UIKitStreamView to escape stuck window states on failed stream resumptions.
 
 ### v11.0.17 (Expected Release: Nov 25, 2025)
 * **AV1 & HDR Confirmation:** Confirmed that AV1 and AV1 HDR are working correctly on M5 devices. Special thanks to **u/webheadVR** for testing.

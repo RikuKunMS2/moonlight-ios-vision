@@ -524,11 +524,15 @@ struct _RealityKitStreamView: View {
             }
             .onChange(of: controlState.immersivePositionY) { _, newValue in
                 guard !isPinnedToStage else { return }
-                screenPosition.y = newValue
+                withAnimation(.interpolatingSpring(stiffness: 50, damping: 20)) {
+                    screenPosition.y = newValue
+                }
             }
             .onChange(of: controlState.immersivePositionZ) { _, newValue in
                 guard !isPinnedToStage else { return }
-                screenPosition.z = newValue
+                withAnimation(.interpolatingSpring(stiffness: 50, damping: 20)) {
+                    screenPosition.z = newValue
+                }
             }
             .onChange(of: controlState.immersionAmount) { _, newValue in
                 immersionAmount = newValue
@@ -885,10 +889,12 @@ struct _RealityKitStreamView: View {
                         }
                         .onChange(of: isKeyboardFocused) { _, newValue in
                             if !newValue && showVirtualKeyboard {
-                                print("[Keyboard] Focus lost, closing keyboard")
-                                showVirtualKeyboard = false
-                                keyboardInput = ""
-                                previousKeyboardInput = ""
+                                // Maintain focus so modifier buttons can be tapped
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    if showVirtualKeyboard {
+                                        isKeyboardFocused = true
+                                    }
+                                }
                             }
                         }
                 }
@@ -923,7 +929,7 @@ struct _RealityKitStreamView: View {
         // NOTE: gazeTapGesture disabled - DragGesture(minimumDistance: 0) handles all pinch
         // interactions including quick taps. Having both gestures causes conflicts.
         // .gesture(gazeTapGesture, isEnabled: inputMode == .gazeControl)
-        .onTapGesture {
+        .simultaneousGesture(TapGesture().onEnded {
             guard viewModel.activelyStreaming && !showMenuPanel else { return }
             withAnimation(.easeInOut(duration: 0.3)) {
                 hideControls = false
@@ -932,7 +938,7 @@ struct _RealityKitStreamView: View {
             startHighlightTimer()
             let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
             AudioHelpers.applySpatialAudioMode(currentMode)
-        }
+        })
     }
 
     // MARK: - Scene Setup & Teardown
@@ -1547,20 +1553,22 @@ struct _RealityKitStreamView: View {
             let newChars = String(newValue.suffix(newValue.count - oldValue.count))
             for char in newChars {
                 let text = String(char)
-                let cString = text.cString(using: .utf8)
-                cString?.withUnsafeBufferPointer { ptr in
-                    if let base = ptr.baseAddress {
-                        LiSendUtf8TextEvent(base, UInt32(text.utf8.count))
-                    }
+                text.withCString { base in
+                    LiSendUtf8TextEvent(base, UInt32(text.utf8.count))
                 }
             }
         } else if newValue.count < oldValue.count {
             // Character(s) removed - send backspace for each removed character
             let removedCount = oldValue.count - newValue.count
-            for _ in 0..<removedCount {
-                LiSendKeyboardEvent(0x08, 0x03, 0) // Backspace Down
-                usleep(50 * 1000)
-                LiSendKeyboardEvent(0x08, 0x04, 0) // Backspace Up
+            for i in 0..<removedCount {
+                let delayDown = Double(i) * 0.1
+                let delayUp = delayDown + 0.05
+                DispatchQueue.main.asyncAfter(deadline: .now() + delayDown) {
+                    LiSendKeyboardEvent(0x08, 0x03, 0) // Backspace Down
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + delayUp) {
+                    LiSendKeyboardEvent(0x08, 0x04, 0) // Backspace Up
+                }
             }
         }
         
@@ -1652,14 +1660,17 @@ struct _RealityKitStreamView: View {
     
     private func cycleInputMode() {
         gazeController.cleanup()
-        inputMode = inputMode.next()
+        
+        // Only toggle between screenMove (0) and gazeControl (1)
+        let currentRaw = inputMode.rawValue
+        let nextRaw = (currentRaw + 1) % 2
+        inputMode = InputMode(rawValue: nextRaw) ?? .screenMove
         
         UserDefaults.standard.set(inputMode.rawValue, forKey: "immersiveInputMode")
         let text = (inputMode == .gazeControl && viewModel.streamSettings.gazeTouchMode) ? viewModel.localized("input_mode_touch") : viewModel.localized(inputMode.localizedKey)
         let icon: String
         if inputMode == .gazeControl && viewModel.streamSettings.gazeTouchMode { icon = "hand.point.up.left.fill" }
         else if inputMode == .gazeControl { icon = "eye" }
-        else if inputMode == .controller { icon = "gamecontroller" }
         else { icon = "arrow.up.and.down.and.arrow.left.and.right" }
         showInlineHint(text: text, icon: icon)
         updateScreenInteractivity()
@@ -3737,8 +3748,9 @@ struct PCModifierToolbar: View {
     
     private func sendInstantKey(_ keyCode: Int16) {
         LiSendKeyboardEvent(keyCode, 0x03, 0)
-        usleep(50 * 1000)
-        LiSendKeyboardEvent(keyCode, 0x04, 0)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            LiSendKeyboardEvent(keyCode, 0x04, 0)
+        }
     }
     
     private func sendToggleKey(_ keyCode: Int16, down: Bool) {

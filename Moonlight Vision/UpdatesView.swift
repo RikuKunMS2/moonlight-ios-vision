@@ -35,6 +35,24 @@ struct UpdatesView: View {
 
                 Section(header: Text(viewModel.localized("latest_updates"))) { // Section for latest updates
                     VStack(alignment: .leading) {
+                        Text("Version 11.0.21 (April 25, 2026)")
+                            .font(.headline)
+                        Text("- Audio Pipeline Refactor: Complete migration of the spatial audio pipeline (OutputAU) to pure Objective-C.")
+                            .font(.body)
+                        Text("- Vision Pro Spatial Audio: Restored functional audio streaming by properly activating AVAudioSession and integrating native SpatialAudioComponent for RealityKit. Fixed Opus decoding integration and eliminated \"Session lookup failed\" crashes.")
+                            .font(.body)
+                        Text("- SharePlay & Spatial Personas: Integrated SharePlay-based co-watching using Spatial Personas for shared immersive viewing experiences.")
+                            .font(.body)
+                        Text("- Reactive Lighting (Ambilight): Added a user-configurable Reactive Lighting toggle within the immersive control panel.")
+                            .font(.body)
+                        Text("- HDR Consistency & Calibration: Re-enabled 1:1 HDR EDR mapping for perfect RealityKit HDR and introduced a Calibration Mode toggle in the immersive control panel.")
+                            .font(.body)
+                        Text("- UIKit Stream Recovery: Added an \"Open Main Menu\" recovery button to the error overlay in UIKitStreamView to escape stuck window states on failed stream resumptions.")
+                            .font(.body)
+                    }
+                    .padding(.vertical)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading) {
                         Text("Version 11.0.20 (Commit b191da8)")
                             .font(.headline)
                         Text("- Concurrency and Network Handling: Moved blocking HTTP network calls (updateHost, refreshAppsFor) to background threads using Swift continuations. Wrapped state updates in ObservableConnectionManager with @mainactor.")

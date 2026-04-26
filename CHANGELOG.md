@@ -1,8 +1,24 @@
 #Change Log
 
+## Version 11.0.21 (April 25, 2026)
+
+### Audio Pipeline Refactor
+- Complete migration of the spatial audio pipeline (`OutputAU`) to pure Objective-C.
+- Restored functional audio streaming by properly activating `AVAudioSession` and integrating native `SpatialAudioComponent` for RealityKit.
+- Fixed Opus decoding integration and eliminated "Session lookup failed" crashes.
+
+### Vision Pro Spatial Audio & Immersion
+- Integrated SharePlay-based co-watching using Spatial Personas for shared immersive viewing experiences.
+- Added a user-configurable Reactive Lighting (Ambilight) toggle within the immersive control panel.
+- Re-enabled 1:1 HDR EDR mapping for perfect RealityKit HDR and introduced a Calibration Mode toggle in the immersive control panel.
+
+### UIKit Stream Recovery
+- Added an "Open Main Menu" recovery button to the error overlay in UIKitStreamView to escape stuck window states on failed stream resumptions.
+
+---
+
 ## Commit b191da8
 *Note: A later commit will address contribution attribution data accidentally cleared from file headers.*
-
 ### Concurrency and Network Handling
 - Moved blocking HTTP network calls (`updateHost`, `refreshAppsFor`) to background threads using Swift continuations.
 - Wrapped state updates in `ObservableConnectionManager` with `@mainactor` to ensure execution on the main thread.

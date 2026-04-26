@@ -1697,7 +1697,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Moonlight XrOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				ENABLE_MODULE_VERIFIER = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -1744,7 +1744,7 @@
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS-Sim",
 				);
-				MARKETING_VERSION = 11.0.20;
+				MARKETING_VERSION = 11.0.21;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu99 gnu++11";
 				OTHER_LDFLAGS = "-ld64";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";
@@ -1777,7 +1777,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Moonlight XrOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 1;
 				DEFINES_MODULE = YES;
 				ENABLE_MODULE_VERIFIER = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -1824,7 +1824,7 @@
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS-Sim",
 				);
-				MARKETING_VERSION = 11.0.20;
+				MARKETING_VERSION = 11.0.21;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu99 gnu++11";
 				OTHER_LDFLAGS = "-ld64";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";

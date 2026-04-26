@@ -171,22 +171,7 @@ struct ImmersiveControlPanelView: View {
                     controlState.onEnvironmentChange?(newValue)
                 }
                 
-                if controlState.selectedEnvironmentState != .none {
-                    Toggle(isOn: Binding(
-                        get: { viewModel.streamSettings.reactiveLightingEnabled },
-                        set: { newValue in
-                            viewModel.streamSettings.reactiveLightingEnabled = newValue
-                            viewModel.streamSettings.save()
-                        }
-                    )) {
-                        Label(viewModel.localized("reactive_lighting"), systemImage: "wand.and.rays")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .tint(.white)
                 }
-                
-            }
             
             // Quick actions
             VStack(alignment: .leading, spacing: 16) {
@@ -262,6 +247,20 @@ struct ImmersiveControlPanelView: View {
                         isActive: false
                     ) {
                         SharePlayManager.shared.startSharePlay()
+                    }
+                    
+                    // Reactive Lighting
+                    if controlState.selectedEnvironmentState != .none {
+                        ModernActionTile(
+                            icon: viewModel.streamSettings.reactiveLightingEnabled ? "wand.and.rays" : "wand.and.rays.inverse",
+                            title: viewModel.localized("reactive_lighting"),
+                            isActive: viewModel.streamSettings.reactiveLightingEnabled
+                        ) {
+                            withAnimation {
+                                viewModel.streamSettings.reactiveLightingEnabled.toggle()
+                                viewModel.streamSettings.save()
+                            }
+                        }
                     }
                 }
                 
@@ -451,7 +450,7 @@ struct ImmersiveControlPanelView: View {
                         get: { -controlState.immersivePositionZ },
                         set: { controlState.immersivePositionZ = -$0 }
                     ),
-                    range: 1.5...10.5,
+                    range: 0.5...5.0,
                     defaultValue: 1.5,
                     format: "%.2fm",
                     disabled: controlState.isPinnedToStage,
@@ -461,7 +460,7 @@ struct ImmersiveControlPanelView: View {
                 SteppedSliderRow(
                     title: viewModel.localized("vertical_height"),
                     value: $controlState.immersivePositionY,
-                    range: 0.0...8.0,
+                    range: -2.0...3.0,
                     defaultValue: 1.0,
                     format: "%.2fm",
                     disabled: controlState.isPinnedToStage,

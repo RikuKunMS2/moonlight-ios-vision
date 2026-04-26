@@ -364,6 +364,14 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
                                             (float*)buffer, desiredBufferSize / sizeof(float) / visionOpusConfig.channelCount, 0);
 
     if (decodeRet > 0) {
+        if (volume != 127) {
+            float volMultiplier = (float)volume / 127.0f;
+            int numFloats = decodeRet * visionOpusConfig.channelCount;
+            float *floatBuf = (float *)buffer;
+            for (int i = 0; i < numFloats; i++) {
+                floatBuf[i] *= volMultiplier;
+            }
+        }
         int bytesWritten = decodeRet * sizeof(float) * visionOpusConfig.channelCount;
         if (![audioRenderer submitAudio:bytesWritten opusBytes:sampleLength decodeStartTime:decodeStartTime]) {
             // Also drop the sample
