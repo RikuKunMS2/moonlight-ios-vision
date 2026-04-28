@@ -136,7 +136,7 @@ struct _RealityKitStreamView: View {
     @State private var streamMan: StreamManager?
     @State private var streamOpQueue = OperationQueue()
     @State private var controllerSupport: ControllerSupport?
-    @ObservedObject var connectionCallbacks: ObservableConnectionManager = .init()
+    @StateObject var connectionCallbacks: ObservableConnectionManager = .init()
     @State private var lastStreamErrorMessage: String? = nil
     
     /// Auto-reconnect: attempt count (0 = fresh, 1..=max = retrying). Reset on first frame.
@@ -2345,7 +2345,7 @@ struct _RealityKitStreamView: View {
                 if !self.firstFrameReceived { LiRequestIdrFrame() }
             }
             
-            self.ensureHDRTextureMatchesSetting()
+            self.recreateStreamTexture()
             
             // Set controller support reference for rumble forwarding
             self.connectionCallbacks.controllerSupport = self.controllerSupport
@@ -2429,10 +2429,8 @@ struct _RealityKitStreamView: View {
         }
     }
     
-    private func ensureHDRTextureMatchesSetting() {
+    private func recreateStreamTexture() {
         let desiredHDR = viewModel.streamSettings.enableHdr
-        if desiredHDR == isHDRTexture { return }
-        
         let width = Int(streamConfig.width)
         let height = Int(streamConfig.height)
         let bytesPerPixel = desiredHDR ? 8 : 4
@@ -2592,6 +2590,7 @@ struct _RealityKitStreamView: View {
         idrWatchdogTimer2?.invalidate(); idrWatchdogTimer2 = nil
         postFirstFrameRebindTimer?.invalidate(); postFirstFrameRebindTimer = nil
         firstFrameReceived = false
+        ambilightTexture = nil
         
         controllerSupport?.cleanup()
         controllerSupport = nil

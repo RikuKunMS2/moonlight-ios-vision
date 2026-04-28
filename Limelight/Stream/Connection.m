@@ -590,9 +590,7 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     }
     _serverInfo.serverCodecModeSupport = config.serverCodecModeSupport;
 
-    renderer = myRenderer;
     _instanceRenderer = myRenderer;
-    _callbacks = callbacks;
     _instanceCallbacks = callbacks;
 
     LiInitializeStreamConfiguration(&_streamConfig);
@@ -665,6 +663,12 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
 -(void) main
 {
     [initLock lock];
+    
+    // Assign static globals inside the lock to ensure they are not overwritten
+    // before the old connection has fully finished its LiStopConnection teardown.
+    renderer = _instanceRenderer;
+    _callbacks = _instanceCallbacks;
+    
     LiStartConnection(&_serverInfo,
                       &_streamConfig,
                       &_clCallbacks,
