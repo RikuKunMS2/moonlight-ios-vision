@@ -40,6 +40,8 @@
     char _appVersionString[32];
     char _gfeVersionString[32];
     char _rtspSessionUrl[128];
+    id<ConnectionCallbacks> _instanceCallbacks;
+    id<AnyVideoDecoderRenderer> _instanceRenderer;
 }
 
 static NSLock* initLock;
@@ -537,6 +539,8 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
         }
 
         [initLock unlock];
+        if (renderer == self->_instanceRenderer) renderer = nil;
+        if (_callbacks == self->_instanceCallbacks) _callbacks = nil;
         if (completion) {
             dispatch_async(dispatch_get_main_queue(), ^{ completion(); });
         }
@@ -587,7 +591,9 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _serverInfo.serverCodecModeSupport = config.serverCodecModeSupport;
 
     renderer = myRenderer;
+    _instanceRenderer = myRenderer;
     _callbacks = callbacks;
+    _instanceCallbacks = callbacks;
 
     LiInitializeStreamConfiguration(&_streamConfig);
     _streamConfig.width = config.width;

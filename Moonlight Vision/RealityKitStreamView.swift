@@ -134,6 +134,7 @@ struct _RealityKitStreamView: View {
     @State private var volumeZLimits: ClosedRange<Float> = -0.5...0.5
     
     @State private var streamMan: StreamManager?
+    @State private var streamOpQueue = OperationQueue()
     @State private var controllerSupport: ControllerSupport?
     @ObservedObject var connectionCallbacks: ObservableConnectionManager = .init()
     @State private var lastStreamErrorMessage: String? = nil
@@ -2326,7 +2327,7 @@ struct _RealityKitStreamView: View {
             return
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             guard !self.hasPerformedTeardown, self.viewModel.activelyStreaming, self.streamMan == nil else {
                 print("[StreamView] Aborting stream start - Teardown: \(self.hasPerformedTeardown), Streaming: \(self.viewModel.activelyStreaming), Exists: \(self.streamMan != nil)")
                 return
@@ -2421,9 +2422,8 @@ struct _RealityKitStreamView: View {
                 },
                 connectionCallbacks: self.connectionCallbacks
             )
-            let operationQueue = OperationQueue()
             if let streamMan = self.streamMan {
-                operationQueue.addOperation(streamMan)
+                self.streamOpQueue.addOperation(streamMan)
             }
             
         }

@@ -52,6 +52,7 @@
 #if !TARGET_OS_TV && !TARGET_OS_VISION
     UIScreenEdgePanGestureRecognizer *_exitSwipeRecognizer;
 #endif
+    NSOperationQueue *_opQueue;
 }
 
 - (void)stopStream {
@@ -219,7 +220,9 @@
     [_tipLabel.topAnchor constraintEqualToAnchor:_stageLabel.bottomAnchor constant:20.0].active = YES;
     [_tipLabel.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor].active = YES;
 
-    [self startStreamManager];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self startStreamManager];
+    });
     
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(applicationWillResignActive:)
@@ -417,8 +420,10 @@
         return [[VideoDecoderRenderer alloc] initWithView:self->_streamView callbacks:self streamAspectRatio:(float)self.streamConfig.width / (float)self.streamConfig.height useFramePacing:self.streamConfig.useFramePacing];
     }
                                     connectionCallbacks:self];
-    NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
-    [opQueue addOperation:_streamMan];
+    if (!_opQueue) {
+        _opQueue = [[NSOperationQueue alloc] init];
+    }
+    [_opQueue addOperation:_streamMan];
 }
 
 - (void) uikitRequestStreamRestart:(NSNotification*)notification {

@@ -27,6 +27,7 @@
     UIView* _renderView;
     id<ConnectionCallbacks> _callbacks;
     Connection* _connection;
+    NSOperationQueue* _connectionQueue;
     
     id<AnyVideoDecoderRenderer> __strong (^_rendererProvider)(void);
 }
@@ -106,8 +107,10 @@
         id<AnyVideoDecoderRenderer> __strong renderer = self->_rendererProvider();
 //        VideoDecoderRenderer* renderer = [[VideoDecoderRenderer alloc] initWithView:self->_renderView callbacks:self->_callbacks streamAspectRatio:(float)self->_config.width / (float)self->_config.height useFramePacing:self->_config.useFramePacing];
         self->_connection = [[Connection alloc] initWithConfig:self->_config renderer:renderer connectionCallbacks:self->_callbacks];
-        NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
-        [opQueue addOperation:self->_connection];
+        if (!self->_connectionQueue) {
+            self->_connectionQueue = [[NSOperationQueue alloc] init];
+        }
+        [self->_connectionQueue addOperation:self->_connection];
     });
 }
 
