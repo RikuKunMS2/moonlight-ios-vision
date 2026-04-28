@@ -1038,7 +1038,7 @@ struct _RealityKitStreamView: View {
                     pqExposure: viewModel.streamSettings.pqExposure,
                     mode: 1
                 )
-                ensureHDRTextureMatchesSetting()
+                recreateStreamTexture()
             }
 
             if let sceneID = UIApplication.shared.connectedScenes.first?.session.persistentIdentifier {
