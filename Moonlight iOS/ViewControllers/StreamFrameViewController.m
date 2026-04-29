@@ -273,7 +273,11 @@
         [_scrollView setShowsHorizontalScrollIndicator:NO];
         [_scrollView setShowsVerticalScrollIndicator:NO];
         [_scrollView setDelegate:self];
+#if TARGET_OS_VISION
+        [_scrollView setMaximumZoomScale:1.0f];
+#else
         [_scrollView setMaximumZoomScale:10.0f];
+#endif
         
         // Add StreamView inside a UIScrollView for absolute mode
         [_scrollView addSubview:_streamView];
@@ -294,7 +298,11 @@
 }
 
 - (UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView {
+#if TARGET_OS_VISION
+    return nil;
+#else
     return _streamView;
+#endif
 }
 
 - (void)willMoveToParentViewController:(UIViewController *)parent {
