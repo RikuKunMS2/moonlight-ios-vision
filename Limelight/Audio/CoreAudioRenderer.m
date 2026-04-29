@@ -101,9 +101,6 @@
 {
     AUSpatialMixerOutputType outputType = [_outputAU getSpatialMixerOutputType];
     Log(LOG_I, @"CoreAudioRenderer route change -> %@", [_outputAU getSMOTString:outputType]);
-
-    // always reinit on a change
-    [_outputAU setNeedsReinit:YES];
 }
 
 @end
