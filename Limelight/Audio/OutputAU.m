@@ -366,6 +366,18 @@ static OSStatus renderCallbackDirect(void * __nullable inRefCon,
                                                  selector:@selector(handleInterruption:)
                                                      name:AVAudioSessionInterruptionNotification
                                                    object:nil];
+                                                   
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:AVAudioEngineConfigurationChangeNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(handleConfigurationChange:)
+                                                     name:AVAudioEngineConfigurationChangeNotification
+                                                   object:nil];
+                                                   
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:AVAudioSessionRouteChangeNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(handleRouteChange:)
+                                                     name:AVAudioSessionRouteChangeNotification
+                                                   object:nil];
 
         if (_engine) {
             [_engine stop];
@@ -1059,6 +1071,57 @@ static NSString * const SMOT[] = {
                 [_engine startAndReturnError:nil];
             }
         }
+    }
+}
+- (void)handleConfigurationChange:(NSNotification *)notification {
+    if (!_isPlaying || !_engine) return;
+    
+    DEBUG_TRACE(@"[Audio Debug] AVAudioEngineConfigurationChangeNotification received. Reconnecting nodes...");
+    
+    // Stop the engine to ensure a clean state
+    [_engine pause];
+    
+    // Disconnect the source node
+    [_engine disconnectNodeOutput:_sourceNode];
+    
+    // Create the format we expect from Opus
+    AudioChannelLayoutTag layoutTag;
+    switch (_channelCount) {
+        case 2: layoutTag = kAudioChannelLayoutTag_Stereo; break;
+        case 6: layoutTag = kAudioChannelLayoutTag_AudioUnit_5_1; break;
+        case 8: layoutTag = kAudioChannelLayoutTag_AudioUnit_7_1; break;
+        default: layoutTag = kAudioChannelLayoutTag_Stereo; break;
+    }
+    AVAudioChannelLayout *layout = [[AVAudioChannelLayout alloc] initWithLayoutTag:layoutTag];
+    AVAudioFormat *format = [[AVAudioFormat alloc] initWithCommonFormat:AVAudioPCMFormatFloat32
+                                                             sampleRate:_sampleRateOpus
+                                                            interleaved:NO
+                                                          channelLayout:layout];
+                                                          
+    // Reconnect to the main mixer node, which will handle any hardware rate conversions dynamically
+    [_engine connect:_sourceNode to:_engine.mainMixerNode format:format];
+    
+    NSError *error = nil;
+    if (![_engine startAndReturnError:&error]) {
+        DEBUG_TRACE(@"[Audio Debug] Failed to restart AVAudioEngine after config change: %@", error.localizedDescription);
+    } else {
+        DEBUG_TRACE(@"[Audio Debug] Successfully reconnected and restarted AVAudioEngine.");
+    }
+}
+
+- (void)handleRouteChange:(NSNotification *)notification {
+    if (!_isPlaying) return;
+    
+    NSDictionary *userInfo = notification.userInfo;
+    AVAudioSessionRouteChangeReason reason = [userInfo[AVAudioSessionRouteChangeReasonKey] unsignedIntegerValue];
+    
+    DEBUG_TRACE(@"[Audio Debug] AVAudioSessionRouteChangeNotification received, reason: %lu", (unsigned long)reason);
+    
+    // The AVAudioEngineConfigurationChangeNotification will fire and handle the actual node reconnects.
+    // We just log the route change here for diagnostic purposes.
+    AVAudioSessionRouteDescription *currentRoute = [[AVAudioSession sharedInstance] currentRoute];
+    for (AVAudioSessionPortDescription *port in currentRoute.outputs) {
+        DEBUG_TRACE(@"[Audio Debug] Current output route: %@ (%@)", port.portName, port.portType);
     }
 }
 
