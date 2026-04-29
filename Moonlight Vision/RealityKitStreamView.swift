@@ -2451,7 +2451,6 @@ struct _RealityKitStreamView: View {
     
     private func triggerCloseSequence() {
         performCompleteTeardown()
-        viewModel.activelyStreaming = false
         viewModel.shouldCloseStream = false
 
         if isImmersive {
@@ -2622,8 +2621,9 @@ struct _RealityKitStreamView: View {
             if wasHidingForResume {
                 viewModel.isHidingForResume = false
             } else {
-                viewModel.streamState = .stopping
-                viewModel.activelyStreaming = false
+                // User closed the window via system controls. 
+                // Implicitly save the config so they can resume via the Main Menu or App Intent.
+                viewModel.savedStreamConfigForResume = streamConfig
             }
         }
         

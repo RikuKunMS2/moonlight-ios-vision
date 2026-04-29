@@ -421,12 +421,13 @@ struct UIKitStreamView: View {
 
         let wasHidingForResume = viewModel.isHidingForResume
         let isCurrentSession = (viewModel.currentStreamConfig.sessionUUID == streamConfig?.sessionUUID)
-        if isCurrentSession {
+        if isCurrentSession && viewModel.activelyStreaming && viewModel.streamState != .stopping {
             if wasHidingForResume {
                 viewModel.isHidingForResume = false
             } else {
-                viewModel.streamState = .stopping
-                viewModel.activelyStreaming = false
+                // User closed the window via system controls.
+                // Implicitly save the config so they can resume via the Main Menu or App Intent.
+                viewModel.savedStreamConfigForResume = streamConfig
             }
         }
 

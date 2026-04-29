@@ -384,10 +384,13 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
         currentlyPairingHost = host
         print("trying to pair")
         
+        // Capture discoveryManager locally so it can be safely passed to the detached task
+        let localDiscoveryManager = discoveryManager
+        
         Task {
             // Run blocking discovery stop on a background thread so we don't freeze the UI
-            await Task.detached(priority: .userInitiated) { [weak self] in
-                self?.discoveryManager?.stopDiscoveryBlocking()
+            await Task.detached(priority: .userInitiated) {
+                localDiscoveryManager?.stopDiscoveryBlocking()
             }.value
             
             let httpManager = HttpManager(host: host)
