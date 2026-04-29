@@ -87,6 +87,7 @@ public class TemporarySettings: NSObject {
     @objc public var rememberStreamSettings = true
     
     @objc public var spatialAudioMode: Int = SpatialAudioMode.window.rawValue
+    @objc public var preferUninterruptedAudio: Bool = true
 
     @objc public var parent: MoonlightSettings?
 
@@ -118,6 +119,7 @@ public class TemporarySettings: NSObject {
         }
         
         self.spatialAudioMode = SpatialAudioMode.window.rawValue
+        self.preferUninterruptedAudio = true
         super.init()
     }
 
@@ -208,6 +210,7 @@ public class TemporarySettings: NSObject {
             self.rememberStreamSettings = UserDefaults.standard.object(forKey: "rememberStreamSettings") as? Bool ?? true
             self.uikitWindowCornerRadius = UserDefaults.standard.object(forKey: "uikitWindowCornerRadius") as? Float ?? 0.0
             self.spatialAudioMode = UserDefaults.standard.object(forKey: "spatialAudioMode") as? Int ?? SpatialAudioMode.window.rawValue
+            self.preferUninterruptedAudio = UserDefaults.standard.object(forKey: "preferUninterruptedAudio") as? Bool ?? true
             #endif
 
             super.init()
@@ -228,6 +231,7 @@ public class TemporarySettings: NSObject {
         UserDefaults.standard.set(self.uikitWindowCornerRadius, forKey: "uikitWindowCornerRadius")
         UserDefaults.standard.set(self.realitykitScreenCornerRadius, forKey: "realitykitScreenCornerRadius")
         UserDefaults.standard.set(self.spatialAudioMode, forKey: "spatialAudioMode")
+        UserDefaults.standard.set(self.preferUninterruptedAudio, forKey: "preferUninterruptedAudio")
 
         // save settings to parent via DataManager
         let dataManager = DataManager()
@@ -340,6 +344,7 @@ public class TemporarySettings: NSObject {
         self.preferredCodec = PreferredCodec.auto
         self.uikitWindowCornerRadius = 0.0
         self.spatialAudioMode = SpatialAudioMode.window.rawValue
+        self.preferUninterruptedAudio = true
         
         // HDR / Color settings (correct neutral for HDR shader)
         self.brightness = 1.0
@@ -384,6 +389,9 @@ public class TemporarySettings: NSObject {
         
         // Reset spatial audio mode
         defaults.set(SpatialAudioMode.window.rawValue, forKey: "spatialAudioMode")
+        
+        // Reset prefer uninterrupted audio
+        defaults.set(true, forKey: "preferUninterruptedAudio")
         
         // Save the reset values
         self.save()

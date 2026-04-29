@@ -341,6 +341,14 @@ static OSStatus renderCallbackDirect(void * __nullable inRefCon,
         // "Session lookup failed" (-50) error because the engine captures a null proxy.
         // Doing this synchronously on the main thread ensures the CoreAudio daemon registers it.
         AVAudioSessionCategoryOptions options = session.categoryOptions;
+        BOOL preferUninterrupted = YES;
+        id preferObj = [[NSUserDefaults standardUserDefaults] objectForKey:@"preferUninterruptedAudio"];
+        if (preferObj) {
+            preferUninterrupted = [preferObj boolValue];
+        }
+        if (preferUninterrupted) {
+            options |= AVAudioSessionCategoryOptionMixWithOthers;
+        }
         [session setCategory:AVAudioSessionCategoryPlayback withOptions:options error:&error];
         [session setMode:AVAudioSessionModeMoviePlayback error:&error];
         
@@ -1052,8 +1060,20 @@ static NSString * const SMOT[] = {
             AVAudioSession *session = [AVAudioSession sharedInstance];
             NSError *error = nil;
             AVAudioSessionCategoryOptions currentOptions = session.categoryOptions;
-            AVAudioSessionCategoryOptions exclusiveOptions = currentOptions & ~AVAudioSessionCategoryOptionMixWithOthers;
-            [session setCategory:AVAudioSessionCategoryPlayback withOptions:exclusiveOptions error:nil];
+            BOOL preferUninterrupted = YES;
+            id preferObj = [[NSUserDefaults standardUserDefaults] objectForKey:@"preferUninterruptedAudio"];
+            if (preferObj) {
+                preferUninterrupted = [preferObj boolValue];
+            }
+            
+            AVAudioSessionCategoryOptions targetOptions = currentOptions;
+            if (preferUninterrupted) {
+                targetOptions |= AVAudioSessionCategoryOptionMixWithOthers;
+            } else {
+                targetOptions &= ~AVAudioSessionCategoryOptionMixWithOthers;
+            }
+            
+            [session setCategory:AVAudioSessionCategoryPlayback withOptions:targetOptions error:nil];
             
             if (![session setActive:YES error:&error]) {
                 // Recover fallback

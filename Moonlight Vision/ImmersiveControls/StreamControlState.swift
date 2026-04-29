@@ -74,6 +74,7 @@ class StreamControlState: ObservableObject {
     
     // MARK: - Audio State
     @Published var isAudioFallbackModeActive: Bool = false
+    @Published var preferUninterruptedAudio: Bool = true
     
     private init() {
         // Load saved immersive screen settings
@@ -97,6 +98,9 @@ class StreamControlState: ObservableObject {
         }
         if let savedPinnedHeight = defaults.object(forKey: "realitykitPinnedStageHeight") as? Float {
             pinnedStageHeight = savedPinnedHeight
+        }
+        if let savedPreferUninterruptedAudio = defaults.object(forKey: "preferUninterruptedAudio") as? Bool {
+            preferUninterruptedAudio = savedPreferUninterruptedAudio
         }
         
         NotificationCenter.default.addObserver(
