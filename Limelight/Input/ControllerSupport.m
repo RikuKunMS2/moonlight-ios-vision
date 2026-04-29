@@ -723,6 +723,8 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             // DualShock/DualSense controller
             if (controller.physicalInputProfile.buttons[GCInputDualShockTouchpadButton]) {
                 supportedButtonFlags |= TOUCHPAD_FLAG;
+                // Also map touchpad to the Xbox Home button to workaround iOS intercepting the PS button
+                supportedButtonFlags |= SPECIAL_FLAG;
             }
             if (controller.physicalInputProfile.dpads[GCInputDualShockTouchpadOne]) {
                 capabilities |= LI_CCAP_TOUCHPAD;
@@ -961,6 +963,8 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                         // DualShock/DualSense controllers
                         if (gamepad.controller.physicalInputProfile.buttons[GCInputDualShockTouchpadButton]) {
                             UPDATE_BUTTON_FLAG(limeController, TOUCHPAD_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputDualShockTouchpadButton].pressed);
+                            // Also map touchpad to the Xbox Home button to workaround iOS intercepting the PS button
+                            UPDATE_BUTTON_FLAG(limeController, SPECIAL_FLAG, gamepad.controller.physicalInputProfile.buttons[GCInputDualShockTouchpadButton].pressed);
                         }
                         if (gamepad.controller.physicalInputProfile.dpads[GCInputDualShockTouchpadOne]) {
                             [self handleControllerTouchpad:limeController
@@ -1057,6 +1061,8 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                         // DualShock/DualSense controllers
                         if (gamepad.buttons[GCInputDualShockTouchpadButton]) {
                             UPDATE_BUTTON_FLAG(limeController, TOUCHPAD_FLAG, gamepad.buttons[GCInputDualShockTouchpadButton].pressed);
+                            // Also map touchpad to the Xbox Home button to workaround iOS intercepting the PS button
+                            UPDATE_BUTTON_FLAG(limeController, SPECIAL_FLAG, gamepad.buttons[GCInputDualShockTouchpadButton].pressed);
                         }
                         if (gamepad.dpads[GCInputDualShockTouchpadOne]) {
                             [self handleControllerTouchpad:limeController
