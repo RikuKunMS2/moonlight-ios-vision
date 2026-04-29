@@ -439,10 +439,6 @@ struct UIKitStreamView: View {
             saveWindowSizeForRestore()
         }
 
-        if !wasHidingForResume {
-            viewModel.savedStreamConfigForResume = nil
-        }
-
         streamConfig = nil
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
