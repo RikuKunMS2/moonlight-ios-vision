@@ -340,12 +340,32 @@ static OSStatus renderCallbackDirect(void * __nullable inRefCon,
         // If the session is inactive when AVAudioEngine is created, visionOS throws a
         // "Session lookup failed" (-50) error because the engine captures a null proxy.
         // Doing this synchronously on the main thread ensures the CoreAudio daemon registers it.
-        [session setCategory:AVAudioSessionCategoryPlayback error:&error];
+        AVAudioSessionCategoryOptions options = session.categoryOptions;
+        [session setCategory:AVAudioSessionCategoryPlayback withOptions:options error:&error];
         [session setMode:AVAudioSessionModeMoviePlayback error:&error];
-        [session setActive:YES error:&error];
-        if (error) {
-            CA_LogError(-1, "Failed to activate AVAudioSession: %@", error.localizedDescription);
+        
+        BOOL success = [session setActive:YES error:&error];
+        if (!success) {
+            CA_LogError(-1, "Failed to activate AVAudioSession (likely mic in use): %@", error.localizedDescription);
+            options |= AVAudioSessionCategoryOptionMixWithOthers;
+            [session setCategory:AVAudioSessionCategoryPlayback withOptions:options error:nil];
+            success = [session setActive:YES error:&error];
+            if (success) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [[NSNotificationCenter defaultCenter] postNotificationName:@"AudioFallbackModeChangedNotification" object:nil userInfo:@{@"fallbackMode": @(YES)}];
+                });
+            }
+        } else {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"AudioFallbackModeChangedNotification" object:nil userInfo:@{@"fallbackMode": @(NO)}];
+            });
         }
+        
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:AVAudioSessionInterruptionNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(handleInterruption:)
+                                                     name:AVAudioSessionInterruptionNotification
+                                                   object:nil];
 
         if (_engine) {
             [_engine stop];
@@ -875,6 +895,7 @@ static NSString * const SMOT[] = {
 
 - (BOOL)start
 {
+    _isPlaying = YES;
 #if TARGET_OS_OSX
     return AudioOutputUnitStart(_outputAU) == noErr;
 #else
@@ -926,6 +947,7 @@ static NSString * const SMOT[] = {
 
 - (BOOL)stop
 {
+    _isPlaying = NO;
 #if TARGET_OS_OSX
     return AudioOutputUnitStop(_outputAU) == noErr;
 #else
@@ -987,6 +1009,57 @@ static NSString * const SMOT[] = {
 //                (double)(pcmBytes * 100.0 / _ringBuffer.length), pcmBytes, pcmDuration * 1000.0, freeBytes, [bitrateAvg output], [decodeTimeAvg output]);
 
     return out;
+}
+
+- (void)handleInterruption:(NSNotification *)notification {
+    if (!_isPlaying) return;
+    
+    NSDictionary *userInfo = notification.userInfo;
+    AVAudioSessionInterruptionType type = [userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue];
+
+    if (type == AVAudioSessionInterruptionTypeBegan) {
+        DEBUG_TRACE(@"[Audio Debug] AVAudioSessionInterruptionTypeBegan");
+        
+        // Try to immediately fallback to mixWithOthers so we can play alongside VoIP
+        AVAudioSession *session = [AVAudioSession sharedInstance];
+        AVAudioSessionCategoryOptions options = session.categoryOptions | AVAudioSessionCategoryOptionMixWithOthers;
+        NSError *error = nil;
+        [session setCategory:AVAudioSessionCategoryPlayback withOptions:options error:&error];
+        if ([session setActive:YES error:&error]) {
+            if (_engine) {
+                [_engine startAndReturnError:nil];
+            }
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"AudioFallbackModeChangedNotification" object:nil userInfo:@{@"fallbackMode": @(YES)}];
+            });
+        }
+    } else if (type == AVAudioSessionInterruptionTypeEnded) {
+        DEBUG_TRACE(@"[Audio Debug] AVAudioSessionInterruptionTypeEnded");
+        AVAudioSessionInterruptionOptions options = [userInfo[AVAudioSessionInterruptionOptionKey] unsignedIntegerValue];
+        if (options == AVAudioSessionInterruptionOptionShouldResume) {
+            AVAudioSession *session = [AVAudioSession sharedInstance];
+            NSError *error = nil;
+            AVAudioSessionCategoryOptions currentOptions = session.categoryOptions;
+            AVAudioSessionCategoryOptions exclusiveOptions = currentOptions & ~AVAudioSessionCategoryOptionMixWithOthers;
+            [session setCategory:AVAudioSessionCategoryPlayback withOptions:exclusiveOptions error:nil];
+            
+            if (![session setActive:YES error:&error]) {
+                // Recover fallback
+                [session setCategory:AVAudioSessionCategoryPlayback withOptions:currentOptions | AVAudioSessionCategoryOptionMixWithOthers error:nil];
+                [session setActive:YES error:nil];
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [[NSNotificationCenter defaultCenter] postNotificationName:@"AudioFallbackModeChangedNotification" object:nil userInfo:@{@"fallbackMode": @(YES)}];
+                });
+            } else {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [[NSNotificationCenter defaultCenter] postNotificationName:@"AudioFallbackModeChangedNotification" object:nil userInfo:@{@"fallbackMode": @(NO)}];
+                });
+            }
+            if (_engine) {
+                [_engine startAndReturnError:nil];
+            }
+        }
+    }
 }
 
 @end

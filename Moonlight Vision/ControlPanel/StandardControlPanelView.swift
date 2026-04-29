@@ -16,6 +16,7 @@ import SwiftUI
 /// Standard mode control panel view
 struct StandardControlPanelView: View {
     @EnvironmentObject private var viewModel: MainViewModel
+    @ObservedObject private var controlState = StreamControlState.shared
     
     /// Home: push main (stream stays). Stop: full teardown. If nil, closeAction used for both.
     var homeAction: (() -> Void)? = nil
@@ -150,12 +151,13 @@ struct StandardControlPanelView: View {
                 .frame(width: 80, height: 80)
                 
                 // Spatial audio
+                let fallback = controlState.isAudioFallbackModeActive
                 ModernActionTile(
-                    icon: spatialAudioMode ? "speaker.wave.3.fill" : "headphones",
-                    title: spatialAudioMode ? 
+                    icon: fallback ? "exclamationmark.triangle.fill" : (spatialAudioMode ? "speaker.wave.3.fill" : "headphones"),
+                    title: fallback ? "Audio: Mic in Use" : (spatialAudioMode ? 
                         (viewModel.currentLanguage == .english ? viewModel.localized("spatial_audio_short") : viewModel.localized("spatial_audio")) :
-                        (viewModel.currentLanguage == .english ? viewModel.localized("stereo_audio_short") : viewModel.localized("stereo_audio")),
-                    isActive: spatialAudioMode
+                        (viewModel.currentLanguage == .english ? viewModel.localized("stereo_audio_short") : viewModel.localized("stereo_audio"))),
+                    isActive: fallback || spatialAudioMode
                 ) {
                     withAnimation {
                         spatialAudioMode.toggle()
@@ -299,10 +301,11 @@ struct StandardControlPanelView: View {
                     }
                     
                     // Spatial audio
+                    let fallback = controlState.isAudioFallbackModeActive
                     ModernActionTile(
-                        icon: spatialAudioMode ? "speaker.wave.3.fill" : "headphones",
-                        title: spatialAudioMode ? viewModel.localized("spatial_audio") : viewModel.localized("stereo_audio"),
-                        isActive: spatialAudioMode
+                        icon: fallback ? "exclamationmark.triangle.fill" : (spatialAudioMode ? "speaker.wave.3.fill" : "headphones"),
+                        title: fallback ? "Audio: Mic in Use" : (spatialAudioMode ? viewModel.localized("spatial_audio") : viewModel.localized("stereo_audio")),
+                        isActive: fallback || spatialAudioMode
                     ) {
                         withAnimation {
                             spatialAudioMode.toggle()

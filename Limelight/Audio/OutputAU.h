@@ -53,6 +53,7 @@
 @property (nonatomic, assign) double outputSoftwareLatencyMax;
 
 @property (nonatomic, assign) BOOL needsReinit;
+@property (nonatomic, assign) BOOL isPlaying;
 
 @property (nonatomic, assign) TPCircularBuffer ringBuffer;
 @property (nonatomic, strong) AllocatedAudioBufferList * _Nullable spatialBuffer;

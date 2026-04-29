@@ -72,6 +72,9 @@ class StreamControlState: ObservableObject {
     @Published var isCalibrationModeActive: Bool = false
     @Published var reactiveLighting: Bool = false
     
+    // MARK: - Audio State
+    @Published var isAudioFallbackModeActive: Bool = false
+    
     private init() {
         // Load saved immersive screen settings
         let defaults = UserDefaults.standard
@@ -94,6 +97,16 @@ class StreamControlState: ObservableObject {
         }
         if let savedPinnedHeight = defaults.object(forKey: "realitykitPinnedStageHeight") as? Float {
             pinnedStageHeight = savedPinnedHeight
+        }
+        
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("AudioFallbackModeChangedNotification"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let fallbackMode = notification.userInfo?["fallbackMode"] as? Bool {
+                self?.isAudioFallbackModeActive = fallbackMode
+            }
         }
     }
     

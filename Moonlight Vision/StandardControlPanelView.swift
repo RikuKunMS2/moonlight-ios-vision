@@ -16,6 +16,7 @@ import SwiftUI
 /// Standard mode control panel view
 struct StandardControlPanelView: View {
     @EnvironmentObject private var viewModel: MainViewModel
+    @ObservedObject private var controlState = StreamControlState.shared
     
     /// Home: push main (stream stays). Stop: full teardown. If nil, closeAction used for both.
     var homeAction: (() -> Void)? = nil
@@ -132,10 +133,11 @@ struct StandardControlPanelView: View {
                 
                 // Spatial audio
                 let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
+                let fallback = controlState.isAudioFallbackModeActive
                 ModernActionTile(
-                    icon: currentMode == .surround ? "speaker.wave.3.fill" : (currentMode == .window ? "person.fill.viewfinder" : "headphones"),
-                    title: currentMode == .surround ? "7.1 Surround" : (currentMode == .window ? viewModel.localized("spatial_audio") : viewModel.localized("stereo_audio")),
-                    isActive: currentMode != .stereo
+                    icon: fallback ? "exclamationmark.triangle.fill" : (currentMode == .surround ? "speaker.wave.3.fill" : (currentMode == .window ? "person.fill.viewfinder" : "headphones")),
+                    title: fallback ? "Audio: Mic in Use" : (currentMode == .surround ? "7.1 Surround" : (currentMode == .window ? viewModel.localized("spatial_audio") : viewModel.localized("stereo_audio"))),
+                    isActive: fallback || currentMode != .stereo
                 ) {
                     withAnimation {
                         let nextModeRaw = (currentMode.rawValue + 1) % 3
