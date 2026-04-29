@@ -2481,26 +2481,76 @@ struct _RealityKitStreamView: View {
         let msg = (notification.userInfo?["message"] as? String) ?? viewModel.localized("unknown_error")
         
         if reconnectAttemptCount < maxReconnectAttempts {
-            reconnectAttemptCount += 1
-            isReconnecting = true
-            connectionCallbacks.isReconnectingForRetry = true
-            isPerformingReconnectTeardown = true
-            print("[StreamView] Connection lost, auto-reconnect attempt \(reconnectAttemptCount)/\(maxReconnectAttempts)")
-            performReconnectTeardown {
-                self.isPerformingReconnectTeardown = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + self.reconnectDelaySeconds) {
-                    guard !self.hasPerformedTeardown, self.viewModel.activelyStreaming else {
-                        self.isReconnecting = false
-                        self.connectionCallbacks.isReconnectingForRetry = false
-                        return
+            let configToUse = self.streamConfig
+            Task {
+                var isOnline = false
+                if let hostAddress = configToUse.host,
+                   let host = viewModel.hosts.first(where: { $0.activeAddress == hostAddress || $0.address == hostAddress || $0.localAddress == hostAddress || $0.externalAddress == hostAddress }) {
+                    let httpManager = HttpManager(host: host)
+                    let serverInfoResponse = ServerInfoResponse()
+                    let request = HttpRequest(
+                        for: serverInfoResponse,
+                        with: httpManager?.newServerInfoRequest(false),
+                        fallbackError: 401,
+                        fallbackRequest: httpManager?.newHttpServerInfoRequest()
+                    )
+                    
+                    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                        DispatchQueue.global(qos: .userInitiated).async {
+                            httpManager?.executeRequestSynchronously(request)
+                            continuation.resume()
+                        }
                     }
-                    self.renderGateOpen = true
-                    self.controllerSupport = ControllerSupport(config: self.streamConfig, delegate: DummyControllerDelegate())
-                    self.connectionCallbacks.controllerSupport = self.controllerSupport
-                    self.startStreamIfNeeded()
+                    isOnline = serverInfoResponse.isStatusOk()
+                } else {
+                    isOnline = true // Fallback to normal retry if host missing
+                }
+                
+                await MainActor.run {
+                    guard !self.hasPerformedTeardown, self.viewModel.activelyStreaming else { return }
+                    
+                    if isOnline {
+                        self.reconnectAttemptCount += 1
+                        self.isReconnecting = true
+                        self.connectionCallbacks.isReconnectingForRetry = true
+                        self.isPerformingReconnectTeardown = true
+                        print("[StreamView] Connection lost, auto-reconnect attempt \(self.reconnectAttemptCount)/\(self.maxReconnectAttempts)")
+                        self.performReconnectTeardown {
+                            self.isPerformingReconnectTeardown = false
+                            DispatchQueue.main.asyncAfter(deadline: .now() + self.reconnectDelaySeconds) {
+                                guard !self.hasPerformedTeardown, self.viewModel.activelyStreaming else {
+                                    self.isReconnecting = false
+                                    self.connectionCallbacks.isReconnectingForRetry = false
+                                    return
+                                }
+                                self.renderGateOpen = true
+                                self.controllerSupport = ControllerSupport(config: self.streamConfig, delegate: DummyControllerDelegate())
+                                self.connectionCallbacks.controllerSupport = self.controllerSupport
+                                self.startStreamIfNeeded()
+                            }
+                        }
+                    } else {
+                        print("[StreamView] Host offline, aborting reconnect attempts")
+                        self.isReconnecting = false
+                        self.isPerformingReconnectTeardown = false
+                        self.connectionCallbacks.isReconnectingForRetry = false
+                        self.reconnectAttemptCount = 0
+                        self.lastStreamErrorMessage = msg
+                        self.connectionCallbacks.showAlert = true
+                        self.connectionCallbacks.errorMessage = msg
+                        if self.isImmersive {
+                            self.viewModel.streamState = .stopping
+                        }
+                        self.performReconnectTeardown {
+                            NotificationCenter.default.post(name: Notification.Name("RealityKitStreamErrorNotification"), object: nil, userInfo: ["message": msg])
+                            if !self.isImmersive {
+                                NotificationCenter.default.post(name: Notification.Name("RealityKitRetriesExhausted"), object: nil)
+                            }
+                        }
+                    }
                 }
             }
-            } else {
+        } else {
             print("[StreamView] Reconnect attempts exhausted, showing error overlay")
             isReconnecting = false
             isPerformingReconnectTeardown = false

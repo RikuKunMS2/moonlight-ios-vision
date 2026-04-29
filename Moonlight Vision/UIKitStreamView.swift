@@ -270,17 +270,55 @@ struct UIKitStreamView: View {
         let msg = (notification.userInfo?["message"] as? String) ?? viewModel.localized("unknown_error")
         
         if uikitReconnectAttemptCount < uikitMaxReconnectAttempts {
-            uikitReconnectAttemptCount += 1
-            isUIKitReconnecting = true
-            let streamVC = _UIKitStreamView.controllerReference.object
-            streamVC?.uikitReconnectingForRetry = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + uikitReconnectDelaySeconds) {
-                guard self.viewModel.activelyStreaming else {
-                    self.isUIKitReconnecting = false
-                    _UIKitStreamView.controllerReference.object?.uikitReconnectingForRetry = false
-                    return
+            let configToUse = self.streamConfig
+            Task {
+                var isOnline = false
+                if let config = configToUse, let hostAddress = config.host,
+                   let host = viewModel.hosts.first(where: { $0.activeAddress == hostAddress || $0.address == hostAddress || $0.localAddress == hostAddress || $0.externalAddress == hostAddress }) {
+                    let httpManager = HttpManager(host: host)
+                    let serverInfoResponse = ServerInfoResponse()
+                    let request = HttpRequest(
+                        for: serverInfoResponse,
+                        with: httpManager?.newServerInfoRequest(false),
+                        fallbackError: 401,
+                        fallbackRequest: httpManager?.newHttpServerInfoRequest()
+                    )
+                    
+                    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                        DispatchQueue.global(qos: .userInitiated).async {
+                            httpManager?.executeRequestSynchronously(request)
+                            continuation.resume()
+                        }
+                    }
+                    isOnline = serverInfoResponse.isStatusOk()
+                } else {
+                    isOnline = true
                 }
-                NotificationCenter.default.post(name: Notification.Name("UIKitRequestStreamRestart"), object: nil)
+                
+                await MainActor.run {
+                    guard self.viewModel.activelyStreaming else { return }
+                    if isOnline {
+                        self.uikitReconnectAttemptCount += 1
+                        self.isUIKitReconnecting = true
+                        let streamVC = _UIKitStreamView.controllerReference.object
+                        streamVC?.uikitReconnectingForRetry = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + self.uikitReconnectDelaySeconds) {
+                            guard self.viewModel.activelyStreaming else {
+                                self.isUIKitReconnecting = false
+                                _UIKitStreamView.controllerReference.object?.uikitReconnectingForRetry = false
+                                return
+                            }
+                            NotificationCenter.default.post(name: Notification.Name("UIKitRequestStreamRestart"), object: nil)
+                        }
+                    } else {
+                        self.uikitReconnectAttemptCount = 0
+                        self.isUIKitReconnecting = false
+                        _UIKitStreamView.controllerReference.object?.uikitReconnectingForRetry = false
+                        self.lastStreamErrorMessage = msg
+                        _UIKitStreamView.controllerReference.object?.stopStream()
+                        NotificationCenter.default.post(name: Notification.Name("UIKitRetriesExhausted"), object: nil)
+                    }
+                }
             }
         } else {
             uikitReconnectAttemptCount = 0
