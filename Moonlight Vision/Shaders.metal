@@ -297,7 +297,6 @@ fragment half4 copyFragmentShaderHDR_EDR(
         // 203 nits (BT.2408 reference) → 1.0 EDR (display SDR white). No extra gain.
         float3 linearNits = pqInv(clamp(rgb_nl, 0.0, 1.0));
         finalColor = pqNitsToDisplayP3(linearNits, params);
-        finalColor = pqToneMapLumaDisplayP3(finalColor, PQ_SOFT_CLIP_KNEE, PQ_SOFT_CLIP_MAX_EDR);
 
         // Apply user-controlled HDR grading (neutral by default: boost=1, contrast=1, saturation=1, brightness=0).
         finalColor *= max(full.boost, 0.0);
@@ -320,6 +319,8 @@ fragment half4 copyFragmentShaderHDR_EDR(
                 : linearColor;
         }
     }
+
+    finalColor = min(finalColor, float3(20.0));
 
     if (full.mode == 2) {
         if (in.uv.y < 0.15) {
@@ -354,7 +355,6 @@ fragment half4 copyFragmentShaderHEVC_EDR(
     if (params.isPQ == 1u) {
         float3 linearNits = pqInv(clamp(rgb_nl, 0.0, 1.0));
         finalColor = pqNitsToDisplayP3(linearNits, params);
-        finalColor = pqToneMapLumaDisplayP3(finalColor, PQ_SOFT_CLIP_KNEE, PQ_SOFT_CLIP_MAX_EDR);
 
         finalColor *= max(full.boost, 0.0);
         finalColor += max(full.brightness, 0.0);
@@ -374,6 +374,8 @@ fragment half4 copyFragmentShaderHEVC_EDR(
                 : linearColor;
         }
     }
+
+    finalColor = min(finalColor, float3(20.0));
 
     if (full.mode == 2) {
         if (in.uv.y < 0.15) {
