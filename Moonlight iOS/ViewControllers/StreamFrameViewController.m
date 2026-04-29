@@ -423,6 +423,24 @@
 - (void) startStreamManager {
     if (_streamMan != nil) return;
     if (!_streamConfig) return;
+    
+    if (_controllerSupport == nil) {
+        _controllerSupport = [[ControllerSupport alloc] initWithConfig:self.streamConfig delegate:self];
+    }
+    
+    if (_streamView == nil) {
+        _streamView = [[StreamView alloc] initWithFrame:self.view.frame];
+        [_streamView setupStreamView:_controllerSupport interactionDelegate:self config:self.streamConfig];
+        _streamView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        
+        if (_scrollView) {
+            [_scrollView addSubview:_streamView];
+        } else {
+            [self.view addSubview:_streamView];
+            [self.view sendSubviewToBack:_streamView];
+        }
+    }
+    
     _streamMan = [[StreamManager alloc] initWithConfig:_streamConfig
                                        rendererProvider:^id<AnyVideoDecoderRenderer> __strong {
         return [[VideoDecoderRenderer alloc] initWithView:self->_streamView callbacks:self streamAspectRatio:(float)self.streamConfig.width / (float)self.streamConfig.height useFramePacing:self.streamConfig.useFramePacing];

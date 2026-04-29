@@ -159,12 +159,17 @@ struct ComputerView: View {
                      .multilineTextAlignment(.center)
                      .padding(.horizontal)
 
-                Button(viewModel.localized("start_pairing")) {
-                    // ViewModel should handle checking if host is online again if necessary,
-                    // but ComputerView already knows it's online here.
-                    viewModel.tryPairHost(host)
+                if viewModel.isInitiatingPairing {
+                    ProgressView()
+                        .padding(.vertical)
+                } else {
+                    Button(viewModel.localized("start_pairing")) {
+                        // ViewModel should handle checking if host is online again if necessary,
+                        // but ComputerView already knows it's online here.
+                        viewModel.tryPairHost(host)
+                    }
+                    .controlSize(.large) // Make button prominent
                 }
-                .controlSize(.large) // Make button prominent
                 // The alert is attached higher up in the view hierarchy now
             }
 
@@ -178,11 +183,15 @@ struct ComputerView: View {
                       .padding(.bottom)
 
                  // Option to force pairing attempt
-                 Button(viewModel.localized("start_pairing_anyway")) {
-                     print("User initiated pairing while pairState is unknown for \(host.name).")
-                     viewModel.tryPairHost(host)
+                 if viewModel.isInitiatingPairing {
+                     ProgressView()
+                 } else {
+                     Button(viewModel.localized("start_pairing_anyway")) {
+                         print("User initiated pairing while pairState is unknown for \(host.name).")
+                         viewModel.tryPairHost(host)
+                     }
+                     .controlSize(.regular)
                  }
-                 .controlSize(.regular)
                  // The alert is attached higher up in the view hierarchy
 
                  // Option to stop automatic background checks for this view instance

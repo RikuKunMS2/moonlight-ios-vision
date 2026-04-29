@@ -34,6 +34,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     @Published var pairingInProgress = false
     @Published var currentPin = ""
+    @Published var isInitiatingPairing = false
 
     @Published var errorAddingHost = false
     @Published var addHostErrorMessage = ""
@@ -379,17 +380,29 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
     }
 
     func tryPairHost(_ host: TemporaryHost) {
-        discoveryManager?.stopDiscoveryBlocking()
-        let httpManager = HttpManager(host: host)
-        // do we need to retain this? probably?
-        let pairManager = PairManager(manager: httpManager, clientCert: clientCert, callback: self)
-        opQueue.addOperation(pairManager!)
+        isInitiatingPairing = true
         currentlyPairingHost = host
         print("trying to pair")
+        
+        Task {
+            // Run blocking discovery stop on a background thread so we don't freeze the UI
+            await Task.detached(priority: .userInitiated) { [weak self] in
+                self?.discoveryManager?.stopDiscoveryBlocking()
+            }.value
+            
+            let httpManager = HttpManager(host: host)
+            let pairManager = PairManager(manager: httpManager, clientCert: self.clientCert, callback: self)
+            if let pairManager = pairManager {
+                self.opQueue.addOperation(pairManager)
+            } else {
+                self.isInitiatingPairing = false
+            }
+        }
     }
 
     nonisolated func startPairing(_ PIN: String!) {
         Task { @MainActor in
+            isInitiatingPairing = false
             pairingInProgress = true
             currentPin = PIN
         }
@@ -398,6 +411,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     nonisolated func pairSuccessful(_ serverCert: Data!) {
         Task { @MainActor in
+            isInitiatingPairing = false
             if let pairingHost = currentlyPairingHost {
                  print("pairSuccessful - Pairing successful for host: \(pairingHost.name)")
                  pairingHost.serverCert = serverCert
@@ -412,6 +426,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     nonisolated func pairFailed(_ message: String!) {
         Task { @MainActor in
+            isInitiatingPairing = false
             print("pairFailed - Pairing failed for host: \(currentlyPairingHost?.name ?? "Unknown"). Reason: \(message ?? "Unknown error")")
             endPairing()
         }
@@ -419,6 +434,7 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
 
     nonisolated func alreadyPaired() {
         Task { @MainActor in
+            isInitiatingPairing = false
             print("alreadyPaired - Host \(currentlyPairingHost?.name ?? "Unknown") is already paired.")
             if let host = currentlyPairingHost {
                 // Ensure pair state is correct if discovery missed it somehow
