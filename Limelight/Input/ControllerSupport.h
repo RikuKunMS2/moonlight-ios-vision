@@ -27,11 +27,9 @@
 @interface ControllerSupport : NSObject;
 @property (nonatomic, assign) BOOL relativeMouseMode;
 // Add these properties
-@property (nonatomic, assign) BOOL realityKitMode;
-@property (nonatomic, copy) void (^realityKitMouseMovedHandler)(float deltaX, float deltaY);
 
 // Keyboard Reality Kit Stuff
-@property (nonatomic, copy) void (^realityKitKeyboardHandler)(int keyCode, BOOL pressed);
+// Handlers removed for Option B global input capture
 -(void) registerKeyboardCallbacks:(GCKeyboard*) keyboard API_AVAILABLE(ios(14.0));
 
 -(id) initWithConfig:(StreamConfiguration*)streamConfig delegate:(id<ControllerSupportDelegate>)delegate;

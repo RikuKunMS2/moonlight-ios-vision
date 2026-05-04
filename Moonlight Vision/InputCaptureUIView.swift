@@ -142,13 +142,11 @@ class InputCaptureUIView: UIView, UIKeyInput {
     
     override init(frame: CGRect) {
         super.init(frame: frame)
-        setupGestures()
         startFirstResponderMonitoring()
     }
     
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        setupGestures()
         startFirstResponderMonitoring()
     }
     
@@ -167,10 +165,7 @@ class InputCaptureUIView: UIView, UIKeyInput {
     }
     
     private func setupGestures() {
-        // From commit 12250ee: Attach GCEventInteraction for reliable controller input
-        DispatchQueue.main.async {
-            self.controllerSupport?.attachGCEventInteraction(to: self)
-        }
+        // GCEventInteraction removed to allow global input capture (Option B)
     }
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {

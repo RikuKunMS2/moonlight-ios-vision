@@ -1020,6 +1020,7 @@ struct _RealityKitStreamView: View {
             viewModel.streamSettings.dimPassthrough = false
 
             self.targetScale = self.screenScale
+            self.tiltAngle = viewModel.streamSettings.realitykitRendererTilt
 
             // Initialize input mode from user preference
             let defaultMode = UserDefaults.standard.integer(forKey: "immersive.defaultControlMode")
@@ -2370,6 +2371,9 @@ struct _RealityKitStreamView: View {
                         },
                         isVolumeModeProvider: {
                             !self.isImmersive
+                        },
+                        enableAmbilightProvider: {
+                            self.viewModel.streamSettings.reactiveLightingEnabled
                         },
                         callbackToRender: { textureQueue, ambilightQueue, correctedResolution in
                             guard self.renderGateOpen else { return }

@@ -297,6 +297,15 @@ struct SettingsView: View {
                                 settings.save()
                             }
                         }
+                        
+                    Label(viewModel.localized("screen_tilt"), systemImage: "rotate.3d")
+                    Slider(value: $settings.realitykitRendererTilt, in: (-0.5...0.5), step: 0.01)
+                        .onChange(of: settings.realitykitRendererTilt) { _, _ in
+                            saveTimer?.invalidate()
+                            saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+                                settings.save()
+                            }
+                        }
                     
                     Toggle(isOn: $settings.dimPassthrough) {
                         Label(viewModel.localized("dim_passthrough"), systemImage: "moon.fill")

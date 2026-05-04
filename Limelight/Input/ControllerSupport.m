@@ -178,18 +178,9 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             __strong typeof(weakSelf) strongSelf = weakSelf;
             if (!strongSelf) return;
             
-            // --- REALITYKIT PASSTHROUGH ---
-            if (strongSelf.realityKitMode) {
-                // Optional Logging
-                // NSLog(@"[ControllerSupport] Key Event: Code %d, Pressed: %d", (int)keyCode, pressed);
-                
-                if (strongSelf.realityKitKeyboardHandler) {
-                    strongSelf.realityKitKeyboardHandler((int)keyCode, pressed);
-                }
-                return; // Stop processing here if in RealityKit mode
-            }
-            
-            // Add standard iOS keyboard handling here if you need it for the 2D menu
+            // Global Keyboard Capture (Option B) - Bypass Responder Chain
+            char keyAction = pressed ? 0x03 : 0x04;
+            LiSendKeyboardEvent((short)keyCode, keyAction, 0);
         };
     }
 
@@ -1128,16 +1119,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             NSLog(@"[ControllerSupport] GCMouse Moved - Delta X: %.4f, Delta Y: %.4f", deltaX, deltaY);
         }
 
-        // --- REALITYKIT HANDLING ---
-        // If we are in the Volume, send data to Swift and skip standard processing
-        if (strongSelf.realityKitMode) {
-            if (strongSelf.realityKitMouseMovedHandler) {
-                strongSelf.realityKitMouseMovedHandler(deltaX, deltaY);
-            }
-            return;
-        }
-
-        // --- STANDARD LOGIC (Existing) ---
+        // Global Mouse Capture (Option B) - Bypass Responder Chain
         strongSelf->accumulatedDeltaX += deltaX / MOUSE_SPEED_DIVISOR;
         strongSelf->accumulatedDeltaY += -deltaY / MOUSE_SPEED_DIVISOR;
         

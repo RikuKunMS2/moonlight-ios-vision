@@ -106,6 +106,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     var textureCache: CVMetalTextureCache?
     var drawableQueue: TextureResource.DrawableQueue?
     var ambilightQueue: TextureResource.DrawableQueue?
+    var enableAmbilight: Bool = true
 
     var session: VTDecompressionSession?
     var decoderCallback: VTDecompressionOutputCallbackRecord
@@ -127,6 +128,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
     private var enhancementsProvider: (() -> (Float, Float, Float))? = nil
     private var isVolumeModeProvider: (() -> Bool)? = nil
+    private var enableAmbilightProvider: (() -> Bool)? = nil
 
     private var copyPipelineState: MTLRenderPipelineState?
     private var copyPipelineFormat: MTLPixelFormat?
@@ -149,6 +151,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         hdrSettingsProvider: (() -> HDRParams)? = nil,
         enhancementsProvider: (() -> (Float, Float, Float))? = nil,
         isVolumeModeProvider: (() -> Bool)? = nil,
+        enableAmbilightProvider: (() -> Bool)? = nil,
         callbackToRender: @MainActor @escaping (TextureResource.DrawableQueue, TextureResource.DrawableQueue?, (Int, Int)?) -> Void,
         debugInfoCallback: (@MainActor (String) -> Void)? = nil
     ) {
@@ -166,6 +169,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         self.hdrSettingsProvider = hdrSettingsProvider
         self.enhancementsProvider = enhancementsProvider
         self.isVolumeModeProvider = isVolumeModeProvider
+        self.enableAmbilightProvider = enableAmbilightProvider
         self.callbackToRender = callbackToRender
         self.debugInfoCallback = debugInfoCallback
 
@@ -385,7 +389,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
         let renderPassDescriptor = MTLRenderPassDescriptor()
         renderPassDescriptor.colorAttachments[0].texture = drawable.texture
-        renderPassDescriptor.colorAttachments[0].loadAction = .clear
+        renderPassDescriptor.colorAttachments[0].loadAction = .dontCare
         renderPassDescriptor.colorAttachments[0].storeAction = .store
 
         guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
@@ -512,7 +516,8 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             blitEncoder.endEncoding()
         }
         
-        if let ambQueue = ambilightQueue, let ambDrawable = try? ambQueue.nextDrawable() {
+        let ambEnabled = enableAmbilightProvider?() ?? enableAmbilight
+        if let ambQueue = ambilightQueue, ambEnabled, let ambDrawable = try? ambQueue.nextDrawable() {
             let targetMipLevel = 6
             let mipLevel = min(targetMipLevel, drawable.texture.mipmapLevelCount - 1)
             
@@ -529,8 +534,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             if let ambPipelineState = ambilightPipelineState {
                 let ambRenderPass = MTLRenderPassDescriptor()
                 ambRenderPass.colorAttachments[0].texture = ambDrawable.texture
-                ambRenderPass.colorAttachments[0].loadAction = .clear
-                ambRenderPass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0)
+                ambRenderPass.colorAttachments[0].loadAction = .dontCare
                 ambRenderPass.colorAttachments[0].storeAction = .store
                 
                 if let ambRenderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: ambRenderPass) {
@@ -564,8 +568,6 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
 
         commandBuffer.commit()
         drawable.present()
-        
-        CVMetalTextureCacheFlush(textureCache, 0)
 
         if !firstFrameEmitted {
             firstFrameEmitted = true
