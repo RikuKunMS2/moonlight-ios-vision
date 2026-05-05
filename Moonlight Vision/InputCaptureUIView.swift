@@ -177,6 +177,9 @@ struct SwiftUIAbsoluteMouseTracker: View {
                 guard isControllerMode && !fpsMouseCapture else { return }
                 switch phase {
                 case .active(let location):
+                    if UserDefaults.standard.bool(forKey: "macVirtualDisplaySupport") {
+                        GlobalInputState.shared.lastPhysicalMouseActivityTime = CACurrentMediaTime()
+                    }
                     updateCursorFromSystemPointer(location: location, bounds: geo.size)
                 case .ended:
                     break
@@ -225,6 +228,63 @@ struct SwiftUIAbsoluteMouseTracker: View {
                         }
                     }
             )
+            .onKeyPress(phases: [.down, .up, .repeat]) { press in
+                let macVirtualDisplaySupport = UserDefaults.standard.bool(forKey: "macVirtualDisplaySupport")
+                guard macVirtualDisplaySupport else { return .ignored }
+                
+                let down = (press.phase == .down || press.phase == .repeat)
+                let KEY_ACTION_DOWN: Int8 = 0x03
+                let KEY_ACTION_UP: Int8 = 0x04
+                let action = down ? KEY_ACTION_DOWN : KEY_ACTION_UP
+                
+                var modifiers: Int8 = 0
+                if press.modifiers.contains(.shift) { modifiers |= 0x01 }
+                if press.modifiers.contains(.control) { modifiers |= 0x02 }
+                if press.modifiers.contains(.option) { modifiers |= 0x04 }
+                if press.modifiers.contains(.command) { modifiers |= 0x08 }
+                
+                var keyCode: Int16 = 0
+                switch press.key {
+                case .upArrow: keyCode = 0x26
+                case .downArrow: keyCode = 0x28
+                case .leftArrow: keyCode = 0x25
+                case .rightArrow: keyCode = 0x27
+                case .escape: keyCode = 0x1B
+                case .return: keyCode = 0x0D
+                case .delete: keyCode = 0x08
+                case .deleteForward: keyCode = 0x2E
+                case .tab: keyCode = 0x09
+                case .space: keyCode = 0x20
+                default:
+                    if let first16 = press.characters.utf16.first {
+                        let unicharValue = first16
+                        if unicharValue >= 0x30 && unicharValue <= 0x39 { keyCode = Int16(unicharValue) }
+                        else if unicharValue >= 0x41 && unicharValue <= 0x5A { keyCode = Int16(unicharValue) }
+                        else if unicharValue >= 0x61 && unicharValue <= 0x7A { keyCode = Int16(unicharValue - 0x20) }
+                        else {
+                            switch press.key.character {
+                            case "-": keyCode = 0xBD
+                            case "=": keyCode = 0xBB
+                            case "[": keyCode = 0xDB
+                            case "]": keyCode = 0xDD
+                            case "\\": keyCode = 0xDC
+                            case ";": keyCode = 0xBA
+                            case "'": keyCode = 0xDE
+                            case ",": keyCode = 0xBC
+                            case ".": keyCode = 0xBE
+                            case "/": keyCode = 0xBF
+                            case "`": keyCode = 0xC0
+                            default: return .ignored
+                            }
+                        }
+                    } else {
+                        return .ignored
+                    }
+                }
+                
+                LiSendKeyboardEvent(Int16(bitPattern: 0x8000) | keyCode, action, modifiers)
+                return .handled
+            }
             .onDisappear {
                 longPressTimer?.invalidate()
                 longPressTimer = nil

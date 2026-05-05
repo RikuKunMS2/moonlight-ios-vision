@@ -330,6 +330,11 @@ struct SettingsView: View {
                     }
                     .onChange(of: settings.fpsMouseCapture) { _, _ in settings.save() }
                     
+                    Toggle(isOn: $settings.macVirtualDisplaySupport) {
+                        Label("Experimental Mac Virtual Display Inputs", systemImage: "macbook.and.visionpro")
+                    }
+                    .onChange(of: settings.macVirtualDisplaySupport) { _, _ in settings.save() }
+                    
                     Toggle(isOn: $settings.swapABXYButtons) {
                         Label(viewModel.localized("swap_abxy_buttons"), systemImage: "arrow.up.arrow.down.circle")
                     }
