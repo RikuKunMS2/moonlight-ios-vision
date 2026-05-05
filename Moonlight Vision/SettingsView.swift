@@ -258,7 +258,7 @@ struct SettingsView: View {
                         Text(viewModel.localized("hevc")).tag(PreferredCodec.hevc)
                         
                         // Only show AV1 option if the hardware explicitly supports it
-                        if VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1) {
+                        if Self.isAV1HardwareDecodeSupported {
                             Text(viewModel.localized("av1")).tag(PreferredCodec.av1)
                         }
                         
@@ -528,7 +528,7 @@ if !Self.bitrateTable.contains(settings.bitrate) {
 }
                 // If the user has AV1 selected (e.g. from sync or previous device) but it's not supported here,
                 // fall back to Auto to prevent issues.
-                if settings.preferredCodec == .av1 && !VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1) {
+                if settings.preferredCodec == .av1 && !Self.isAV1HardwareDecodeSupported {
                     settings.preferredCodec = .auto
                     settings.save()
                 }
@@ -658,6 +658,10 @@ extension SettingsView {
             5000, 10000, 30000, 50000, 75000, 100000, 120000, 150000,
             200000, 300000, 400000, 500000, 600000
         ]
+        
+    static let isAV1HardwareDecodeSupported: Bool = {
+        VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1)
+    }()
 }
 
 // Functions to help with aspect ratio calculation

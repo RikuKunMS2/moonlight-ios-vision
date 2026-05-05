@@ -420,11 +420,16 @@ struct _RealityKitStreamView: View {
                         print("Suspending stream due to background")
                         needsResume = true
                         renderGateOpen = false // CRITICAL: Stop rendering before stopping stream to prevent EXC_BAD_ACCESS
-                        AudioHelpers.resetAudioSession()
-                        streamMan?.stopStream()
+                        let sm = streamMan
                         streamMan = nil
                         controllerSupport?.cleanup()
                         controllerSupport = nil
+                        
+                        sm?.stopStream(completion: {
+                            DispatchQueue.main.async {
+                                AudioHelpers.resetAudioSession()
+                            }
+                        })
                     }
                 } else if newValue == .active {
                     if isImmersive,
@@ -902,37 +907,30 @@ struct _RealityKitStreamView: View {
                 }
             }
             Attachment(id: "inputOverlay") { inputCaptureAttachment }
-            if showInlineHint {
-                Attachment(id: "presetPopup") {
-                    CenterHintOverlay(text: hintOverlayText, icon: hintOverlayIcon)
-                        .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .center)))
-                }
+            Attachment(id: "presetPopup") {
+                CenterHintOverlay(text: hintOverlayText, icon: hintOverlayIcon)
+                    .opacity(showInlineHint ? 1.0 : 0.0)
+                    .scaleEffect(showInlineHint ? 1.0 : 0.95)
+                    .animation(.easeOut(duration: 0.15), value: showInlineHint)
             }
             Attachment(id: "dimPicker") { dimmingPickerAttachment }
             Attachment(id: "stats") { statsAttachment }
-            if showVirtualKeyboard {
-                Attachment(id: "pcModifierToolbar") {
-                    PCModifierToolbar()
-                }
-                Attachment(id: "keyboardTextField") {
+            Attachment(id: "keyboardAndModifiers") {
+                PCModifierToolbar {
                     TextField("", text: $keyboardInput)
                         .focused($isKeyboardFocused)
                         .font(.system(size: 11))
                         .foregroundColor(.white)
                         .textFieldStyle(.plain)
                         .multilineTextAlignment(.center)
-                        .padding(12)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                         .frame(width: 180)
                         .background(
                             Capsule()
                                 .fill(.ultraThinMaterial)
                                 .opacity(0.7)
                         )
-                        .onAppear {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                isKeyboardFocused = true
-                            }
-                        }
                         .onSubmit {
                             print("[Keyboard] Submit detected, sending Return key and closing keyboard")
                             let hidReturn = Int16(bitPattern: 0x8000 | 0x0D)
@@ -947,17 +945,11 @@ struct _RealityKitStreamView: View {
                         .onChange(of: keyboardInput) { _, newValue in
                             handleKeyboardInput(newValue)
                         }
-                        .onChange(of: isKeyboardFocused) { _, newValue in
-                            if !newValue && showVirtualKeyboard {
-                                // Maintain focus so modifier buttons can be tapped
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    if showVirtualKeyboard {
-                                        isKeyboardFocused = true
-                                    }
-                                }
-                            }
-                        }
                 }
+                .opacity(showVirtualKeyboard ? 1.0 : 0.0)
+                .scaleEffect(showVirtualKeyboard ? 1.0 : 0.95)
+                .animation(.easeOut(duration: 0.2), value: showVirtualKeyboard)
+                .allowsHitTesting(showVirtualKeyboard)
             }
             if isImmersive && isReconnecting {
                 Attachment(id: "reconnectingOverlay") {
@@ -1668,10 +1660,15 @@ struct _RealityKitStreamView: View {
             
             // Keyboard toggle (next to stats)
             Button(action: {
-                if inputMode == .controller && !showVirtualKeyboard {
-                    inputMode = .screenMove
-                    gazeController.cleanup()
-                    UserDefaults.standard.set(inputMode.rawValue, forKey: "immersiveInputMode")
+                if isImmersive {
+                    if inputMode == .controller && !showVirtualKeyboard {
+                        inputMode = .screenMove
+                        gazeController.cleanup()
+                        UserDefaults.standard.set(inputMode.rawValue, forKey: "immersiveInputMode")
+                    } else if inputMode == .screenMove && showVirtualKeyboard {
+                        inputMode = .controller
+                        UserDefaults.standard.set(inputMode.rawValue, forKey: "immersiveInputMode")
+                    }
                 }
                 showVirtualKeyboard.toggle()
                 controlState.isKeyboardActive = showVirtualKeyboard
@@ -1724,9 +1721,7 @@ struct _RealityKitStreamView: View {
         showInlineHint = true
         hintOverlayTimer?.invalidate()
         hintOverlayTimer = Timer.scheduledTimer(withTimeInterval: 1.4, repeats: false) { _ in
-            withAnimation(.easeOut(duration: 0.15)) {
-                showInlineHint = false
-            }
+            showInlineHint = false
         }
     }
     
@@ -1991,51 +1986,29 @@ struct _RealityKitStreamView: View {
                     statsEnt.scale = [scale, scale, scale]
                 }
             }
-            let screenHeight = CURVED_MAX_WIDTH_METERS / screenAspect
-            statsEnt.position = [0.0 as Float, -(screenHeight / 2.0) - Float(0.07), Float(0.07)]
+            let screenHeight = CURVED_MAX_WIDTH_METERS * screenAspect
+            statsEnt.position = [0.0 as Float, -(screenHeight / 2.0) - Float(0.07), Float(0.08)]
         }
 
-        // Keyboard TextField - positioned below screen, centered
-        if let keyboardEnt = attachments.entity(for: "keyboardTextField") {
-            if keyboardEnt.parent !== screen { screen.addChild(keyboardEnt) }
-            let screenHeight = CURVED_MAX_WIDTH_METERS / screenAspect
+        // Keyboard and PC Modifier Toolbar - unified view below screen
+        if let keyboardAndModifiersEnt = attachments.entity(for: "keyboardAndModifiers") {
+            if keyboardAndModifiersEnt.parent !== screen { screen.addChild(keyboardAndModifiersEnt) }
+            let screenHeight = CURVED_MAX_WIDTH_METERS * screenAspect
             
-            let keyboardOffset: Float = 0.08
-            keyboardEnt.position = [0.0 as Float, -(screenHeight / 2.0) - Float(keyboardOffset), Float(0.05)]
+            let toolbarOffset: Float = 0.12
+            keyboardAndModifiersEnt.position = [0.0 as Float, -(screenHeight / 2.0) - Float(toolbarOffset), Float(0.08)]
 
             if showVirtualKeyboard {
-                let bounds = keyboardEnt.visualBounds(relativeTo: screen)
+                let bounds = keyboardAndModifiersEnt.visualBounds(relativeTo: screen)
                 if bounds.extents.x > 0 {
-                    let currentScaleX = max(keyboardEnt.scale.x, 0.0001)
+                    let currentScaleX = max(keyboardAndModifiersEnt.scale.x, 0.0001)
                     let unscaledWidth = Float(bounds.extents.x) / currentScaleX
-                    let desiredLocalWidth: Float = 0.25
+                    let desiredLocalWidth: Float = 0.65
                     let scale = desiredLocalWidth / unscaledWidth
-                    keyboardEnt.scale = [scale, scale, scale]
-                }
-        } else {
-                keyboardEnt.scale = .one
-            }
-        }
-
-        // PC Modifier Toolbar - positioned below keyboardTextField
-        if let pcModifierEnt = attachments.entity(for: "pcModifierToolbar") {
-            if pcModifierEnt.parent !== screen { screen.addChild(pcModifierEnt) }
-            let screenHeight = CURVED_MAX_WIDTH_METERS / screenAspect
-            
-            let toolbarOffset: Float = 0.16
-            pcModifierEnt.position = [0.0 as Float, -(screenHeight / 2.0) - Float(toolbarOffset), Float(0.05)]
-
-            if showVirtualKeyboard {
-                let bounds = pcModifierEnt.visualBounds(relativeTo: screen)
-                if bounds.extents.x > 0 {
-                    let currentScaleX = max(pcModifierEnt.scale.x, 0.0001)
-                    let unscaledWidth = Float(bounds.extents.x) / currentScaleX
-                    let desiredLocalWidth: Float = 0.45
-                    let scale = desiredLocalWidth / unscaledWidth
-                    pcModifierEnt.scale = [scale, scale, scale]
+                    keyboardAndModifiersEnt.scale = [scale, scale, scale]
                 }
             } else {
-                pcModifierEnt.scale = .one
+                keyboardAndModifiersEnt.scale = .one
             }
         }
     }
@@ -2253,10 +2226,10 @@ struct _RealityKitStreamView: View {
         
         // Lightweight per-frame: only update position-sensitive attachments
         // Fix: height is width / aspect, not width * aspect
-        let screenHeight = CURVED_MAX_WIDTH_METERS / screenAspect
+        let screenHeight = CURVED_MAX_WIDTH_METERS * screenAspect
         if let statsEnt = attachments.entity(for: "stats") {
             if statsEnt.parent !== screen { screen.addChild(statsEnt) }
-            statsEnt.position = [0.0 as Float, -(screenHeight / 2.0) - Float(0.07), Float(0.07)]
+            statsEnt.position = [0.0 as Float, -(screenHeight / 2.0) - Float(0.07), Float(0.08)]
         }
         if let keyboardEnt = attachments.entity(for: "keyboardTextField") {
             if keyboardEnt.parent !== screen { screen.addChild(keyboardEnt) }
@@ -2344,7 +2317,7 @@ struct _RealityKitStreamView: View {
                     let scaleX = (CURVED_MAX_WIDTH_METERS * 1.05) / unscaledWidth
                     // Multiply height by 1.5 so the invisible interactive plane extends past the top/bottom 
                     // of the screen mesh. This prevents the volume bounds from clipping the interaction area early.
-                    let scaleY = ((CURVED_MAX_WIDTH_METERS / Float(screenAspect)) * 1.5) / unscaledHeight
+                    let scaleY = ((CURVED_MAX_WIDTH_METERS * Float(screenAspect)) * 1.5) / unscaledHeight
                     
                     inputEnt.scale = [scaleX, scaleY, scaleX]
                 } else {
@@ -2367,11 +2340,7 @@ struct _RealityKitStreamView: View {
         if let popupEnt = attachments.entity(for: "presetPopup") {
             if popupEnt.parent !== screen { screen.addChild(popupEnt) }
             popupEnt.position = [0.0 as Float, 0.0 as Float, Float(0.15)]
-            if showInlineHint {
-                sizeToFit(popupEnt, targetWidth: 0.35)
-            } else {
-                popupEnt.scale = .one
-            }
+            sizeToFit(popupEnt, targetWidth: 0.35)
         }
         if let panelEnt = attachments.entity(for: "controlPanel") {
             if panelEnt.parent !== screen { screen.addChild(panelEnt) }
@@ -2380,8 +2349,8 @@ struct _RealityKitStreamView: View {
         }
         if let controls = attachments.entity(for: "controls") {
             if controls.parent !== screen { screen.addChild(controls) }
-            let actualScreenHeight = CURVED_MAX_WIDTH_METERS * screenAspect
-            controls.position = [0.0 as Float, (actualScreenHeight / 2.0) + Float(0.08), Float(0.05)]
+            let actualScreenHeight = CURVED_MAX_WIDTH_METERS * Float(screenAspect)
+            controls.position = [0.0 as Float, (actualScreenHeight / 2.0) + Float(0.08), Float(0.08)]
         }
         if let reconnectEnt = attachments.entity(for: "reconnectingOverlay") {
             if reconnectEnt.parent !== screen { screen.addChild(reconnectEnt) }
@@ -2393,20 +2362,17 @@ struct _RealityKitStreamView: View {
             errorEnt.position = [0.0 as Float, 0.0 as Float, Float(0.45)]
             sizeToFit(errorEnt, targetWidth: 0.55)
         }
-        if let keyboardEnt = attachments.entity(for: "keyboardTextField") {
-            if keyboardEnt.parent !== screen { screen.addChild(keyboardEnt) }
+        if let keyboardAndModifiersEnt = attachments.entity(for: "keyboardAndModifiers") {
+            if keyboardAndModifiersEnt.parent !== screen { screen.addChild(keyboardAndModifiersEnt) }
+            
+            let actualScreenHeight = CURVED_MAX_WIDTH_METERS * Float(screenAspect)
+            let toolbarOffset: Float = 0.12
+            keyboardAndModifiersEnt.position = [0.0 as Float, -(actualScreenHeight / 2.0) - toolbarOffset, Float(0.08)]
+            
             if showVirtualKeyboard {
-                sizeToFit(keyboardEnt, targetWidth: 0.25)
-                            } else {
-                keyboardEnt.scale = .one
-            }
-        }
-        if let pcModifierEnt = attachments.entity(for: "pcModifierToolbar") {
-            if pcModifierEnt.parent !== screen { screen.addChild(pcModifierEnt) }
-            if showVirtualKeyboard {
-                sizeToFit(pcModifierEnt, targetWidth: 0.45)
+                sizeToFit(keyboardAndModifiersEnt, targetWidth: 0.65)
             } else {
-                pcModifierEnt.scale = .one
+                keyboardAndModifiersEnt.scale = .one
             }
         }
     }
@@ -2727,7 +2693,7 @@ struct _RealityKitStreamView: View {
         // CRITICAL: Close render gate BEFORE stopping stream
         renderGateOpen = false
         
-        AudioHelpers.resetAudioSession()
+        // Audio session will be reset after stopStream completes
         
         statsTimer?.invalidate()
         hintOverlayTimer?.invalidate()
@@ -2762,6 +2728,11 @@ struct _RealityKitStreamView: View {
                 guard !teardownPosted else { return }
                 teardownPosted = true
                 print("[StreamView] StreamManager stopped, clearing references")
+                
+                // CRITICAL: Reset audio session AFTER the stream has fully stopped.
+                // Resetting it earlier causes EXC_BAD_ACCESS if the audio thread is still running.
+                AudioHelpers.resetAudioSession()
+                
                 print("[StreamView] 🔴 TEARDOWN COMPLETE")
                 NotificationCenter.default.post(name: Notification.Name("RKStreamDidTeardown"), object: nil)
             }
@@ -4019,11 +3990,13 @@ extension Notification.Name {
     static let immersiveScreenWakeRequested = Notification.Name("ImmersiveScreenWakeRequested")
 }
 
-struct PCModifierToolbar: View {
+struct PCModifierToolbar<Content: View>: View {
     @State private var ctrlActive = false
     @State private var altActive = false
     @State private var shiftActive = false
     @State private var winActive = false
+    
+    @ViewBuilder let textField: Content
 
     var body: some View {
         HStack(spacing: 12) {
@@ -4031,6 +4004,10 @@ struct PCModifierToolbar: View {
                 .buttonStyle(.bordered)
             Button("Tab") { sendInstantKey(0x09) }
                 .buttonStyle(.bordered)
+            
+            Divider().frame(height: 24)
+            
+            textField
             
             Divider().frame(height: 24)
             
