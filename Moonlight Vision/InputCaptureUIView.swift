@@ -177,9 +177,7 @@ struct SwiftUIAbsoluteMouseTracker: View {
                 guard isControllerMode && !fpsMouseCapture else { return }
                 switch phase {
                 case .active(let location):
-                    if UserDefaults.standard.bool(forKey: "macVirtualDisplaySupport") {
-                        GlobalInputState.shared.lastPhysicalMouseActivityTime = CACurrentMediaTime()
-                    }
+                    GlobalInputState.shared.lastPhysicalMouseActivityTime = CACurrentMediaTime()
                     updateCursorFromSystemPointer(location: location, bounds: geo.size)
                 case .ended:
                     break
@@ -229,9 +227,6 @@ struct SwiftUIAbsoluteMouseTracker: View {
                     }
             )
             .onKeyPress(phases: [.down, .up, .repeat]) { press in
-                let macVirtualDisplaySupport = UserDefaults.standard.bool(forKey: "macVirtualDisplaySupport")
-                guard macVirtualDisplaySupport else { return .ignored }
-                
                 let down = (press.phase == .down || press.phase == .repeat)
                 let KEY_ACTION_DOWN: Int8 = 0x03
                 let KEY_ACTION_UP: Int8 = 0x04

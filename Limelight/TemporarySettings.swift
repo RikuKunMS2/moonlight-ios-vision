@@ -72,7 +72,6 @@ public class TemporarySettings: NSObject {
     @objc public var absoluteTouchMode = false
     @objc public var statsOverlay = false
     @objc public var dimPassthrough = true
-    @objc public var macVirtualDisplaySupport = false
     
     // UIKit window corner radius (default: 0, may affect clarity)
     @objc public var uikitWindowCornerRadius: Float = 0.0
@@ -109,7 +108,6 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererTilt = 0.0
         self.dimPassthrough = false
         self.reactiveLightingEnabled = false
-        self.macVirtualDisplaySupport = false
         
         // HDR defaults: 1.0 = neutral (correct for shader)
         self.brightness = 1.0
@@ -190,7 +188,6 @@ public class TemporarySettings: NSObject {
             self.enableHdr = settings.enableHdr
             self.btMouseSupport = settings.btMouseSupport
             self.fpsMouseCapture = UserDefaults.standard.bool(forKey: "fpsMouseCapture")
-            self.macVirtualDisplaySupport = UserDefaults.standard.bool(forKey: "macVirtualDisplaySupport")
             self.absoluteTouchMode = settings.absoluteTouchMode
             self.statsOverlay = settings.statsOverlay
 
@@ -236,7 +233,6 @@ public class TemporarySettings: NSObject {
         UserDefaults.standard.set(self.reactiveLightingEnabled, forKey: "reactiveLightingEnabled")
         UserDefaults.standard.set(self.autoResumeStreamOnReopen, forKey: "autoResumeStreamOnReopen")
         UserDefaults.standard.set(self.fpsMouseCapture, forKey: "fpsMouseCapture")
-        UserDefaults.standard.set(self.macVirtualDisplaySupport, forKey: "macVirtualDisplaySupport")
         UserDefaults.standard.set(self.rememberStreamSettings, forKey: "rememberStreamSettings")
         UserDefaults.standard.set(self.uikitWindowCornerRadius, forKey: "uikitWindowCornerRadius")
         UserDefaults.standard.set(self.realitykitScreenCornerRadius, forKey: "realitykitScreenCornerRadius")
@@ -351,7 +347,6 @@ public class TemporarySettings: NSObject {
         self.optimizeGames = false
         self.enableHdr = false
         self.btMouseSupport = false
-        self.macVirtualDisplaySupport = false
         self.absoluteTouchMode = false
         self.statsOverlay = false
         self.dimPassthrough = true
