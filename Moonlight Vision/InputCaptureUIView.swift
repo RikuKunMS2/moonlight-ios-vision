@@ -114,16 +114,23 @@ struct InputCaptureView: UIViewControllerRepresentable {
         uiViewController.fpsMouseCaptureEnabled = fpsMouseCapture
         
         // ALWAYS aggressively reclaim first responder (needed for controller input)
-        if !view.isFirstResponder {
+        if view.window != nil && !view.isFirstResponder {
             _ = view.becomeFirstResponder()
             
             // Double-check and force if needed
             if !view.isFirstResponder {
                 DispatchQueue.main.async {
-                    _ = view.becomeFirstResponder()
+                    if view.window != nil {
+                        _ = view.becomeFirstResponder()
+                    }
                 }
             }
         }
+    }
+    
+    static func dismantleUIViewController(_ uiViewController: InputCaptureViewController, coordinator: Context) {
+        uiViewController.fpsMouseCaptureEnabled = false
+        uiViewController.captureView.cleanup()
     }
 }
 
@@ -194,6 +201,11 @@ struct SwiftUIAbsoluteMouseTracker: View {
                         }
                     }
             )
+            .onDisappear {
+                longPressTimer?.invalidate()
+                longPressTimer = nil
+                isDragging = false
+            }
         }
     }
     
@@ -318,7 +330,8 @@ class InputCaptureViewController: UIViewController {
                let pointerLockState = (scene as? UIWindowScene)?.pointerLockState {
                 
                 if !pointerLockState.isLocked && fpsMouseCaptureEnabled {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                        guard let self = self, self.fpsMouseCaptureEnabled else { return }
                         self.setNeedsUpdateOfPrefersPointerLocked()
                         
                         // Also try the active window's root view controller to be safe
@@ -386,14 +399,19 @@ class InputCaptureUIView: UIView, UIKeyInput {
         // Periodically check and reclaim first responder if lost (needed for controller input)
         firstResponderCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            if !self.isFirstResponder {
+            if self.window != nil && !self.isFirstResponder {
                 _ = self.becomeFirstResponder()
             }
         }
     }
     
-    deinit {
+    func cleanup() {
         firstResponderCheckTimer?.invalidate()
+        firstResponderCheckTimer = nil
+    }
+    
+    deinit {
+        cleanup()
     }
     
 

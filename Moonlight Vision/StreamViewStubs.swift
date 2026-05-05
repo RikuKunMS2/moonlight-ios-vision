@@ -45,6 +45,7 @@ struct CenterHintOverlay: View {
         }
         .padding(24)
         .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .allowsHitTesting(false)
     }
 }
 

@@ -1682,6 +1682,7 @@ struct _RealityKitStreamView: View {
         let icon: String
         if inputMode == .gazeControl && viewModel.streamSettings.gazeTouchMode { icon = "hand.point.up.left.fill" }
         else if inputMode == .gazeControl { icon = "eye" }
+        else if inputMode == .controller { icon = "gamecontroller.fill" }
         else { icon = "arrow.up.and.down.and.arrow.left.and.right" }
         showInlineHint(text: text, icon: icon)
         updateScreenInteractivity()
@@ -2645,6 +2646,9 @@ struct _RealityKitStreamView: View {
         hintOverlayTimer = nil
         hideTimer?.invalidate()
         moonlightCycleTimer?.invalidate()
+        scaleHUDFadeTimer?.invalidate()
+        environmentFadeTimer?.invalidate()
+        reactiveLerpTimer?.invalidate()
         idrWatchdogTimer1?.invalidate(); idrWatchdogTimer1 = nil
         idrWatchdogTimer2?.invalidate(); idrWatchdogTimer2 = nil
         postFirstFrameRebindTimer?.invalidate(); postFirstFrameRebindTimer = nil
@@ -2695,6 +2699,9 @@ struct _RealityKitStreamView: View {
         hintOverlayTimer = nil
         hideTimer?.invalidate()
         moonlightCycleTimer?.invalidate()
+        scaleHUDFadeTimer?.invalidate()
+        environmentFadeTimer?.invalidate()
+        reactiveLerpTimer?.invalidate()
         
         idrWatchdogTimer1?.invalidate(); idrWatchdogTimer1 = nil
         idrWatchdogTimer2?.invalidate(); idrWatchdogTimer2 = nil
