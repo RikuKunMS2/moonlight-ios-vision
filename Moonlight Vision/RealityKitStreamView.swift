@@ -172,8 +172,12 @@ struct _RealityKitStreamView: View {
     @State private var controlPanelEntity: Entity?
     
     @State private var texture: TextureResource
+    @State private var depthTexture: TextureResource?
+    @State private var boundDepthQueue: ObjectIdentifier?
+    
     @State private var videoMode: VideoMode = .standard2D
     @State private var surfaceMaterial: ShaderGraphMaterial?
+    @State private var ml3dMaterial: ShaderGraphMaterial?
     
     @State private var curveAnimationMultiplier: Float = 1.0
     @State private var animationTimer: Timer?
@@ -613,6 +617,12 @@ struct _RealityKitStreamView: View {
             }
             .onChange(of: viewModel.streamSettings.pqExposure) { _, _ in
                 if viewModel.streamSettings.enableHdr { updateHDRParams() }
+            }
+            .onChange(of: viewModel.streamSettings.ml3dParallaxIntensity) { _, _ in
+                updateScreenMaterial()
+            }
+            .onChange(of: viewModel.streamSettings.ml3dDebugDepthMap) { _, _ in
+                updateScreenMaterial()
             }
             .onChange(of: viewModel.streamSettings.reactiveLightingEnabled) { _, newValue in
                 updateDimmerDomesState()
@@ -1099,6 +1109,12 @@ struct _RealityKitStreamView: View {
             // Initialize slider curvature from saved settings
             sliderCurvature = viewModel.streamSettings.realitykitRendererCurvature
 
+            // Enforce ML 3D restriction to immersive mode
+            if !isImmersive && controlState.videoMode == .machineLearning3D {
+                controlState.videoMode = .standard2D
+            }
+            self.videoMode = controlState.videoMode
+
             // Second pass — needs first-pass @State to have settled
             setupControlStateCallbacks()
 
@@ -1216,10 +1232,12 @@ struct _RealityKitStreamView: View {
         }
         
         controlState.toggle3DMode = { [self] in
-            if videoMode == .sideBySide3D {
-                videoMode = .standard2D
-            } else {
+            if videoMode == .standard2D {
                 videoMode = .sideBySide3D
+            } else if videoMode == .sideBySide3D {
+                videoMode = isImmersive ? .machineLearning3D : .standard2D
+            } else {
+                videoMode = .standard2D
             }
             updateScreenMaterial()
             controlState.videoMode = videoMode
@@ -1794,6 +1812,19 @@ struct _RealityKitStreamView: View {
             } else {
                 screen.model?.materials = [mat]
             }
+        } else if videoMode == .machineLearning3D {
+            if var mMat = ml3dMaterial {
+                try? mMat.setParameter(name: "texture", value: .textureResource(self.texture))
+                if let depthTex = self.depthTexture {
+                    try? mMat.setParameter(name: "depthTexture", value: .textureResource(depthTex))
+                }
+                try? mMat.setParameter(name: "parallaxIntensity", value: .float(viewModel.streamSettings.ml3dParallaxIntensity))
+                try? mMat.setParameter(name: "debugDepthMap", value: .float(viewModel.streamSettings.ml3dDebugDepthMap ? 1.0 : 0.0))
+                ml3dMaterial = mMat
+                screen.model?.materials = [mMat]
+            } else {
+                screen.model?.materials = [mat]
+            }
         } else {
             screen.model?.materials = [mat]
         }
@@ -1820,6 +1851,15 @@ struct _RealityKitStreamView: View {
                 self.surfaceMaterial = material
             } catch {
                 self.surfaceMaterial = nil
+            }
+        }
+        if ml3dMaterial == nil {
+            do {
+                var material = try await ShaderGraphMaterial(named: "/Root/ML3DMaterial", from: "ML3DMaterial.usda")
+                try material.setParameter(name: "texture", value: .textureResource(self.texture))
+                self.ml3dMaterial = material
+            } catch {
+                self.ml3dMaterial = nil
             }
         }
     }
@@ -2464,6 +2504,9 @@ struct _RealityKitStreamView: View {
                         enableAmbilightProvider: {
                             self.viewModel.streamSettings.reactiveLightingEnabled
                         },
+                        ml3dModeProvider: {
+                            self.controlState.videoMode == .machineLearning3D
+                        },
                         callbackToRender: { textureQueue, ambilightQueue, correctedResolution in
                             guard self.renderGateOpen else { return }
 
@@ -2472,6 +2515,32 @@ struct _RealityKitStreamView: View {
                                     self.correctedResolution = correctedResolution 
                                 }
                                 self.texture.replace(withDrawables: textureQueue)
+                                
+                                if let depthQueue = DepthEstimator.shared.depthQueue, self.boundDepthQueue != ObjectIdentifier(depthQueue) {
+                                    do {
+                                        if self.depthTexture == nil {
+                                            // Create dummy 1x1 image for texture resource init
+                                            let rect = CGRect(x: 0, y: 0, width: 1, height: 1)
+                                            UIGraphicsBeginImageContext(rect.size)
+                                            let context = UIGraphicsGetCurrentContext()
+                                            context?.setFillColor(UIColor.black.cgColor)
+                                            context?.fill(rect)
+                                            let img = UIGraphicsGetImageFromCurrentImageContext()
+                                            UIGraphicsEndImageContext()
+                                            
+                                            if let cg = img?.cgImage {
+                                                self.depthTexture = try TextureResource.generate(from: cg, options: .init(semantic: .raw))
+                                            }
+                                        }
+                                        if let dt = self.depthTexture {
+                                            dt.replace(withDrawables: depthQueue)
+                                            self.boundDepthQueue = ObjectIdentifier(depthQueue)
+                                            self.updateScreenMaterial()
+                                        }
+                                    } catch {
+                                        print("[ML3D] Failed to bind depth texture: \(error)")
+                                    }
+                                }
                                 
                                 if let ambilightQueue {
                                     if self.ambilightTexture == nil {
@@ -3566,10 +3635,11 @@ struct _RealityKitStreamView: View {
 
     private func restoreSavedTransform() {
         let defaults = UserDefaults.standard
+        controlState.tiltAngle = viewModel.streamSettings.realitykitRendererTilt
+        
         if !isImmersive {
             if let h = defaults.object(forKey: "realitykitHeight") as? Float { volumeHeight = h }
             if let d = defaults.object(forKey: "realitykitDepthOffset") as? Float { volumeDepthOffset = d }
-            if let tilt = defaults.object(forKey: "realitykitTiltAngle") as? Float { controlState.tiltAngle = tilt }
             if viewModel.streamSettings.rememberStreamSettings {
                 if let c = defaults.object(forKey: "realitykitVolumeCurvature") as? Float { viewModel.streamSettings.realitykitRendererCurvature = c }
                 if let g = defaults.object(forKey: "realitykitVolumeGamma") as? Float { viewModel.streamSettings.gamma = g }
@@ -3621,7 +3691,6 @@ struct _RealityKitStreamView: View {
         if let savedLocked = defaults.object(forKey: kImmersiveLockedKey) as? Bool {
             controlState.isInteractive = savedLocked
         }
-        tiltAngle = 0.0
     }
     
     private let kImmersiveLockedKey = "immersive.locked"

@@ -98,7 +98,10 @@ struct VolumeControlPanelView: View {
         .onChange(of: viewModel.streamSettings.dimPassthrough) { _, _ in debouncedSaveDimPassthrough() }
         .onChange(of: depthOffset) { _, _ in debouncedSave() }
         .onChange(of: height) { _, _ in debouncedSave() }
-        .onChange(of: controlState.tiltAngle) { _, _ in debouncedSave() }
+        .onChange(of: controlState.tiltAngle) { _, newValue in
+            viewModel.streamSettings.realitykitRendererTilt = newValue
+            debouncedSave()
+        }
         .onDisappear {
             saveTimer?.invalidate()
             dimPassthroughSaveTimer?.invalidate()
@@ -160,10 +163,13 @@ struct VolumeControlPanelView: View {
                         AudioHelpers.applySpatialAudioMode(nextMode)
                     }
                 }
+                let videoMode = controlState.videoMode
+                let is3DActive = videoMode != .standard2D
+                let isML3D = videoMode == .machineLearning3D
                 ModernActionTile(
-                    icon: "cube.transparent.fill",
-                    title: viewModel.localized("3d_mode"),
-                    isActive: controlState.videoMode == .sideBySide3D
+                    icon: isML3D ? "wand.and.stars.inverse" : "cube.transparent.fill",
+                    title: isML3D ? "ML 3D" : (is3DActive ? "SBS 3D" : viewModel.localized("3d_mode")),
+                    isActive: is3DActive
                 ) {
                     withAnimation { controlState.toggle3DMode?() }
                 }
@@ -282,7 +288,7 @@ struct VolumeControlPanelView: View {
         let defaults = UserDefaults.standard
         defaults.set(height, forKey: "realitykitHeight")
         defaults.set(depthOffset, forKey: "realitykitDepthOffset")
-        defaults.set(controlState.tiltAngle, forKey: "realitykitTiltAngle")
+        defaults.removeObject(forKey: "realitykitTiltAngle")
         defaults.set(viewModel.streamSettings.realitykitRendererCurvature, forKey: "realitykitVolumeCurvature")
         defaults.set(viewModel.streamSettings.gamma, forKey: "realitykitVolumeGamma")
         defaults.set(viewModel.streamSettings.saturation, forKey: "realitykitVolumeSaturation")

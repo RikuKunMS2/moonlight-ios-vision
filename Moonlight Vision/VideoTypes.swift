@@ -14,4 +14,5 @@ import Foundation
 enum VideoMode {
     case standard2D
     case sideBySide3D
+    case machineLearning3D
 }

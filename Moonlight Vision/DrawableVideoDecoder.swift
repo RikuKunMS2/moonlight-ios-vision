@@ -129,6 +129,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
     private var enhancementsProvider: (() -> (Float, Float, Float))? = nil
     private var isVolumeModeProvider: (() -> Bool)? = nil
     private var enableAmbilightProvider: (() -> Bool)? = nil
+    private var ml3dModeProvider: (() -> Bool)? = nil
 
     private var copyPipelineState: MTLRenderPipelineState?
     private var copyPipelineFormat: MTLPixelFormat?
@@ -152,6 +153,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         enhancementsProvider: (() -> (Float, Float, Float))? = nil,
         isVolumeModeProvider: (() -> Bool)? = nil,
         enableAmbilightProvider: (() -> Bool)? = nil,
+        ml3dModeProvider: (() -> Bool)? = nil,
         callbackToRender: @MainActor @escaping (TextureResource.DrawableQueue, TextureResource.DrawableQueue?, (Int, Int)?) -> Void,
         debugInfoCallback: (@MainActor (String) -> Void)? = nil
     ) {
@@ -170,6 +172,7 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         self.enhancementsProvider = enhancementsProvider
         self.isVolumeModeProvider = isVolumeModeProvider
         self.enableAmbilightProvider = enableAmbilightProvider
+        self.ml3dModeProvider = ml3dModeProvider
         self.callbackToRender = callbackToRender
         self.debugInfoCallback = debugInfoCallback
 
@@ -201,6 +204,10 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         presentationDuration _: CMTime?
     ) {
         guard let imageBuffer = imageBuffer else { return }
+        
+        if ml3dModeProvider?() == true {
+            DepthEstimator.shared.estimateDepth(from: imageBuffer)
+        }
         
         if inflightSemaphore.wait(timeout: .now()) != .success {
             return

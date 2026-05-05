@@ -274,10 +274,13 @@ struct ImmersiveControlPanelView: View {
                     }
                     
                     // 3D
+                    let videoMode = controlState.videoMode
+                    let is3DActive = videoMode != .standard2D
+                    let isML3D = videoMode == .machineLearning3D
                     ModernActionTile(
-                        icon: "cube.transparent.fill",
-                        title: viewModel.localized("3d_mode"),
-                        isActive: controlState.videoMode == .sideBySide3D
+                        icon: isML3D ? "wand.and.stars.inverse" : "cube.transparent.fill",
+                        title: isML3D ? "ML 3D" : (is3DActive ? "SBS 3D" : viewModel.localized("3d_mode")),
+                        isActive: is3DActive
                     ) {
                         withAnimation { controlState.toggle3DMode?() }
                     }
@@ -534,6 +537,28 @@ struct ImmersiveControlPanelView: View {
                         format: "%.2fx",
                         step: 0.01
                     )
+                    
+                    if controlState.videoMode == .machineLearning3D {
+                        SteppedSliderRow(
+                            title: "ML 3D Intensity",
+                            value: $viewModel.streamSettings.ml3dParallaxIntensity,
+                            range: 0.0...0.2,
+                            defaultValue: 0.01,
+                            format: "%.3f",
+                            step: 0.005
+                        )
+                        
+                        GridRow {
+                            Text("Debug Depth Map")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.8))
+                                .padding(.leading, 8)
+                            
+                            Toggle("", isOn: $viewModel.streamSettings.ml3dDebugDepthMap)
+                                .labelsHidden()
+                        }
+                        .padding(.vertical, 8)
+                    }
                 }
                 
                 Grid(horizontalSpacing: 20, verticalSpacing: 24) {
@@ -630,6 +655,10 @@ private struct ImmersivePanelSaveModifier: ViewModifier {
             .onChange(of: controlState.immersionAmount) { _, _ in debouncedSave() }
             .onChange(of: controlState.pinnedStageScale) { _, _ in debouncedSave() }
             .onChange(of: controlState.pinnedStageHeight) { _, _ in debouncedSave() }
+            .onChange(of: controlState.tiltAngle) { _, newValue in
+                viewModel.streamSettings.realitykitRendererTilt = newValue
+                debouncedSave()
+            }
             .onChange(of: controlState.isInteractive) { _, _ in debouncedSave() }
     }
 }

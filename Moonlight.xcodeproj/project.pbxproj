@@ -28,6 +28,9 @@
 		3E265F382F9D86B400B0A566 /* GazeInputController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E265F012F9D86B400B0A566 /* GazeInputController.swift */; };
 		3E265F532F9D87F000B0A566 /* LocalizationHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E265F522F9D87F000B0A566 /* LocalizationHelper.swift */; };
 		3E3791CA2ED2A4F5004B22A2 /* RealityKitStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E3791C92ED2A4F5004B22A2 /* RealityKitStreamView.swift */; };
+		3E48F3DC2FAA91B600297710 /* DepthModel.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = 3E48F3DB2FAA91B600297710 /* DepthModel.mlpackage */; };
+		3E48F3DF2FAA924700297710 /* ML3DMaterial.usda in Resources */ = {isa = PBXBuildFile; fileRef = 3E48F3DE2FAA924700297710 /* ML3DMaterial.usda */; };
+		3E48F3E22FAA925600297710 /* DepthEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E48F3E12FAA925600297710 /* DepthEstimator.swift */; };
 		3E4F94692DC2E2D6006CF0C1 /* ComputerViewWrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E4F94682DC2E2D6006CF0C1 /* ComputerViewWrapper.swift */; };
 		3E8100A72ED5666B0011CB9F /* AV1Helper.m in Sources */ = {isa = PBXBuildFile; fileRef = 3E8100A62ED5666B0011CB9F /* AV1Helper.m */; };
 		3E86FC1D2D4FFDF20016BB8E /* UpdatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */; };
@@ -337,6 +340,9 @@
 		3E265F062F9D86B400B0A566 /* InputCaptureUIView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputCaptureUIView.swift; sourceTree = "<group>"; };
 		3E265F522F9D87F000B0A566 /* LocalizationHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationHelper.swift; sourceTree = "<group>"; };
 		3E3791C92ED2A4F5004B22A2 /* RealityKitStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealityKitStreamView.swift; sourceTree = "<group>"; };
+		3E48F3DB2FAA91B600297710 /* DepthModel.mlpackage */ = {isa = PBXFileReference; lastKnownFileType = folder.mlpackage; path = DepthModel.mlpackage; sourceTree = "<group>"; };
+		3E48F3DE2FAA924700297710 /* ML3DMaterial.usda */ = {isa = PBXFileReference; lastKnownFileType = text; path = ML3DMaterial.usda; sourceTree = "<group>"; };
+		3E48F3E12FAA925600297710 /* DepthEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DepthEstimator.swift; sourceTree = "<group>"; };
 		3E4F94682DC2E2D6006CF0C1 /* ComputerViewWrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerViewWrapper.swift; sourceTree = "<group>"; };
 		3E8100A52ED566510011CB9F /* AV1Helper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AV1Helper.h; sourceTree = "<group>"; };
 		3E8100A62ED5666B0011CB9F /* AV1Helper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AV1Helper.m; sourceTree = "<group>"; };
@@ -822,6 +828,9 @@
 				B1EDB1342D4D95A700EB1839 /* UIKitStreamView.swift */,
 				3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */,
 				6581B5F02D5434100022400F /* VideoTypes.swift */,
+				3E48F3E12FAA925600297710 /* DepthEstimator.swift */,
+				3E48F3DB2FAA91B600297710 /* DepthModel.mlpackage */,
+				3E48F3DE2FAA924700297710 /* ML3DMaterial.usda */,
 			);
 			path = "Moonlight Vision";
 			sourceTree = "<group>";
@@ -1400,6 +1409,7 @@
 				659789EC2D55A93A00B88B25 /* SBSMaterial.usda in Resources */,
 				F7A119502B5DDF73001E8686 /* Images.xcassets in Resources */,
 				F7A119622B5DE1FD001E8689 /* Localizable.strings in Resources */,
+				3E48F3DF2FAA924700297710 /* ML3DMaterial.usda in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1484,6 +1494,7 @@
 				F77B58B02B5EF94900482BD5 /* SidebarView.swift in Sources */,
 				F7A119272B5DDF73001E8686 /* Logger.m in Sources */,
 				F7A1192A2B5DDF73001E8686 /* HapticContext.m in Sources */,
+				3E48F3DC2FAA91B600297710 /* DepthModel.mlpackage in Sources */,
 				3E265F332F9D86B400B0A566 /* InputCaptureUIView.swift in Sources */,
 				3E265F382F9D86B400B0A566 /* GazeInputController.swift in Sources */,
 				3E265EDC2F9D5BCA00B0A566 /* AUSpatialMixer.m in Sources */,
@@ -1494,6 +1505,7 @@
 				3E265EE02F9D5BCA00B0A566 /* OutputAU.m in Sources */,
 				3E265EE12F9D5BCA00B0A566 /* AudioStats.m in Sources */,
 				3E265EE22F9D5BCA00B0A566 /* CoreAudioRenderer.m in Sources */,
+				3E48F3E22FAA925600297710 /* DepthEstimator.swift in Sources */,
 				F7A4A4D62B61E2F2001591F3 /* TemporaryHost.swift in Sources */,
 				3E8100A72ED5666B0011CB9F /* AV1Helper.m in Sources */,
 				F7A1192C2B5DDF73001E8686 /* TemporarySettings.m in Sources */,
@@ -1701,7 +1713,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Moonlight XrOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 20;
+				CURRENT_PROJECT_VERSION = 21;
 				DEFINES_MODULE = YES;
 				ENABLE_MODULE_VERIFIER = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -1782,7 +1794,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Moonlight XrOS.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 20;
+				CURRENT_PROJECT_VERSION = 21;
 				DEFINES_MODULE = YES;
 				ENABLE_MODULE_VERIFIER = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;

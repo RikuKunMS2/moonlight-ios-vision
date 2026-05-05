@@ -60,6 +60,8 @@ public class TemporarySettings: NSObject {
     @objc public var gazeCursorOffsetX: Int = 0
     @objc public var gazeCursorOffsetY: Int = 0
     @objc public var hideHandsIn360Environment = false
+    @objc public var ml3dParallaxIntensity: Float = 0.01
+    @objc public var ml3dDebugDepthMap: Bool = false
 
     @objc public var useFramePacing = false
     @objc public var multiController = false
@@ -110,6 +112,8 @@ public class TemporarySettings: NSObject {
         self.dimPassthrough = false
         self.macVirtualDisplayExperimental = false
         self.reactiveLightingEnabled = false
+        self.ml3dParallaxIntensity = 0.01
+        self.ml3dDebugDepthMap = false
         
         // HDR defaults: 1.0 = neutral (correct for shader)
         self.brightness = 1.0
@@ -202,6 +206,8 @@ public class TemporarySettings: NSObject {
             self.realitykitImmersiveMode = UserDefaults.standard.bool(forKey: "realitykitImmersiveMode")
             self.reactiveLightingEnabled = UserDefaults.standard.bool(forKey: "reactiveLightingEnabled")
             self.macVirtualDisplayExperimental = UserDefaults.standard.bool(forKey: "macVirtualDisplayExperimental")
+            self.ml3dParallaxIntensity = UserDefaults.standard.object(forKey: "ml3dParallaxIntensity") as? Float ?? 0.01
+            self.ml3dDebugDepthMap = UserDefaults.standard.bool(forKey: "ml3dDebugDepthMap")
             
             // --- HDR / COLOR LOADING ---
             self.brightness = settings.brightness?.floatValue ?? 1.0
@@ -243,6 +249,8 @@ public class TemporarySettings: NSObject {
         UserDefaults.standard.set(self.realitykitRendererTilt, forKey: "realitykitRendererTilt")
         UserDefaults.standard.set(self.spatialAudioMode, forKey: "spatialAudioMode")
         UserDefaults.standard.set(self.preferUninterruptedAudio, forKey: "preferUninterruptedAudio")
+        UserDefaults.standard.set(self.ml3dParallaxIntensity, forKey: "ml3dParallaxIntensity")
+        UserDefaults.standard.set(self.ml3dDebugDepthMap, forKey: "ml3dDebugDepthMap")
 
         // save settings to parent via DataManager
         let dataManager = DataManager()
@@ -288,6 +296,8 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererCurvature = 0.0  // Default from slider
         self.realitykitRendererTilt = 0.0       // Default tilt
         self.realitykitScreenCornerRadius = 0.018  // Default screen corner radius
+        self.ml3dParallaxIntensity = 0.01       // Default parallax intensity
+        self.ml3dDebugDepthMap = false          // Default debug depth map
         
         // Reset UserDefaults for immersive screen parameters
         let defaults = UserDefaults.standard
@@ -340,6 +350,8 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererCurvature = 0.0
         self.realitykitRendererTilt = 0.0
         self.realitykitScreenCornerRadius = 0.018
+        self.ml3dParallaxIntensity = 0.01
+        self.ml3dDebugDepthMap = false
         self.realitykitImmersiveMode = false
         self.reactiveLightingEnabled = false
         self.macVirtualDisplayExperimental = false
@@ -392,6 +404,8 @@ public class TemporarySettings: NSObject {
         defaults.removeObject(forKey: "realitykitDepthOffset")
         defaults.set(0.018, forKey: "realitykitScreenCornerRadius")
         defaults.removeObject(forKey: "realitykitRendererTilt")
+        defaults.removeObject(forKey: "ml3dParallaxIntensity")
+        defaults.removeObject(forKey: "ml3dDebugDepthMap")
         
         // Reset saved gamma and saturation values
         defaults.removeObject(forKey: "realitykitGamma")

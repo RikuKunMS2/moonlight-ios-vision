@@ -1,0 +1,181 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "Reality Composer Pro Version 1.0 (409.60.6)"
+    }
+    defaultPrim = "Root"
+    metersPerUnit = 1
+    upAxis = "Y"
+)
+
+def Xform "Root"
+{
+    def Material "ML3DMaterial"
+    {
+        asset inputs:texture
+        asset inputs:depthTexture
+        float inputs:parallaxIntensity = 0.01
+        float inputs:debugDepthMap = 0.0
+        
+        token outputs:mtlx:surface.connect = </Root/ML3DMaterial/UnlitPreviewSurface.outputs:out>
+        token outputs:realitykit:vertex
+
+        def Shader "DepthImage"
+        {
+            uniform token info:id = "ND_tiledimage_color4"
+            asset inputs:file.connect = </Root/ML3DMaterial.inputs:depthTexture>
+            float2 inputs:texcoord.connect = </Root/ML3DMaterial/Texcoord.outputs:out>
+            color4f outputs:out
+        }
+
+        def Shader "ExtractDepth"
+        {
+            uniform token info:id = "ND_separate4_color4"
+            color4f inputs:in.connect = </Root/ML3DMaterial/DepthImage.outputs:out>
+            float outputs:outr
+            float outputs:outg
+            float outputs:outb
+            float outputs:outa
+        }
+
+        def Shader "DepthScale"
+        {
+            uniform token info:id = "ND_multiply_float"
+            float inputs:in1.connect = </Root/ML3DMaterial/ExtractDepth.outputs:outr>
+            float inputs:in2.connect = </Root/ML3DMaterial.inputs:parallaxIntensity>
+            float outputs:out
+        }
+        
+        def Shader "NegativeOne"
+        {
+            uniform token info:id = "ND_constant_float"
+            float inputs:value = -1.0
+            float outputs:out
+        }
+
+        def Shader "RightDepthScale"
+        {
+            uniform token info:id = "ND_multiply_float"
+            float inputs:in1.connect = </Root/ML3DMaterial/DepthScale.outputs:out>
+            float inputs:in2.connect = </Root/ML3DMaterial/NegativeOne.outputs:out>
+            float outputs:out
+        }
+
+        def Shader "CameraSwitch"
+        {
+            uniform token info:id = "ND_realitykit_geometry_switch_cameraindex_float"
+            float inputs:left.connect = </Root/ML3DMaterial/DepthScale.outputs:out>
+            float inputs:mono = 0.0
+            float inputs:right.connect = </Root/ML3DMaterial/RightDepthScale.outputs:out>
+            float outputs:out
+        }
+
+        def Shader "Texcoord"
+        {
+            uniform token info:id = "ND_texcoord_vector2"
+            float2 outputs:out
+        }
+
+        def Shader "SeparateUV"
+        {
+            uniform token info:id = "ND_separate2_vector2"
+            float2 inputs:in.connect = </Root/ML3DMaterial/Texcoord.outputs:out>
+            float outputs:outx
+            float outputs:outy
+        }
+
+        def Shader "AddOffset"
+        {
+            uniform token info:id = "ND_add_float"
+            float inputs:in1.connect = </Root/ML3DMaterial/SeparateUV.outputs:outx>
+            float inputs:in2.connect = </Root/ML3DMaterial/CameraSwitch.outputs:out>
+            float outputs:out
+        }
+
+        def Shader "CombineUV"
+        {
+            uniform token info:id = "ND_combine2_vector2"
+            float inputs:in1.connect = </Root/ML3DMaterial/AddOffset.outputs:out>
+            float inputs:in2.connect = </Root/ML3DMaterial/SeparateUV.outputs:outy>
+            float2 outputs:out
+        }
+
+        def Shader "Image"
+        {
+            uniform token info:id = "ND_tiledimage_color3"
+            asset inputs:file.connect = </Root/ML3DMaterial.inputs:texture>
+            float2 inputs:texcoord.connect = </Root/ML3DMaterial/CombineUV.outputs:out>
+            color3f outputs:out
+        }
+
+        def Shader "UGreaterEqualZero"
+        {
+            uniform token info:id = "ND_ifgreatereq_float"
+            float inputs:value1.connect = </Root/ML3DMaterial/AddOffset.outputs:out>
+            float inputs:value2 = 0.0
+            float inputs:in1 = 1.0
+            float inputs:in2 = 0.0
+            float outputs:out
+        }
+
+        def Shader "ULessEqualOne"
+        {
+            uniform token info:id = "ND_ifgreatereq_float"
+            float inputs:value1 = 1.0
+            float inputs:value2.connect = </Root/ML3DMaterial/AddOffset.outputs:out>
+            float inputs:in1 = 1.0
+            float inputs:in2 = 0.0
+            float outputs:out
+        }
+
+        def Shader "UMaskFloat"
+        {
+            uniform token info:id = "ND_multiply_float"
+            float inputs:in1.connect = </Root/ML3DMaterial/UGreaterEqualZero.outputs:out>
+            float inputs:in2.connect = </Root/ML3DMaterial/ULessEqualOne.outputs:out>
+            float outputs:out
+        }
+
+        def Shader "UMaskColor"
+        {
+            uniform token info:id = "ND_combine3_color3"
+            float inputs:in1.connect = </Root/ML3DMaterial/UMaskFloat.outputs:out>
+            float inputs:in2.connect = </Root/ML3DMaterial/UMaskFloat.outputs:out>
+            float inputs:in3.connect = </Root/ML3DMaterial/UMaskFloat.outputs:out>
+            color3f outputs:out
+        }
+
+        def Shader "FinalImage"
+        {
+            uniform token info:id = "ND_multiply_color3"
+            color3f inputs:in1.connect = </Root/ML3DMaterial/Image.outputs:out>
+            color3f inputs:in2.connect = </Root/ML3DMaterial/UMaskColor.outputs:out>
+            color3f outputs:out
+        }
+
+        def Shader "ExtractDepthColor"
+        {
+            uniform token info:id = "ND_combine3_color3"
+            float inputs:in1.connect = </Root/ML3DMaterial/ExtractDepth.outputs:outr>
+            float inputs:in2.connect = </Root/ML3DMaterial/ExtractDepth.outputs:outr>
+            float inputs:in3.connect = </Root/ML3DMaterial/ExtractDepth.outputs:outr>
+            color3f outputs:out
+        }
+
+        def Shader "DebugSwitch"
+        {
+            uniform token info:id = "ND_mix_color3"
+            color3f inputs:bg.connect = </Root/ML3DMaterial/FinalImage.outputs:out>
+            color3f inputs:fg.connect = </Root/ML3DMaterial/ExtractDepthColor.outputs:out>
+            float inputs:mix.connect = </Root/ML3DMaterial.inputs:debugDepthMap>
+            color3f outputs:out
+        }
+
+        def Shader "UnlitPreviewSurface"
+        {
+            uniform token info:id = "ND_realitykit_unlit_surfaceshader"
+            color3f inputs:color.connect = </Root/ML3DMaterial/DebugSwitch.outputs:out>
+            token outputs:out
+        }
+    }
+}
