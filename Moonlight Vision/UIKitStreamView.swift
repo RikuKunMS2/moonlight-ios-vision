@@ -155,7 +155,7 @@ struct UIKitStreamView: View {
                                     .layoutPriority(1)
                             }
                         }
-                        .padding(.top, 20)
+                        .padding(.bottom, 20)
                     }
                     .onAppear {
                         hasPerformedTeardown = false
@@ -430,6 +430,8 @@ struct UIKitStreamView: View {
                 viewModel.savedStreamConfigForResume = streamConfig
             }
         }
+        
+        AudioHelpers.resetAudioSession()
 
         if let streamVC = _UIKitStreamView.controllerReference.object {
             streamVC.stopStream()
@@ -527,6 +529,8 @@ struct UIKitStreamView: View {
         saveCurrentWindowSize()
         backgroundTask?.cancel()
         needsResume = true
+        
+        AudioHelpers.resetAudioSession()
         
         if let streamVC = _UIKitStreamView.controllerReference.object {
             streamVC.stopStream()

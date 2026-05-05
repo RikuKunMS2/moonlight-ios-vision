@@ -420,6 +420,7 @@ struct _RealityKitStreamView: View {
                         print("Suspending stream due to background")
                         needsResume = true
                         renderGateOpen = false // CRITICAL: Stop rendering before stopping stream to prevent EXC_BAD_ACCESS
+                        AudioHelpers.resetAudioSession()
                         streamMan?.stopStream()
                         streamMan = nil
                         controllerSupport?.cleanup()
@@ -485,6 +486,31 @@ struct _RealityKitStreamView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .mainViewWindowClosed)) { _ in
                 self.handleWindowClose()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("HardwareInputDetected"))) { _ in
+                if inputMode != .controller {
+                    inputMode = .controller
+                    UserDefaults.standard.set(inputMode.rawValue, forKey: "immersiveInputMode")
+                    let text = viewModel.localized(inputMode.localizedKey)
+                    showInlineHint(text: text, icon: "gamecontroller.fill")
+                    updateScreenInteractivity()
+                    startHighlightTimer()
+                    startHideTimer()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("HandPinchDetected"))) { _ in
+                if inputMode == .controller && !viewModel.streamSettings.fpsMouseCapture {
+                    inputMode = .gazeControl
+                    UserDefaults.standard.set(inputMode.rawValue, forKey: "immersiveInputMode")
+                    let text = (viewModel.streamSettings.gazeTouchMode) ? viewModel.localized("input_mode_touch") : viewModel.localized(inputMode.localizedKey)
+                    let icon: String
+                    if viewModel.streamSettings.gazeTouchMode { icon = "hand.point.up.left.fill" }
+                    else { icon = "eye" }
+                    showInlineHint(text: text, icon: icon)
+                    updateScreenInteractivity()
+                    startHighlightTimer()
+                    startHideTimer()
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .ambientAverageColorUpdated)) { notification in
                 guard dimLevel == 2 || dimLevel == 10 || dimLevel == 12 else { return }  // Only process in Reactive V1, V2, and Starfield modes
@@ -1014,6 +1040,7 @@ struct _RealityKitStreamView: View {
             lastStreamErrorMessage = nil
 
             isMenuOpen = false
+            controlState.isControlPanelVisible = false
 
             viewModel.streamSettings.statsOverlay = false
             statsTimer?.invalidate()
@@ -1926,7 +1953,7 @@ struct _RealityKitStreamView: View {
             self.controlsEntity = controls
             if controls.parent !== screen { screen.addChild(controls) }
             let screenHeight = CURVED_MAX_WIDTH_METERS * screenAspect
-            controls.position = [0.0 as Float, (screenHeight / 2.0) + Float(0.03), Float(0.05)]
+            controls.position = [0.0 as Float, (screenHeight / 2.0) + Float(0.08), Float(0.05)]
         }
         
         // Control panel - attach to screen so it follows screen movement.
@@ -2350,6 +2377,11 @@ struct _RealityKitStreamView: View {
             panelEnt.position = [0.0 as Float, 0.0 as Float, Float(0.22)]
             sizeToFit(panelEnt, targetWidth: 0.95)
         }
+        if let controls = attachments.entity(for: "controls") {
+            if controls.parent !== screen { screen.addChild(controls) }
+            let actualScreenHeight = CURVED_MAX_WIDTH_METERS * screenAspect
+            controls.position = [0.0 as Float, (actualScreenHeight / 2.0) + Float(0.08), Float(0.05)]
+        }
         if let reconnectEnt = attachments.entity(for: "reconnectingOverlay") {
             if reconnectEnt.parent !== screen { screen.addChild(reconnectEnt) }
             reconnectEnt.position = [0.0 as Float, 0.0 as Float, Float(0.4)]
@@ -2693,6 +2725,8 @@ struct _RealityKitStreamView: View {
         
         // CRITICAL: Close render gate BEFORE stopping stream
         renderGateOpen = false
+        
+        AudioHelpers.resetAudioSession()
         
         statsTimer?.invalidate()
         hintOverlayTimer?.invalidate()

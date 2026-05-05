@@ -492,6 +492,12 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             int16_t rightStickX = controller.lastRightStickX;
             int16_t rightStickY = controller.lastRightStickY;
             
+            if (buttonFlags != 0 || leftTrigger != 0 || rightTrigger != 0 || abs(leftStickX) > 4000 || abs(leftStickY) > 4000 || abs(rightStickX) > 4000 || abs(rightStickY) > 4000) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [[NSNotificationCenter defaultCenter] postNotificationName:@"HardwareInputDetected" object:nil];
+                });
+            }
+            
             // If this is merged with another controller, combine the inputs
             if (controller.mergedWithController) {
                 buttonFlags |= controller.mergedWithController.lastButtonFlags;
@@ -1107,13 +1113,24 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 #endif
 }
 
+extern void UpdatePhysicalMouseActivityTime(void);
+
 -(void) registerMouseCallbacks:(GCMouse*) mouse API_AVAILABLE(ios(14.0)) {
     
     __weak typeof(self) weakSelf = self;
     
     mouse.mouseInput.mouseMovedHandler = ^(GCMouseInput * _Nonnull mouse, float deltaX, float deltaY) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf || !strongSelf.fpsMouseCaptureEnabled) return;
+        if (!strongSelf) return;
+
+        if (fabs(deltaX) > 0.01 || fabs(deltaY) > 0.01) {
+            UpdatePhysicalMouseActivityTime();
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [[NSNotificationCenter defaultCenter] postNotificationName:@"HardwareInputDetected" object:nil];
+            });
+        }
+
+        if (!strongSelf.fpsMouseCaptureEnabled) return;
 
         // --- LOGGING: Check Console for this to confirm hardware capture ---
         // We only log if significant movement to prevent console flooding of 0.000001 values
@@ -1140,7 +1157,14 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     
     mouse.mouseInput.leftButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf || !strongSelf.fpsMouseCaptureEnabled) return;
+        if (!strongSelf) return;
+
+        UpdatePhysicalMouseActivityTime();
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"HardwareInputDetected" object:nil];
+        });
+
+        if (!strongSelf.fpsMouseCaptureEnabled) return;
         
         NSLog(@"[ControllerSupport] Left Click: %@", pressed ? @"DOWN" : @"UP");
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_LEFT);
@@ -1148,37 +1172,53 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     
     mouse.mouseInput.middleButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf || !strongSelf.fpsMouseCaptureEnabled) return;
+        if (!strongSelf) return;
         
         NSLog(@"[ControllerSupport] Middle Click: %@", pressed ? @"DOWN" : @"UP");
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_MIDDLE);
+        UpdatePhysicalMouseActivityTime();
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"HardwareInputDetected" object:nil];
+        });
     };
     
     mouse.mouseInput.rightButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf || !strongSelf.fpsMouseCaptureEnabled) return;
+        if (!strongSelf) return;
         
         NSLog(@"[ControllerSupport] Right Click: %@", pressed ? @"DOWN" : @"UP");
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
+        UpdatePhysicalMouseActivityTime();
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [[NSNotificationCenter defaultCenter] postNotificationName:@"HardwareInputDetected" object:nil];
+        });
     };
     
     if (mouse.mouseInput.auxiliaryButtons != nil) {
         if (mouse.mouseInput.auxiliaryButtons.count >= 1) {
             mouse.mouseInput.auxiliaryButtons[0].pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
                 __strong typeof(weakSelf) strongSelf = weakSelf;
-                if (!strongSelf || !strongSelf.fpsMouseCaptureEnabled) return;
+                if (!strongSelf) return;
                 
                 NSLog(@"[ControllerSupport] Aux1 Click: %@", pressed ? @"DOWN" : @"UP");
                 LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_X1);
+                UpdatePhysicalMouseActivityTime();
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [[NSNotificationCenter defaultCenter] postNotificationName:@"HardwareInputDetected" object:nil];
+                });
             };
         }
         if (mouse.mouseInput.auxiliaryButtons.count >= 2) {
             mouse.mouseInput.auxiliaryButtons[1].pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
                 __strong typeof(weakSelf) strongSelf = weakSelf;
-                if (!strongSelf || !strongSelf.fpsMouseCaptureEnabled) return;
+                if (!strongSelf) return;
                 
                 NSLog(@"[ControllerSupport] Aux2 Click: %@", pressed ? @"DOWN" : @"UP");
                 LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_X2);
+                UpdatePhysicalMouseActivityTime();
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    [[NSNotificationCenter defaultCenter] postNotificationName:@"HardwareInputDetected" object:nil];
+                });
             };
         }
     }

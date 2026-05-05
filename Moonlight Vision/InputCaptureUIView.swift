@@ -38,6 +38,17 @@ class MutableBox<T> {
     init(_ value: T) { self.value = value }
 }
 
+class GlobalInputState {
+    static let shared = GlobalInputState()
+    var activeTouchIsHand: Bool = false
+    var lastPhysicalMouseActivityTime: TimeInterval = 0
+}
+
+@_cdecl("UpdatePhysicalMouseActivityTime")
+func UpdatePhysicalMouseActivityTime() {
+    GlobalInputState.shared.lastPhysicalMouseActivityTime = CACurrentMediaTime()
+}
+
 enum InputMode: Int, CaseIterable {
     case screenMove = 0
     case controller = 1
@@ -114,13 +125,13 @@ struct InputCaptureView: UIViewControllerRepresentable {
         uiViewController.fpsMouseCaptureEnabled = fpsMouseCapture
         
         // ALWAYS aggressively reclaim first responder (needed for controller input)
-        if view.window != nil && !view.isFirstResponder {
+        if view.window != nil && !view.isFirstResponder && UIApplication.shared.applicationState == .active {
             _ = view.becomeFirstResponder()
             
             // Double-check and force if needed
             if !view.isFirstResponder {
                 DispatchQueue.main.async {
-                    if view.window != nil {
+                    if view.window != nil && UIApplication.shared.applicationState == .active {
                         _ = view.becomeFirstResponder()
                     }
                 }
@@ -128,7 +139,7 @@ struct InputCaptureView: UIViewControllerRepresentable {
         }
     }
     
-    static func dismantleUIViewController(_ uiViewController: InputCaptureViewController, coordinator: Context) {
+    static func dismantleUIViewController(_ uiViewController: InputCaptureViewController, coordinator: Coordinator) {
         uiViewController.fpsMouseCaptureEnabled = false
         uiViewController.captureView.cleanup()
     }
@@ -149,7 +160,7 @@ struct SwiftUIAbsoluteMouseTracker: View {
     private let BUTTON_ACTION_PRESS: Int8 = 0x07
     private let BUTTON_ACTION_RELEASE: Int8 = 0x08
     private let BUTTON_LEFT: Int32 = 0x01
-    private let BUTTON_RIGHT: Int32 = 0x02
+    private let BUTTON_RIGHT: Int32 = 0x03
     
     var body: some View {
         GeometryReader { geo in
@@ -176,6 +187,18 @@ struct SwiftUIAbsoluteMouseTracker: View {
                     .onChanged { value in
                         guard isControllerMode && !fpsMouseCapture else { return }
                         
+                        let now = CACurrentMediaTime()
+                        // If physical mouse hasn't moved or clicked in the last 0.5 seconds, it's a hand pinch!
+                        if now - GlobalInputState.shared.lastPhysicalMouseActivityTime > 0.5 {
+                            if !GlobalInputState.shared.activeTouchIsHand {
+                                GlobalInputState.shared.activeTouchIsHand = true
+                                NotificationCenter.default.post(name: Notification.Name("HandPinchDetected"), object: nil)
+                            }
+                            return
+                        } else {
+                            GlobalInputState.shared.activeTouchIsHand = false
+                        }
+                        
                         updateCursorFromSystemPointer(location: value.location, bounds: geo.size)
                         
                         if !isDragging {
@@ -191,6 +214,7 @@ struct SwiftUIAbsoluteMouseTracker: View {
                         }
                     }
                     .onEnded { value in
+                        if GlobalInputState.shared.activeTouchIsHand { return }
                         if isDragging {
                             isDragging = false
                             longPressTimer?.invalidate()
@@ -312,9 +336,28 @@ class InputCaptureViewController: UIViewController {
         if #available(iOS 14.0, *) {
             NotificationCenter.default.addObserver(self, selector: #selector(pointerLockStateDidChange(_:)), name: UIPointerLockState.didChangeNotification, object: nil)
         }
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(appDidEnterBackground), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+    }
+    
+    @objc private func appDidEnterBackground() {
+        if GlobalPointerLock.shared.isLocked {
+            GlobalPointerLock.shared.isLocked = false
+        }
+    }
+    
+    @objc private func appWillEnterForeground() {
+        if fpsMouseCaptureEnabled {
+            GlobalPointerLock.shared.isLocked = true
+            if #available(iOS 14.0, *) {
+                setNeedsUpdateOfPrefersPointerLocked()
+            }
+        }
     }
     
     @objc private func updatePointerLock() {
+        guard UIApplication.shared.applicationState == .active else { return }
         GlobalPointerLock.shared.isLocked = fpsMouseCaptureEnabled
         if #available(iOS 14.0, *) {
             setNeedsUpdateOfPrefersPointerLocked()
@@ -332,6 +375,7 @@ class InputCaptureViewController: UIViewController {
                 if !pointerLockState.isLocked && fpsMouseCaptureEnabled {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                         guard let self = self, self.fpsMouseCaptureEnabled else { return }
+                        guard UIApplication.shared.applicationState == .active else { return }
                         self.setNeedsUpdateOfPrefersPointerLocked()
                         
                         // Also try the active window's root view controller to be safe
@@ -399,6 +443,7 @@ class InputCaptureUIView: UIView, UIKeyInput {
         // Periodically check and reclaim first responder if lost (needed for controller input)
         firstResponderCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self = self else { return }
+            guard UIApplication.shared.applicationState == .active else { return }
             if self.window != nil && !self.isFirstResponder {
                 _ = self.becomeFirstResponder()
             }
@@ -426,6 +471,18 @@ class InputCaptureUIView: UIView, UIKeyInput {
     override var canBecomeFocused: Bool { true }
     override var canBecomeFirstResponder: Bool { true }
     var hasText: Bool { true }
+    
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesBegan(touches, with: event)
+    }
+    
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesEnded(touches, with: event)
+    }
+    
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesCancelled(touches, with: event)
+    }
     
     func insertText(_ text: String) {
         let cString = text.cString(using: .utf8)

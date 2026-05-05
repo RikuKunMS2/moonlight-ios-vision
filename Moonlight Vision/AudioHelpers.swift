@@ -114,4 +114,14 @@ class AudioHelpers {
             }
         }
     }
+
+    static func resetAudioSession() {
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            try audioSession.setIntendedSpatialExperience(.bypassed)
+            try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            print("AudioHelpers - Failed to reset audio session: \(error)")
+        }
+    }
 }
