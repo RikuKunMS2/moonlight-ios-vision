@@ -72,6 +72,7 @@ public class TemporarySettings: NSObject {
     @objc public var absoluteTouchMode = false
     @objc public var statsOverlay = false
     @objc public var dimPassthrough = true
+    @objc public var macVirtualDisplayExperimental = false
     
     // UIKit window corner radius (default: 0, may affect clarity)
     @objc public var uikitWindowCornerRadius: Float = 0.0
@@ -107,6 +108,7 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererCurvature = 0.0
         self.realitykitRendererTilt = 0.0
         self.dimPassthrough = false
+        self.macVirtualDisplayExperimental = false
         self.reactiveLightingEnabled = false
         
         // HDR defaults: 1.0 = neutral (correct for shader)
@@ -199,6 +201,7 @@ public class TemporarySettings: NSObject {
             
             self.realitykitImmersiveMode = UserDefaults.standard.bool(forKey: "realitykitImmersiveMode")
             self.reactiveLightingEnabled = UserDefaults.standard.bool(forKey: "reactiveLightingEnabled")
+            self.macVirtualDisplayExperimental = UserDefaults.standard.bool(forKey: "macVirtualDisplayExperimental")
             
             // --- HDR / COLOR LOADING ---
             self.brightness = settings.brightness?.floatValue ?? 1.0
@@ -231,6 +234,7 @@ public class TemporarySettings: NSObject {
     @objc public func save() {
         UserDefaults.standard.set(self.realitykitImmersiveMode, forKey: "realitykitImmersiveMode")
         UserDefaults.standard.set(self.reactiveLightingEnabled, forKey: "reactiveLightingEnabled")
+        UserDefaults.standard.set(self.macVirtualDisplayExperimental, forKey: "macVirtualDisplayExperimental")
         UserDefaults.standard.set(self.autoResumeStreamOnReopen, forKey: "autoResumeStreamOnReopen")
         UserDefaults.standard.set(self.fpsMouseCapture, forKey: "fpsMouseCapture")
         UserDefaults.standard.set(self.rememberStreamSettings, forKey: "rememberStreamSettings")
@@ -338,6 +342,7 @@ public class TemporarySettings: NSObject {
         self.realitykitScreenCornerRadius = 0.018
         self.realitykitImmersiveMode = false
         self.reactiveLightingEnabled = false
+        self.macVirtualDisplayExperimental = false
         
         // Stream settings
         self.useFramePacing = false
@@ -369,6 +374,7 @@ public class TemporarySettings: NSObject {
         let defaults = UserDefaults.standard
         defaults.set(false, forKey: "realitykitImmersiveMode")
         defaults.set(false, forKey: "reactiveLightingEnabled")
+        defaults.set(false, forKey: "macVirtualDisplayExperimental")
         defaults.set(false, forKey: "autoResumeStreamOnReopen")
         defaults.set(true, forKey: "rememberStreamSettings")
         

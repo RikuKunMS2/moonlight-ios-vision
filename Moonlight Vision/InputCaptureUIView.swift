@@ -124,15 +124,17 @@ struct InputCaptureView: UIViewControllerRepresentable {
         
         uiViewController.fpsMouseCaptureEnabled = fpsMouseCapture
         
-        // ALWAYS aggressively reclaim first responder (needed for controller input)
-        if view.window != nil && !view.isFirstResponder && UIApplication.shared.applicationState == .active {
-            _ = view.becomeFirstResponder()
-            
-            // Double-check and force if needed
-            if !view.isFirstResponder {
-                DispatchQueue.main.async {
-                    if view.window != nil && UIApplication.shared.applicationState == .active {
-                        _ = view.becomeFirstResponder()
+        // ONLY aggressively reclaim first responder if Mac Virtual Display mode is OFF
+        if !UserDefaults.standard.bool(forKey: "macVirtualDisplayExperimental") {
+            if view.window != nil && !view.isFirstResponder && UIApplication.shared.applicationState == .active {
+                _ = view.becomeFirstResponder()
+                
+                // Double-check and force if needed
+                if !view.isFirstResponder {
+                    DispatchQueue.main.async {
+                        if view.window != nil && UIApplication.shared.applicationState == .active {
+                            _ = view.becomeFirstResponder()
+                        }
                     }
                 }
             }
@@ -495,6 +497,9 @@ class InputCaptureUIView: UIView, UIKeyInput {
     }
     
     private func startFirstResponderMonitoring() {
+        // ONLY start the timer if Mac Virtual Display mode is OFF
+        guard !UserDefaults.standard.bool(forKey: "macVirtualDisplayExperimental") else { return }
+        
         // Periodically check and reclaim first responder if lost (needed for controller input)
         firstResponderCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self = self else { return }
@@ -502,6 +507,14 @@ class InputCaptureUIView: UIView, UIKeyInput {
             if self.window != nil && !self.isFirstResponder {
                 _ = self.becomeFirstResponder()
             }
+        }
+    }
+    
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        // Always gracefully request focus when attached to the window
+        if self.window != nil && !isFirstResponder {
+            _ = becomeFirstResponder()
         }
     }
     
@@ -529,6 +542,10 @@ class InputCaptureUIView: UIView, UIKeyInput {
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         super.touchesBegan(touches, with: event)
+        // Request focus on user interaction
+        if !isFirstResponder {
+            _ = becomeFirstResponder()
+        }
     }
     
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {

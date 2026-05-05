@@ -320,6 +320,18 @@ struct ImmersiveControlPanelView: View {
                             viewModel.streamSettings.save()
                         }
                     }
+                    
+                    // Mac Virtual Display
+                    ModernActionTile(
+                        icon: "macbook.and.visionpro",
+                        title: "Mac Virtual Display",
+                        isActive: viewModel.streamSettings.macVirtualDisplayExperimental
+                    ) {
+                        withAnimation {
+                            viewModel.streamSettings.macVirtualDisplayExperimental.toggle()
+                            viewModel.streamSettings.save()
+                        }
+                    }
                 }
                 
                 // Volume control (moved from display settings)

@@ -339,6 +339,11 @@ struct SettingsView: View {
                         Label(viewModel.localized("play_audio_on_pc"), systemImage: "speaker.wave.2")
                     }
                     .onChange(of: settings.playAudioOnPC) { _, _ in settings.save() }
+                    
+                    Toggle(isOn: $settings.macVirtualDisplayExperimental) {
+                        Label("Mac Virtual Display Input (Experimental)", systemImage: "macbook.and.visionpro")
+                    }
+                    .onChange(of: settings.macVirtualDisplayExperimental) { _, _ in settings.save() }
                 }
                 
                 Section(header: Label(viewModel.localized("uikit_settings"), systemImage: "window.casement")) {
