@@ -322,6 +322,14 @@ struct SettingsView: View {
                     }
                     .onChange(of: settings.multiController) { _, _ in settings.save() }
                     
+                    Picker(selection: $settings.fpsMouseCapture) {
+                        Text("Absolute (Desktop/RTS)").tag(false)
+                        Text("Relative (FPS Locked)").tag(true)
+                    } label: {
+                        Label("Mouse Tracking Mode", systemImage: "mouse")
+                    }
+                    .onChange(of: settings.fpsMouseCapture) { _, _ in settings.save() }
+                    
                     Toggle(isOn: $settings.swapABXYButtons) {
                         Label(viewModel.localized("swap_abxy_buttons"), systemImage: "arrow.up.arrow.down.circle")
                     }

@@ -100,7 +100,7 @@ static OSStatus renderCallbackSpatial(void * __nullable inRefCon,
 
     static int spatialRenderCounter = 0;
     if (spatialRenderCounter++ % 200 == 0) {
-        DEBUG_TRACE(@"[Audio Debug] renderCallbackSpatial called for %d frames", inNumberFrames);
+//        DEBUG_TRACE(@"[Audio Debug] renderCallbackSpatial called for %d frames", inNumberFrames);
     }
 
     // Copy the temporary buffer to the output.
@@ -437,7 +437,7 @@ static OSStatus renderCallbackDirect(void * __nullable inRefCon,
 
         static int renderCounter = 0;
         if (renderCounter++ % 200 == 0) {
-            DEBUG_TRACE(@"[Audio Debug] AVAudioSourceNode render block called for %d frames", frameCount);
+//            DEBUG_TRACE(@"[Audio Debug] AVAudioSourceNode render block called for %d frames", frameCount);
         }
 
         int channels = me->_channelCount;

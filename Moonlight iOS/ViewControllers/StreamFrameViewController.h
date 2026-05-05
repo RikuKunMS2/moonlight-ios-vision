@@ -25,6 +25,7 @@ typedef void (^noargCallbackType)(void);
 @property (nonatomic, strong) noargCallbackType disconnectedCallback;
 #if TARGET_OS_VISION
 @property (nonatomic, assign) BOOL uikitReconnectingForRetry;
+@property (nonatomic, assign) BOOL fpsMouseCaptureEnabled;
 #endif
 
 -(void)updatePreferredDisplayMode:(BOOL)streamActive;

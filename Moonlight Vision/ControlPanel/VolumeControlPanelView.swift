@@ -25,6 +25,8 @@ struct VolumeControlPanelView: View {
     var toggleKeyboardAction: (() -> Void)?
     var isKeyboardActive: Bool = false
     
+    @Binding var inputMode: InputMode
+    
     @Binding var depthOffset: Float
     @Binding var height: Float
     var zLimits: ClosedRange<Float>
@@ -118,6 +120,31 @@ struct VolumeControlPanelView: View {
                 ) {
                     withAnimation { viewModel.streamSettings.dimPassthrough.toggle() }
                 }
+                
+                // Input Mode Menu
+                Menu {
+                    Button(action: { inputMode = .gazeControl }) { Label("Gaze Control", systemImage: "eye") }
+                    Button(action: { inputMode = .controller; viewModel.streamSettings.fpsMouseCapture = false; viewModel.streamSettings.save() }) { Label("Absolute Mouse", systemImage: "cursorarrow") }
+                    Button(action: { inputMode = .controller; viewModel.streamSettings.fpsMouseCapture = true; viewModel.streamSettings.save() }) { Label("FPS Locked Mouse", systemImage: "cursorarrow.and.square.on.square.dashed") }
+                } label: {
+                    VStack(spacing: 10) {
+                        Image(systemName: inputMode == .gazeControl ? "eye" : (viewModel.streamSettings.fpsMouseCapture ? "cursorarrow.and.square.on.square.dashed" : "cursorarrow"))
+                            .font(.system(size: 24))
+                            .foregroundStyle(Color.black)
+                        
+                        Text(inputMode == .gazeControl ? "Gaze Mode" : (viewModel.streamSettings.fpsMouseCapture ? "FPS Mouse" : "Absolute Mouse"))
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.black.opacity(0.8))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 20).fill(Color.white))
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.lift)
                 // Spatial audio
                 let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
                 let fallback = controlState.isAudioFallbackModeActive

@@ -19,6 +19,8 @@ struct ImmersiveControlPanelView: View {
     @EnvironmentObject private var viewModel: MainViewModel
     @EnvironmentObject private var controlState: StreamControlState
     
+    @Binding var inputMode: InputMode
+    
     // Debounce timer for settings save
     @State private var saveTimer: Timer?
     
@@ -211,6 +213,32 @@ struct ImmersiveControlPanelView: View {
                             viewModel.streamSettings.save()
                         }
                     }
+                    
+                    // Input Mode Menu
+                    Menu {
+                        Button(action: { inputMode = .gazeControl }) { Label("Gaze Control", systemImage: "eye") }
+                        Button(action: { inputMode = .controller; viewModel.streamSettings.fpsMouseCapture = false; viewModel.streamSettings.save() }) { Label("Absolute Mouse", systemImage: "cursorarrow") }
+                        Button(action: { inputMode = .controller; viewModel.streamSettings.fpsMouseCapture = true; viewModel.streamSettings.save() }) { Label("FPS Locked Mouse", systemImage: "cursorarrow.and.square.on.square.dashed") }
+                        Button(action: { inputMode = .screenMove }) { Label("Screen Adjust", systemImage: "arrow.up.and.down.and.arrow.left.and.right") }
+                    } label: {
+                        VStack(spacing: 10) {
+                            Image(systemName: inputMode == .gazeControl ? "eye" : (inputMode == .screenMove ? "arrow.up.and.down.and.arrow.left.and.right" : (viewModel.streamSettings.fpsMouseCapture ? "cursorarrow.and.square.on.square.dashed" : "cursorarrow")))
+                                .font(.system(size: 24))
+                                .foregroundStyle(Color.black)
+                            
+                            Text(inputMode == .gazeControl ? "Gaze Mode" : (inputMode == .screenMove ? "Screen Adjust" : (viewModel.streamSettings.fpsMouseCapture ? "FPS Mouse" : "Absolute Mouse")))
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(Color.black.opacity(0.8))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.vertical, 12)
+                        .background(RoundedRectangle(cornerRadius: 20).fill(Color.white))
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(.lift)
                     
                     // Spatial audio
                     let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
@@ -730,7 +758,7 @@ struct SteppedSliderRow: View {
 }
 
 #Preview {
-    ImmersiveControlPanelView()
+    ImmersiveControlPanelView(inputMode: .constant(.controller))
         .environmentObject(MainViewModel())
         .environmentObject(StreamControlState.shared)
 }

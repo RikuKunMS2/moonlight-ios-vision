@@ -74,47 +74,279 @@ enum InputMode: Int, CaseIterable {
     }
 }
 
-struct InputCaptureView: UIViewRepresentable {
+struct InputCaptureView: UIViewControllerRepresentable {
     let controllerSupport: ControllerSupport
     @Binding var showKeyboard: Bool
     var isControllerMode: Bool  // True only when inputMode == .controller
     var curvature: Float
     var streamConfig: StreamConfiguration
     let headStorage: HeadPositionStorage
+    var fpsMouseCapture: Bool
     
-    func makeUIView(context: Context) -> InputCaptureUIView {
-        let view = InputCaptureUIView()
+    func makeUIViewController(context: Context) -> InputCaptureViewController {
+        let vc = InputCaptureViewController()
+        let view = vc.captureView
         view.curvature = curvature
         view.controllerSupport = controllerSupport
+        controllerSupport.attachGCEventInteraction(to: view)
         view.streamConfig = streamConfig
         view.headStorage = headStorage
         view.allowTouchPassthrough = !showKeyboard && !isControllerMode
         
-        view.isMultipleTouchEnabled = true
-        view.isUserInteractionEnabled = true
-        view.backgroundColor = UIColor.black.withAlphaComponent(0.01)
+        controllerSupport.fpsMouseCaptureEnabled = fpsMouseCapture
+        controllerSupport.relativeMouseMode = isControllerMode
         
-        return view
+        vc.fpsMouseCaptureEnabled = fpsMouseCapture
+        return vc
     }
     
-    func updateUIView(_ uiView: InputCaptureUIView, context: Context) {
-        uiView.curvature = curvature
-        uiView.streamConfig = streamConfig
-        uiView.headStorage = headStorage
-        uiView.allowTouchPassthrough = !showKeyboard && !isControllerMode
-        uiView.showVirtualKeyboard = showKeyboard
+    func updateUIViewController(_ uiViewController: InputCaptureViewController, context: Context) {
+        let view = uiViewController.captureView
+        view.curvature = curvature
+        view.streamConfig = streamConfig
+        view.headStorage = headStorage
+        view.allowTouchPassthrough = !showKeyboard && !isControllerMode
+        view.showVirtualKeyboard = showKeyboard
+        
+        controllerSupport.fpsMouseCaptureEnabled = fpsMouseCapture
+        controllerSupport.relativeMouseMode = isControllerMode
+        
+        uiViewController.fpsMouseCaptureEnabled = fpsMouseCapture
         
         // ALWAYS aggressively reclaim first responder (needed for controller input)
-        if !uiView.isFirstResponder {
-            _ = uiView.becomeFirstResponder()
+        if !view.isFirstResponder {
+            _ = view.becomeFirstResponder()
             
             // Double-check and force if needed
-            if !uiView.isFirstResponder {
+            if !view.isFirstResponder {
                 DispatchQueue.main.async {
-                    _ = uiView.becomeFirstResponder()
+                    _ = view.becomeFirstResponder()
                 }
             }
         }
+    }
+}
+
+struct SwiftUIAbsoluteMouseTracker: View {
+    var controllerSupport: ControllerSupport?
+    @Binding var showKeyboard: Bool
+    var isControllerMode: Bool
+    var curvature: Float
+    var streamConfig: StreamConfiguration
+    var headStorage: HeadPositionStorage
+    var fpsMouseCapture: Bool
+    
+    @State private var longPressTimer: Timer?
+    @State private var isDragging: Bool = false
+    
+    private let BUTTON_ACTION_PRESS: Int8 = 0x07
+    private let BUTTON_ACTION_RELEASE: Int8 = 0x08
+    private let BUTTON_LEFT: Int32 = 0x01
+    private let BUTTON_RIGHT: Int32 = 0x02
+    
+    var body: some View {
+        GeometryReader { geo in
+            InputCaptureView(
+                controllerSupport: controllerSupport!,
+                showKeyboard: $showKeyboard,
+                isControllerMode: isControllerMode,
+                curvature: curvature,
+                streamConfig: streamConfig,
+                headStorage: headStorage,
+                fpsMouseCapture: fpsMouseCapture
+            )
+            .onContinuousHover(coordinateSpace: .local) { phase in
+                guard isControllerMode && !fpsMouseCapture else { return }
+                switch phase {
+                case .active(let location):
+                    updateCursorFromSystemPointer(location: location, bounds: geo.size)
+                case .ended:
+                    break
+                }
+            }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                    .onChanged { value in
+                        guard isControllerMode && !fpsMouseCapture else { return }
+                        
+                        updateCursorFromSystemPointer(location: value.location, bounds: geo.size)
+                        
+                        if !isDragging {
+                            isDragging = true
+                            LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT)
+                            
+                            longPressTimer?.invalidate()
+                            longPressTimer = Timer.scheduledTimer(withTimeInterval: 0.650, repeats: false) { _ in
+                                // Right click emulation
+                                LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT)
+                                LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT)
+                            }
+                        }
+                    }
+                    .onEnded { value in
+                        if isDragging {
+                            isDragging = false
+                            longPressTimer?.invalidate()
+                            longPressTimer = nil
+                            
+                            LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT)
+                            LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT)
+                        }
+                    }
+            )
+        }
+    }
+    
+    private func updateCursorFromSystemPointer(location: CGPoint, bounds: CGSize) {
+        // This must perfectly match the sizing in RealityKitStreamView:
+        // targetWidth: CURVED_MAX_WIDTH_METERS * 1.05
+        let overscaleX: CGFloat = 1.05
+        
+        let rawNormX = location.x / bounds.width
+        let rawNormY = location.y / bounds.height
+        
+        // Scale out from the exact center (0.5)
+        let correctedNormX = (rawNormX - 0.5) * overscaleX + 0.5
+        
+        // Apply a non-linear curve for the Y axis to allow reaching the top and bottom of the host screen.
+        // The physical visionOS volume limits vertical movement, clipping rawNormY before it reaches 0 or 1.
+        // We use a cubic curve y = a*x + b*x^3 to maintain reasonable center sensitivity while 
+        // aggressively scaling the edges so the user can easily reach the full [-0.5, 0.5] range.
+        let dy = rawNormY - 0.5
+        let a: CGFloat = 1.5
+        let b: CGFloat = 50.0
+        let nonLinearY = (a * dy) + (b * (dy * dy * dy))
+        let correctedNormY = nonLinearY + 0.5
+        
+        var hostX = correctedNormX * CGFloat(streamConfig.width)
+        var hostY = correctedNormY * CGFloat(streamConfig.height)
+        
+        // Clamp to bounds to prevent host cursor from wrapping or snapping
+        hostX = min(max(hostX, 0), CGFloat(streamConfig.width))
+        hostY = min(max(hostY, 0), CGFloat(streamConfig.height))
+        
+        LiSendMousePositionEvent(Int16(hostX), Int16(hostY), Int16(streamConfig.width), Int16(streamConfig.height))
+    }
+}
+
+class GlobalPointerLock {
+    static let shared = GlobalPointerLock()
+    
+    var isLocked: Bool = false {
+        didSet {
+            if oldValue != isLocked {
+                DispatchQueue.main.async {
+                    for scene in UIApplication.shared.connectedScenes {
+                        if let windowScene = scene as? UIWindowScene {
+                            for window in windowScene.windows {
+                                window.rootViewController?.setNeedsUpdateOfPrefersPointerLocked()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private static let swizzleOnce: Void = {
+        let originalSelector = #selector(getter: UIViewController.prefersPointerLocked)
+        let swizzledSelector = #selector(getter: UIViewController.swizzled_prefersPointerLocked)
+        guard let originalMethod = class_getInstanceMethod(UIViewController.self, originalSelector),
+              let swizzledMethod = class_getInstanceMethod(UIViewController.self, swizzledSelector) else { return }
+        method_exchangeImplementations(originalMethod, swizzledMethod)
+    }()
+    
+    static func swizzle() {
+        _ = swizzleOnce
+    }
+}
+
+extension UIViewController {
+    @objc dynamic var swizzled_prefersPointerLocked: Bool {
+        if GlobalPointerLock.shared.isLocked {
+            return true
+        }
+        return self.swizzled_prefersPointerLocked
+    }
+}
+
+class InputCaptureViewController: UIViewController {
+    var fpsMouseCaptureEnabled: Bool = false {
+        didSet {
+            if oldValue != fpsMouseCaptureEnabled {
+                GlobalPointerLock.shared.isLocked = fpsMouseCaptureEnabled
+                if #available(iOS 14.0, *) {
+                    setNeedsUpdateOfPrefersPointerLocked()
+                }
+            }
+        }
+    }
+    
+    init() {
+        super.init(nibName: nil, bundle: nil)
+        GlobalPointerLock.swizzle()
+        setupObservers()
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        GlobalPointerLock.swizzle()
+        setupObservers()
+    }
+    
+    private func setupObservers() {
+        NotificationCenter.default.addObserver(self, selector: #selector(updatePointerLock), name: .GCMouseDidConnect, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(updatePointerLock), name: .GCMouseDidDisconnect, object: nil)
+        if #available(iOS 14.0, *) {
+            NotificationCenter.default.addObserver(self, selector: #selector(pointerLockStateDidChange(_:)), name: UIPointerLockState.didChangeNotification, object: nil)
+        }
+    }
+    
+    @objc private func updatePointerLock() {
+        GlobalPointerLock.shared.isLocked = fpsMouseCaptureEnabled
+        if #available(iOS 14.0, *) {
+            setNeedsUpdateOfPrefersPointerLocked()
+        }
+    }
+    
+    @objc private func pointerLockStateDidChange(_ notification: Notification) {
+        if #available(iOS 14.0, *) {
+            // If the system drops the pointer lock but we still want it, 
+            // aggressively request it back. The system will honor it as soon
+            // as our app regains focus.
+            if let scene = notification.userInfo?[UIPointerLockState.sceneUserInfoKey] as? UIScene,
+               let pointerLockState = (scene as? UIWindowScene)?.pointerLockState {
+                
+                if !pointerLockState.isLocked && fpsMouseCaptureEnabled {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        self.setNeedsUpdateOfPrefersPointerLocked()
+                        
+                        // Also try the active window's root view controller to be safe
+                        for window in (scene as? UIWindowScene)?.windows ?? [] {
+                            if window.isKeyWindow {
+                                window.rootViewController?.setNeedsUpdateOfPrefersPointerLocked()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    lazy var captureView: InputCaptureUIView = {
+        let view = InputCaptureUIView()
+        view.isMultipleTouchEnabled = true
+        view.isUserInteractionEnabled = true
+        view.backgroundColor = UIColor.black.withAlphaComponent(0.01)
+        return view
+    }()
+    
+    override func loadView() {
+        self.view = captureView
+    }
+    
+    override var prefersPointerLocked: Bool {
+        return fpsMouseCaptureEnabled
     }
 }
 
@@ -164,9 +396,7 @@ class InputCaptureUIView: UIView, UIKeyInput {
         firstResponderCheckTimer?.invalidate()
     }
     
-    private func setupGestures() {
-        // GCEventInteraction removed to allow global input capture (Option B)
-    }
+
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         if allowTouchPassthrough {

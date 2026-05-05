@@ -11,6 +11,7 @@
 #import "OnScreenControls.h"
 #import "DataManager.h"
 #import "Moonlight-Swift.h"
+#import "KeyboardSupport.h"
 
 #include "Limelight.h"
 
@@ -178,9 +179,10 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             __strong typeof(weakSelf) strongSelf = weakSelf;
             if (!strongSelf) return;
             
-            // Global Keyboard Capture (Option B) - Bypass Responder Chain
-            char keyAction = pressed ? 0x03 : 0x04;
-            LiSendKeyboardEvent((short)keyCode, keyAction, 0);
+            NSLog(@"[ControllerSupport] GCKeyboard Pressed: %ld (pressed: %d)", (long)keyCode, pressed);
+            
+            // Global Keyboard Capture (Option B) - Translate USB HID code to Win32 VK Code
+            [KeyboardSupport sendUSBHIDKeyEvent:keyCode down:pressed];
         };
     }
 
@@ -1111,7 +1113,7 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     
     mouse.mouseInput.mouseMovedHandler = ^(GCMouseInput * _Nonnull mouse, float deltaX, float deltaY) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf) return;
+        if (!strongSelf || !strongSelf.fpsMouseCaptureEnabled) return;
 
         // --- LOGGING: Check Console for this to confirm hardware capture ---
         // We only log if significant movement to prevent console flooding of 0.000001 values
@@ -1137,16 +1139,25 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     // --- BUTTONS WITH LOGGING ---
     
     mouse.mouseInput.leftButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf || !strongSelf.fpsMouseCaptureEnabled) return;
+        
         NSLog(@"[ControllerSupport] Left Click: %@", pressed ? @"DOWN" : @"UP");
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_LEFT);
     };
     
     mouse.mouseInput.middleButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf || !strongSelf.fpsMouseCaptureEnabled) return;
+        
         NSLog(@"[ControllerSupport] Middle Click: %@", pressed ? @"DOWN" : @"UP");
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_MIDDLE);
     };
     
     mouse.mouseInput.rightButton.pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf || !strongSelf.fpsMouseCaptureEnabled) return;
+        
         NSLog(@"[ControllerSupport] Right Click: %@", pressed ? @"DOWN" : @"UP");
         LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
     };
@@ -1154,12 +1165,18 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     if (mouse.mouseInput.auxiliaryButtons != nil) {
         if (mouse.mouseInput.auxiliaryButtons.count >= 1) {
             mouse.mouseInput.auxiliaryButtons[0].pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
+                __strong typeof(weakSelf) strongSelf = weakSelf;
+                if (!strongSelf || !strongSelf.fpsMouseCaptureEnabled) return;
+                
                 NSLog(@"[ControllerSupport] Aux1 Click: %@", pressed ? @"DOWN" : @"UP");
                 LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_X1);
             };
         }
         if (mouse.mouseInput.auxiliaryButtons.count >= 2) {
             mouse.mouseInput.auxiliaryButtons[1].pressedChangedHandler = ^(GCControllerButtonInput * _Nonnull button, float value, BOOL pressed) {
+                __strong typeof(weakSelf) strongSelf = weakSelf;
+                if (!strongSelf || !strongSelf.fpsMouseCaptureEnabled) return;
+                
                 NSLog(@"[ControllerSupport] Aux2 Click: %@", pressed ? @"DOWN" : @"UP");
                 LiSendMouseButtonEvent(pressed ? BUTTON_ACTION_PRESS : BUTTON_ACTION_RELEASE, BUTTON_X2);
             };
@@ -1309,6 +1326,15 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 }
 
 +(bool) isSupportedGamepad:(GCController*) controller {
+    if (@available(iOS 14.0, tvOS 14.0, *)) {
+        if ([controller isKindOfClass:[GCKeyboard class]]) {
+            return false;
+        }
+    }
+    // Check if the device is actually a keyboard masquerading as a gamepad (e.g., Magic Keyboard WASD mapping)
+    if ([controller.vendorName localizedCaseInsensitiveContainsString:@"Keyboard"]) {
+        return false;
+    }
     return controller.extendedGamepad != nil || controller.microGamepad != nil || controller.gamepad != nil;
 }
 
@@ -1413,126 +1439,105 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
         for (GCMouse* mouse in [GCMouse mice]) {
             [self registerMouseCallbacks:mouse];
         }
+        if ([GCKeyboard coalescedKeyboard]) {
+            [self registerKeyboardCallbacks:[GCKeyboard coalescedKeyboard]];
+        }
     }
     
+    __weak typeof(self) weakSelf = self;
+    
     _controllerConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCControllerDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        
         Log(LOG_I, @"Controller connected!");
         
         GCController* controller = note.object;
         
         if (![ControllerSupport isSupportedGamepad:controller]) {
-            // Ignore micro gamepads and motion controllers
             return;
         }
         
-        Controller* limeController = [self assignController:controller];
+        Controller* limeController = [strongSelf assignController:controller];
         if (limeController) {
-            // Register callbacks on the new controller
-            [self registerControllerCallbacks:controller];
-            
-            // Report the controller arrival to the host if we're connected
-            [self reportControllerArrival:limeController];
-            
-            // Re-evaluate the on-screen control mode
-            [self updateAutoOnScreenControlMode];
-            
-            // Notify the delegate
-            [self->_delegate gamepadPresenceChanged];
+            [strongSelf registerControllerCallbacks:controller];
+            [strongSelf reportControllerArrival:limeController];
+            [strongSelf updateAutoOnScreenControlMode];
+            [strongSelf->_delegate gamepadPresenceChanged];
         }
     }];
     _controllerDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCControllerDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        
         Log(LOG_I, @"Controller disconnected!");
         
         GCController* controller = note.object;
         
         if (![ControllerSupport isSupportedGamepad:controller]) {
-            // Ignore micro gamepads and motion controllers
             return;
         }
         
-        [self unregisterControllerCallbacks:controller];
-        self->_controllerNumbers &= ~(1 << controller.playerIndex);
+        [strongSelf unregisterControllerCallbacks:controller];
+        strongSelf->_controllerNumbers &= ~(1 << controller.playerIndex);
         Log(LOG_I, @"Unassigning controller index: %ld", (long)controller.playerIndex);
         
-        Controller* limeController = [self->_controllers objectForKey:[NSNumber numberWithInteger:controller.playerIndex]];
+        Controller* limeController = [strongSelf->_controllers objectForKey:[NSNumber numberWithInteger:controller.playerIndex]];
         if (limeController) {
-            // Stop haptics on this controller
-            [self cleanupControllerHaptics:limeController];
+            [strongSelf cleanupControllerHaptics:limeController];
+            [strongSelf cleanupControllerMotion:limeController];
+            [strongSelf cleanupControllerBattery:limeController];
             
-            // Stop motion reports on this controller
-            [self cleanupControllerMotion:limeController];
-            
-            // Stop battery reports on this controller
-            [self cleanupControllerBattery:limeController];
-            
-            // Disassociate this controller from any controllers merged with it
             if (limeController.mergedWithController) {
                 assert(limeController.mergedWithController.mergedWithController == limeController);
                 limeController.mergedWithController.mergedWithController = nil;
             }
             
-            // Inform the server of the updated active gamepads before removing this controller
-            [self updateFinished:limeController];
-            [self->_controllers removeObjectForKey:[NSNumber numberWithInteger:controller.playerIndex]];
-            
-            // Re-evaluate the on-screen control mode
-            [self updateAutoOnScreenControlMode];
-            
-            // Notify the delegate
-            [self->_delegate gamepadPresenceChanged];
+            [strongSelf updateFinished:limeController];
+            [strongSelf->_controllers removeObjectForKey:[NSNumber numberWithInteger:controller.playerIndex]];
+            [strongSelf updateAutoOnScreenControlMode];
+            [strongSelf->_delegate gamepadPresenceChanged];
         }
     }];
     
     if (@available(iOS 14.0, tvOS 14.0, *)) {
         _mouseConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+            __strong typeof(weakSelf) strongSelf = weakSelf;
+            if (!strongSelf) return;
             Log(LOG_I, @"Mouse connected!");
             
             GCMouse* mouse = note.object;
-            
-            // Register for mouse events
-            [self registerMouseCallbacks: mouse];
-
-            // Re-evaluate the on-screen control mode
-            [self updateAutoOnScreenControlMode];
-            
-            // Notify the delegate
-            [self->_delegate mousePresenceChanged];
+            [strongSelf registerMouseCallbacks: mouse];
+            [strongSelf updateAutoOnScreenControlMode];
+            [strongSelf->_delegate mousePresenceChanged];
         }];
         _mouseDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+            __strong typeof(weakSelf) strongSelf = weakSelf;
+            if (!strongSelf) return;
             Log(LOG_I, @"Mouse disconnected!");
             
             GCMouse* mouse = note.object;
-            
-            // Unregister for mouse events
-            [self unregisterMouseCallbacks: mouse];
-
-            // Re-evaluate the on-screen control mode
-            [self updateAutoOnScreenControlMode];
-            
-            // Notify the delegate
-            [self->_delegate mousePresenceChanged];
+            [strongSelf unregisterMouseCallbacks: mouse];
+            [strongSelf updateAutoOnScreenControlMode];
+            [strongSelf->_delegate mousePresenceChanged];
         }];
         _keyboardConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+            __strong typeof(weakSelf) strongSelf = weakSelf;
+            if (!strongSelf) return;
             Log(LOG_I, @"Keyboard connected!");
             
-            // --- ADD THIS ---
-                        GCKeyboard *keyboard = note.object;
-                        [self registerKeyboardCallbacks:keyboard];
-                        // ----------------
-            
-            // Re-evaluate the on-screen control mode
-            [self updateAutoOnScreenControlMode];
+            GCKeyboard *keyboard = note.object;
+            [strongSelf registerKeyboardCallbacks:keyboard];
+            [strongSelf updateAutoOnScreenControlMode];
         }];
         _keyboardDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+            __strong typeof(weakSelf) strongSelf = weakSelf;
+            if (!strongSelf) return;
             Log(LOG_I, @"Keyboard disconnected!");
             
-            // --- ADD THIS ---
-                        GCKeyboard *keyboard = note.object;
-                        [self unregisterKeyboardCallbacks:keyboard];
-                        // ----------------
-
-            // Re-evaluate the on-screen control mode
-            [self updateAutoOnScreenControlMode];
+            GCKeyboard *keyboard = note.object;
+            [strongSelf unregisterKeyboardCallbacks:keyboard];
+            [strongSelf updateAutoOnScreenControlMode];
         }];
     }
     
@@ -1582,6 +1587,27 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
         for (GCMouse* mouse in [GCMouse mice]) {
             [self unregisterMouseCallbacks:mouse];
         }
+    }
+}
+-(void) dealloc
+{
+    if (_controllerConnectObserver) {
+        [[NSNotificationCenter defaultCenter] removeObserver:_controllerConnectObserver];
+    }
+    if (_controllerDisconnectObserver) {
+        [[NSNotificationCenter defaultCenter] removeObserver:_controllerDisconnectObserver];
+    }
+    if (_mouseConnectObserver) {
+        [[NSNotificationCenter defaultCenter] removeObserver:_mouseConnectObserver];
+    }
+    if (_mouseDisconnectObserver) {
+        [[NSNotificationCenter defaultCenter] removeObserver:_mouseDisconnectObserver];
+    }
+    if (_keyboardConnectObserver) {
+        [[NSNotificationCenter defaultCenter] removeObserver:_keyboardConnectObserver];
+    }
+    if (_keyboardDisconnectObserver) {
+        [[NSNotificationCenter defaultCenter] removeObserver:_keyboardDisconnectObserver];
     }
 }
 

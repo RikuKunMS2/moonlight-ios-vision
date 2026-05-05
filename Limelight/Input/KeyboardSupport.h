@@ -16,6 +16,7 @@ struct KeyEvent {
     u_char modifier;
 };
 
++ (BOOL)sendUSBHIDKeyEvent:(NSInteger)hidUsage down:(BOOL)down;
 + (BOOL)sendKeyEventForPress:(UIPress*)press down:(BOOL)down API_AVAILABLE(ios(13.4));
 + (BOOL)sendKeyEvent:(UIKey*)key down:(BOOL)down API_AVAILABLE(ios(13.4));
 + (struct KeyEvent) translateKeyEvent:(unichar) inputChar withModifierFlags:(UIKeyModifierFlags)modifierFlags;

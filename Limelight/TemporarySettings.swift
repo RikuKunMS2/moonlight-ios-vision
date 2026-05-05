@@ -68,6 +68,7 @@ public class TemporarySettings: NSObject {
     @objc public var optimizeGames = false
     @objc public var enableHdr = false
     @objc public var btMouseSupport = false
+    @objc public var fpsMouseCapture = false
     @objc public var absoluteTouchMode = false
     @objc public var statsOverlay = false
     @objc public var dimPassthrough = true
@@ -186,6 +187,7 @@ public class TemporarySettings: NSObject {
             self.optimizeGames = settings.optimizeGames
             self.enableHdr = settings.enableHdr
             self.btMouseSupport = settings.btMouseSupport
+            self.fpsMouseCapture = UserDefaults.standard.bool(forKey: "fpsMouseCapture")
             self.absoluteTouchMode = settings.absoluteTouchMode
             self.statsOverlay = settings.statsOverlay
 
@@ -230,6 +232,7 @@ public class TemporarySettings: NSObject {
         UserDefaults.standard.set(self.realitykitImmersiveMode, forKey: "realitykitImmersiveMode")
         UserDefaults.standard.set(self.reactiveLightingEnabled, forKey: "reactiveLightingEnabled")
         UserDefaults.standard.set(self.autoResumeStreamOnReopen, forKey: "autoResumeStreamOnReopen")
+        UserDefaults.standard.set(self.fpsMouseCapture, forKey: "fpsMouseCapture")
         UserDefaults.standard.set(self.rememberStreamSettings, forKey: "rememberStreamSettings")
         UserDefaults.standard.set(self.uikitWindowCornerRadius, forKey: "uikitWindowCornerRadius")
         UserDefaults.standard.set(self.realitykitScreenCornerRadius, forKey: "realitykitScreenCornerRadius")

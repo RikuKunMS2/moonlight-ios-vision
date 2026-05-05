@@ -163,6 +163,7 @@ struct _RealityKitStreamView: View {
     @State private var pinnedStageScale: Float = 1.0
     @State private var screenOriginalParent: Entity?
     @State private var screen: ModelEntity = ModelEntity()
+    @State private var focusCatcherEntity: ModelEntity = ModelEntity()
     @State private var ambilightLayers: [ModelEntity] = []
     @State private var isInteractive = false
     // Immersive transform (synced with controlState)
@@ -203,6 +204,7 @@ struct _RealityKitStreamView: View {
     @State private var hideTimer: Timer?
     @State private var controlsEntity: Entity?
     @State private var shouldClose = false
+    @FocusState private var isInputFocused: Bool
     @State private var hasPerformedTeardown = false
     @State private var needsResume = false
     // spatialAudioMode is now in viewModel.streamSettings.spatialAudioMode
@@ -376,11 +378,6 @@ struct _RealityKitStreamView: View {
             .volumeBaseplateVisibility(viewModel.streamSettings.dimPassthrough ? .hidden : .automatic)
             .supportedVolumeViewpoints(.front)
             .preferredSurroundingsEffect(!isImmersive && viewModel.streamSettings.dimPassthrough ? .systemDark : nil)
-            .ornament(attachmentAnchor: .scene(.bottom)) {
-                if showVirtualKeyboard {
-                    PCModifierToolbar()
-                }
-            }
         
         let lifecycleApplied = baseView
             .task { await setupMaterial() }
@@ -514,7 +511,13 @@ struct _RealityKitStreamView: View {
             }
             .onChange(of: videoMode) { _, _ in updateScreenMaterial() }
             .onChange(of: showMenuPanel) { _, _ in updateScreenInteractivity() }
-            .onChange(of: inputMode) { _, _ in updateScreenInteractivity() }
+            .onChange(of: inputMode) { oldValue, newValue in 
+                if oldValue == .gazeControl && newValue != .gazeControl {
+                    gazeController.cleanup()
+                }
+                UserDefaults.standard.set(newValue.rawValue, forKey: "immersiveInputMode")
+                updateScreenInteractivity() 
+            }
             .onChange(of: viewModel.streamSettings.swapABXYButtons) { _, newValue in
                 controllerSupport?.setSwapABXYButtons(newValue)
             }
@@ -835,7 +838,7 @@ struct _RealityKitStreamView: View {
             Attachment(id: "controlPanel") {
                 if controlState.isControlPanelVisible {
                     if isImmersive {
-                        ImmersiveControlPanelView()
+                        ImmersiveControlPanelView(inputMode: $inputMode)
                             .environmentObject(viewModel)
                             .environmentObject(controlState)
                     } else {
@@ -859,6 +862,7 @@ struct _RealityKitStreamView: View {
                             },
                             toggleKeyboardAction: { showVirtualKeyboard.toggle() },
                             isKeyboardActive: showVirtualKeyboard,
+                            inputMode: $inputMode,
                             depthOffset: $volumeDepthOffset,
                             height: $volumeHeight,
                             zLimits: volumeZLimits,
@@ -1023,8 +1027,17 @@ struct _RealityKitStreamView: View {
             self.tiltAngle = viewModel.streamSettings.realitykitRendererTilt
 
             // Initialize input mode from user preference
-            let defaultMode = UserDefaults.standard.integer(forKey: "immersive.defaultControlMode")
-            inputMode = InputMode(rawValue: defaultMode) ?? .gazeControl
+            if UserDefaults.standard.object(forKey: "immersive.defaultControlMode") == nil {
+                inputMode = .controller
+            } else {
+                let defaultMode = UserDefaults.standard.integer(forKey: "immersive.defaultControlMode")
+                inputMode = InputMode(rawValue: defaultMode) ?? .controller
+            }
+            
+            // Screen Move is only allowed in Immersive Mode
+            if !isImmersive && inputMode == .screenMove {
+                inputMode = .controller
+            }
             print("[StreamView] Initialized input mode from settings: \(inputMode.displayName)")
 
             // Spatial audio is read from streamSettings, no need to reset it here
@@ -1263,6 +1276,11 @@ struct _RealityKitStreamView: View {
         DragGesture(minimumDistance: 0)  // 0 for instant gaze response
             .targetedToEntity(screen)
             .onChanged { value in
+                isInputFocused = true
+                // If FPS mode is enabled, the pointer is locked and physical mouse handles movement natively.
+                // Ignore RealityKit drag gestures to prevent coordinate snapping.
+                guard !viewModel.streamSettings.fpsMouseCapture else { return }
+                
                 // DISPATCHER: Route logic based on active mode
                 switch inputMode {
                 case .screenMove:
@@ -1291,6 +1309,9 @@ struct _RealityKitStreamView: View {
                 }
             }
             .onEnded { _ in
+                // If FPS mode is enabled, ignore RealityKit drag gestures.
+                guard !viewModel.streamSettings.fpsMouseCapture else { return }
+                
                 // CLEANUP DISPATCHER
                 switch inputMode {
                 case .screenMove:
@@ -1359,6 +1380,11 @@ struct _RealityKitStreamView: View {
         SpatialTapGesture()
             .targetedToEntity(screen)
             .onEnded { value in
+                isInputFocused = true
+                // If FPS mode is enabled, the pointer is locked and physical mouse handles clicks natively.
+                // Do not fire gaze taps, otherwise the cursor snaps to the center.
+                guard !viewModel.streamSettings.fpsMouseCapture else { return }
+                
                 guard inputMode == .gazeControl else {
                     print("[Gaze] Tap ignored - not in gaze control mode (current: \(inputMode))")
                     return
@@ -1444,20 +1470,27 @@ struct _RealityKitStreamView: View {
     @ViewBuilder
     private var inputCaptureAttachment: some View {
         if let support = controllerSupport {
-            InputCaptureView(
+            SwiftUIAbsoluteMouseTracker(
                 controllerSupport: support,
                 showKeyboard: $showVirtualKeyboard,
                 isControllerMode: inputMode == .controller,
                 curvature: effectiveCurvature,
                 streamConfig: streamConfig,
-                headStorage: headStorage
+                headStorage: headStorage,
+                fpsMouseCapture: viewModel.streamSettings.fpsMouseCapture
             )
-            .frame(width: 1920, height: 1920 / CGFloat(screenAspect))
-            .opacity(0.01)
-            // Input Mode handling:
-            // - Controller mode: allowsHitTesting(true) → Controller works
-            // - Other modes: allowsHitTesting(false) → RealityKit gestures work
-            .allowsHitTesting(showVirtualKeyboard || inputMode == .controller)
+            .frame(
+                width: (showVirtualKeyboard || inputMode == .controller) ? 1920 : 1,
+                height: (showVirtualKeyboard || inputMode == .controller) ? (1920 / CGFloat(screenAspect)) : 1
+            )
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .focusable()
+            .focused($isInputFocused)
+            .onAppear {
+                isInputFocused = true
+            }
+            .allowsHitTesting(inputMode == .controller && !viewModel.streamSettings.fpsMouseCapture)
         }
     }
 
@@ -1640,12 +1673,9 @@ struct _RealityKitStreamView: View {
     private func cycleInputMode() {
         gazeController.cleanup()
         
-        // Only toggle between screenMove (0) and gazeControl (2)
-        if inputMode == .screenMove {
-            inputMode = .gazeControl
-        } else {
-            inputMode = .screenMove
-        }
+        let allCases: [InputMode] = isImmersive ? InputMode.allCases : [.controller, .gazeControl]
+        let idx = allCases.firstIndex(of: inputMode) ?? 0
+        inputMode = allCases[(idx + 1) % allCases.count]
         
         UserDefaults.standard.set(inputMode.rawValue, forKey: "immersiveInputMode")
         let text = (inputMode == .gazeControl && viewModel.streamSettings.gazeTouchMode) ? viewModel.localized("input_mode_touch") : viewModel.localized(inputMode.localizedKey)
@@ -1803,6 +1833,15 @@ struct _RealityKitStreamView: View {
     // MARK: - RealityView Setup
 
     func setupRealityView(content: RealityViewContent, attachments: RealityViewAttachments) {
+        // Setup Focus Catcher for Pointer Lock / Hardware Input
+        // A giant invisible box that fills the bounds to catch gaze, ensuring the scene
+        // maintains focus when the user looks away from the screen in controller mode.
+        focusCatcherEntity.components.set(OpacityComponent(opacity: 0.0))
+        let focusMesh = MeshResource.generateBox(size: 1000)
+        focusCatcherEntity.model = ModelComponent(mesh: focusMesh, materials: [UnlitMaterial(color: .clear)])
+        focusCatcherEntity.components.set(CollisionComponent(shapes: [.generateBox(size: [1000, 1000, 1000])], isStatic: true))
+        content.add(focusCatcherEntity)
+        
         // Safe mesh generation with fallback
         let mesh: MeshResource
         do {
@@ -1923,14 +1962,14 @@ struct _RealityKitStreamView: View {
                     statsEnt.scale = [scale, scale, scale]
                 }
             }
-            let screenHeight = CURVED_MAX_WIDTH_METERS * screenAspect
+            let screenHeight = CURVED_MAX_WIDTH_METERS / screenAspect
             statsEnt.position = [0.0 as Float, -(screenHeight / 2.0) - Float(0.07), Float(0.07)]
         }
 
         // Keyboard TextField - positioned below screen, centered
         if let keyboardEnt = attachments.entity(for: "keyboardTextField") {
             if keyboardEnt.parent !== screen { screen.addChild(keyboardEnt) }
-            let screenHeight = CURVED_MAX_WIDTH_METERS * screenAspect
+            let screenHeight = CURVED_MAX_WIDTH_METERS / screenAspect
             
             let keyboardOffset: Float = 0.08
             keyboardEnt.position = [0.0 as Float, -(screenHeight / 2.0) - Float(keyboardOffset), Float(0.05)]
@@ -1952,7 +1991,7 @@ struct _RealityKitStreamView: View {
         // PC Modifier Toolbar - positioned below keyboardTextField
         if let pcModifierEnt = attachments.entity(for: "pcModifierToolbar") {
             if pcModifierEnt.parent !== screen { screen.addChild(pcModifierEnt) }
-            let screenHeight = CURVED_MAX_WIDTH_METERS * screenAspect
+            let screenHeight = CURVED_MAX_WIDTH_METERS / screenAspect
             
             let toolbarOffset: Float = 0.16
             pcModifierEnt.position = [0.0 as Float, -(screenHeight / 2.0) - Float(toolbarOffset), Float(0.05)]
@@ -2184,7 +2223,8 @@ struct _RealityKitStreamView: View {
         }
         
         // Lightweight per-frame: only update position-sensitive attachments
-        let screenHeight = CURVED_MAX_WIDTH_METERS * screenAspect
+        // Fix: height is width / aspect, not width * aspect
+        let screenHeight = CURVED_MAX_WIDTH_METERS / screenAspect
         if let statsEnt = attachments.entity(for: "stats") {
             if statsEnt.parent !== screen { screen.addChild(statsEnt) }
             statsEnt.position = [0.0 as Float, -(screenHeight / 2.0) - Float(0.07), Float(0.07)]
@@ -2265,7 +2305,23 @@ struct _RealityKitStreamView: View {
         if let inputEnt = attachments.entity(for: "inputOverlay") {
             if inputEnt.parent !== screen { screen.addChild(inputEnt) }
             inputEnt.position = [0.0 as Float, 0.0 as Float, Float(0.01)]
-            sizeToFit(inputEnt, targetWidth: CURVED_MAX_WIDTH_METERS * 1.05)
+            
+            let bounds = inputEnt.visualBounds(relativeTo: screen)
+            if bounds.extents.x > 0 && bounds.extents.y > 0 {
+                if showVirtualKeyboard || inputMode == .controller {
+                    let unscaledWidth = Float(bounds.extents.x) / max(inputEnt.scale.x, 0.0001)
+                    let unscaledHeight = Float(bounds.extents.y) / max(inputEnt.scale.y, 0.0001)
+                    
+                    let scaleX = (CURVED_MAX_WIDTH_METERS * 1.05) / unscaledWidth
+                    // Multiply height by 1.5 so the invisible interactive plane extends past the top/bottom 
+                    // of the screen mesh. This prevents the volume bounds from clipping the interaction area early.
+                    let scaleY = ((CURVED_MAX_WIDTH_METERS / Float(screenAspect)) * 1.5) / unscaledHeight
+                    
+                    inputEnt.scale = [scaleX, scaleY, scaleX]
+                } else {
+                    inputEnt.scale = .one
+                }
+            }
         }
         if let dimPickerEnt = attachments.entity(for: "dimPicker") {
             if dimPickerEnt.parent !== screen { screen.addChild(dimPickerEnt) }
@@ -3669,6 +3725,15 @@ struct _RealityKitStreamView: View {
                 }
             }
             screen.components.set(InputTargetComponent(allowedInputTypes: .all))
+        }
+        
+        // Update Focus Catcher Entity
+        // We only want the focus catcher to intercept gaze during physical input modes
+        // to prevent interference with screen move/gaze control.
+        if inputMode == .controller {
+            focusCatcherEntity.components.set(InputTargetComponent(allowedInputTypes: .all))
+        } else {
+            focusCatcherEntity.components.remove(InputTargetComponent.self)
         }
     }
     

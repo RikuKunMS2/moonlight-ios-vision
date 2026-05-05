@@ -44,57 +44,41 @@
     }
 }
 
-+ (BOOL)sendKeyEvent:(UIKey*)key down:(BOOL)down API_AVAILABLE(ios(13.4)) {
-    char modifierFlags = 0;
++ (short)vkCodeForHIDUsage:(NSInteger)hidUsage {
     short keyCode = 0;
     
-    if (key.modifierFlags & UIKeyModifierShift) {
-        modifierFlags |= MODIFIER_SHIFT;
+    if (hidUsage >= UIKeyboardHIDUsageKeyboardA &&
+        hidUsage <= UIKeyboardHIDUsageKeyboardZ) {
+        keyCode = (hidUsage - UIKeyboardHIDUsageKeyboardA) + 0x41;
     }
-    if (key.modifierFlags & UIKeyModifierAlternate) {
-        modifierFlags |= MODIFIER_ALT;
-    }
-    if (key.modifierFlags & UIKeyModifierControl) {
-        modifierFlags |= MODIFIER_CTRL;
-    }
-    if (key.modifierFlags & UIKeyModifierCommand) {
-        modifierFlags |= MODIFIER_META;
-    }
-    
-    // This converts UIKeyboardHIDUsage values to Win32 VK_* values
-    // https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
-    if (key.keyCode >= UIKeyboardHIDUsageKeyboardA &&
-        key.keyCode <= UIKeyboardHIDUsageKeyboardZ) {
-        keyCode = (key.keyCode - UIKeyboardHIDUsageKeyboardA) + 0x41;
-    }
-    else if (key.keyCode == UIKeyboardHIDUsageKeyboard0) {
+    else if (hidUsage == UIKeyboardHIDUsageKeyboard0) {
         // This key is at the beginning of the VK_ range but the end
         // of the UIKeyboardHIDUsageKeyboard range.
         keyCode = 0x30;
     }
-    else if (key.keyCode >= UIKeyboardHIDUsageKeyboard1 &&
-             key.keyCode <= UIKeyboardHIDUsageKeyboard9) {
-        keyCode = (key.keyCode - UIKeyboardHIDUsageKeyboard1) + 0x31;
+    else if (hidUsage >= UIKeyboardHIDUsageKeyboard1 &&
+             hidUsage <= UIKeyboardHIDUsageKeyboard9) {
+        keyCode = (hidUsage - UIKeyboardHIDUsageKeyboard1) + 0x31;
     }
-    else if (key.keyCode == UIKeyboardHIDUsageKeypad0) {
+    else if (hidUsage == UIKeyboardHIDUsageKeypad0) {
         // This key is at the beginning of the VK_ range but the end
         // of the UIKeyboardHIDUsageKeypad range.
         keyCode = 0x60;
     }
-    else if (key.keyCode >= UIKeyboardHIDUsageKeypad1 &&
-             key.keyCode <= UIKeyboardHIDUsageKeypad9) {
-        keyCode = (key.keyCode - UIKeyboardHIDUsageKeypad1) + 0x61;
+    else if (hidUsage >= UIKeyboardHIDUsageKeypad1 &&
+             hidUsage <= UIKeyboardHIDUsageKeypad9) {
+        keyCode = (hidUsage - UIKeyboardHIDUsageKeypad1) + 0x61;
     }
-    else if (key.keyCode >= UIKeyboardHIDUsageKeyboardF1 &&
-             key.keyCode <= UIKeyboardHIDUsageKeyboardF12) {
-        keyCode = (key.keyCode - UIKeyboardHIDUsageKeyboardF1) + 0x70;
+    else if (hidUsage >= UIKeyboardHIDUsageKeyboardF1 &&
+             hidUsage <= UIKeyboardHIDUsageKeyboardF12) {
+        keyCode = (hidUsage - UIKeyboardHIDUsageKeyboardF1) + 0x70;
     }
-    else if (key.keyCode >= UIKeyboardHIDUsageKeyboardF13 &&
-             key.keyCode <= UIKeyboardHIDUsageKeyboardF24) {
-        keyCode = (key.keyCode - UIKeyboardHIDUsageKeyboardF13) + 0x7C;
+    else if (hidUsage >= UIKeyboardHIDUsageKeyboardF13 &&
+             hidUsage <= UIKeyboardHIDUsageKeyboardF24) {
+        keyCode = (hidUsage - UIKeyboardHIDUsageKeyboardF13) + 0x7C;
     }
     else {
-        switch (key.keyCode) {
+        switch (hidUsage) {
             case UIKeyboardHIDUsageKeyboardReturnOrEnter:
                 keyCode = 0x0D;
                 break;
@@ -249,10 +233,48 @@
                 keyCode = 0xA5;
                 break;
             default:
-                NSLog(@"Unhandled HID usage: %lu", (unsigned long)key.keyCode);
-                assert(0);
-                return false;
+                NSLog(@"Unhandled HID usage: %lu", (unsigned long)hidUsage);
+                return 0;
         }
+    }
+    
+    return keyCode;
+}
+
++ (BOOL)sendUSBHIDKeyEvent:(NSInteger)hidUsage down:(BOOL)down {
+    short keyCode = [KeyboardSupport vkCodeForHIDUsage:hidUsage];
+    if (keyCode == 0) {
+        return false;
+    }
+    
+    LiSendKeyboardEvent(0x8000 | keyCode,
+                        down ? KEY_ACTION_DOWN : KEY_ACTION_UP,
+                        0);
+    return true;
+}
+
++ (BOOL)sendKeyEvent:(UIKey*)key down:(BOOL)down API_AVAILABLE(ios(13.4)) {
+    char modifierFlags = 0;
+    short keyCode = 0;
+    
+    if (key.modifierFlags & UIKeyModifierShift) {
+        modifierFlags |= MODIFIER_SHIFT;
+    }
+    if (key.modifierFlags & UIKeyModifierAlternate) {
+        modifierFlags |= MODIFIER_ALT;
+    }
+    if (key.modifierFlags & UIKeyModifierControl) {
+        modifierFlags |= MODIFIER_CTRL;
+    }
+    if (key.modifierFlags & UIKeyModifierCommand) {
+        modifierFlags |= MODIFIER_META;
+    }
+    
+    // This converts UIKeyboardHIDUsage values to Win32 VK_* values
+    // https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+    keyCode = [KeyboardSupport vkCodeForHIDUsage:key.keyCode];
+    if (keyCode == 0) {
+        return false;
     }
     
     LiSendKeyboardEvent(0x8000 | keyCode,

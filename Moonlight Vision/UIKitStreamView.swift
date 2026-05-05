@@ -630,6 +630,7 @@ struct _UIKitStreamView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewControllerType {
         let streamView = StreamFrameViewController()
         streamView.streamConfig = streamConfig
+        streamView.fpsMouseCaptureEnabled = MainViewModel.shared.streamSettings.fpsMouseCapture
         streamView.connectedCallback = { [weak streamView] in
             print("Connected in Swift!")
             let currentMode = SpatialAudioMode(rawValue: MainViewModel.shared.streamSettings.spatialAudioMode) ?? .window
@@ -650,6 +651,7 @@ struct _UIKitStreamView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ viewController: UIViewControllerType, context: Context) {
         viewController.streamConfig = streamConfig
+        viewController.fpsMouseCaptureEnabled = MainViewModel.shared.streamSettings.fpsMouseCapture
         _UIKitStreamView.controllerReference.object = viewController
     }
 }

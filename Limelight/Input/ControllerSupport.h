@@ -24,8 +24,9 @@
 
 @end
 
-@interface ControllerSupport : NSObject;
+@interface ControllerSupport : NSObject
 @property (nonatomic, assign) BOOL relativeMouseMode;
+@property (nonatomic, assign) BOOL fpsMouseCaptureEnabled;
 // Add these properties
 
 // Keyboard Reality Kit Stuff

@@ -946,8 +946,23 @@
     // Pointer lock breaks the UIKit mouse APIs, which is a problem because
     // GCMouse is horribly broken on iOS 14.0 for certain mice. Only lock
     // the cursor if there is a GCMouse present.
+#if TARGET_OS_VISION
+    return self.fpsMouseCaptureEnabled && [GCMouse mice].count > 0;
+#else
     return [GCMouse mice].count > 0;
+#endif
 }
+
+#if TARGET_OS_VISION
+- (void)setFpsMouseCaptureEnabled:(BOOL)fpsMouseCaptureEnabled {
+    if (_fpsMouseCaptureEnabled != fpsMouseCaptureEnabled) {
+        _fpsMouseCaptureEnabled = fpsMouseCaptureEnabled;
+        if (@available(iOS 14.0, *)) {
+            [self setNeedsUpdateOfPrefersPointerLocked];
+        }
+    }
+}
+#endif
 #endif
 
 - (void)toggleKeyboard {
