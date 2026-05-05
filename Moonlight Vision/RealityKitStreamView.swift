@@ -582,6 +582,7 @@ struct _RealityKitStreamView: View {
             }
             .onChange(of: controlState.tiltAngle) { _, newValue in
                 tiltAngle = newValue
+                viewModel.streamSettings.realitykitRendererTilt = newValue
             }
             .onChange(of: controlState.dimLevel) { _, newValue in
                 if dimLevel != newValue {
@@ -3569,7 +3570,12 @@ struct _RealityKitStreamView: View {
         if !isImmersive {
             if let h = defaults.object(forKey: "realitykitHeight") as? Float { volumeHeight = h }
             if let d = defaults.object(forKey: "realitykitDepthOffset") as? Float { volumeDepthOffset = d }
-            if let tilt = defaults.object(forKey: "realitykitTiltAngle") as? Float { controlState.tiltAngle = tilt }
+            if let legacyTilt = defaults.object(forKey: "realitykitTiltAngle") as? Float { 
+                controlState.tiltAngle = legacyTilt
+                tiltAngle = legacyTilt
+                viewModel.streamSettings.realitykitRendererTilt = legacyTilt
+                defaults.removeObject(forKey: "realitykitTiltAngle")
+            }
             if viewModel.streamSettings.rememberStreamSettings {
                 if let c = defaults.object(forKey: "realitykitVolumeCurvature") as? Float { viewModel.streamSettings.realitykitRendererCurvature = c }
                 if let g = defaults.object(forKey: "realitykitVolumeGamma") as? Float { viewModel.streamSettings.gamma = g }
@@ -3621,7 +3627,6 @@ struct _RealityKitStreamView: View {
         if let savedLocked = defaults.object(forKey: kImmersiveLockedKey) as? Bool {
             controlState.isInteractive = savedLocked
         }
-        tiltAngle = 0.0
     }
     
     private let kImmersiveLockedKey = "immersive.locked"
@@ -3980,6 +3985,7 @@ struct _RealityKitStreamView: View {
     private func saveRealityKitSettings() {
         guard viewModel.streamSettings.rememberStreamSettings else { return }
         let defaults = UserDefaults.standard
+        viewModel.streamSettings.realitykitRendererTilt = tiltAngle
         if isImmersive {
             defaults.set(screenScale, forKey: "realitykitImmersiveScale")
             defaults.set(screenPosition.x, forKey: "realitykitImmersivePosX")

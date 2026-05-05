@@ -299,7 +299,7 @@ struct SettingsView: View {
                         }
                         
                     Label(viewModel.localized("screen_tilt"), systemImage: "rotate.3d")
-                    Slider(value: $settings.realitykitRendererTilt, in: (-0.5...0.5), step: 0.01)
+                    Slider(value: $settings.realitykitRendererTilt, in: (-60.0...60.0), step: 1.0)
                         .onChange(of: settings.realitykitRendererTilt) { _, _ in
                             saveTimer?.invalidate()
                             saveTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in

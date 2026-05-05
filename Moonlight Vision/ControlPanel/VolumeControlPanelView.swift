@@ -282,7 +282,7 @@ struct VolumeControlPanelView: View {
         let defaults = UserDefaults.standard
         defaults.set(height, forKey: "realitykitHeight")
         defaults.set(depthOffset, forKey: "realitykitDepthOffset")
-        defaults.set(controlState.tiltAngle, forKey: "realitykitTiltAngle")
+        viewModel.streamSettings.realitykitRendererTilt = controlState.tiltAngle
         defaults.set(viewModel.streamSettings.realitykitRendererCurvature, forKey: "realitykitVolumeCurvature")
         defaults.set(viewModel.streamSettings.gamma, forKey: "realitykitVolumeGamma")
         defaults.set(viewModel.streamSettings.saturation, forKey: "realitykitVolumeSaturation")
