@@ -228,6 +228,8 @@
 "gamepad_home" = "Gamepad Home";
 "stats_overlay" = "Stats Overlay";
 "screen_tilt" = "Screen Tilt";
+"auto_pitch_follow" = "Auto Pitch Follow";
+"auto_pitch_follow_enabled" = "Enabled";
 "hide_panel" = "Hide Panel";
 "semi_short" = "Semi";
 "full_short" = "Full";

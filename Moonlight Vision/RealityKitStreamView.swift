@@ -21,6 +21,7 @@ import AVFoundation
 import QuartzCore
 import ImageIO
 import os
+import AudioToolbox
 
 
 struct RealityKitStreamView: View {
@@ -188,6 +189,11 @@ struct _RealityKitStreamView: View {
     @State private var isLocked: Bool = false
     @State private var startDragPosition: SIMD3<Float>? = nil
     @State private var startDragGestureScenePosition: SIMD3<Float>? = nil
+    @State private var lastDragGestureScenePosition: SIMD3<Float>? = nil
+    @State private var lastDragSampleTime: CFTimeInterval = 0
+    @State private var dragReleaseVelocity: SIMD3<Float> = .zero
+    @State private var inertiaUpdateSubscription: EventSubscription?
+    @State private var inertiaVelocity: SIMD3<Float> = .zero
     @State private var hasInitializedPosition = false
     
     @State private var safeHDRSettings = ThreadSafeHDRSettings(
@@ -232,8 +238,45 @@ struct _RealityKitStreamView: View {
     private let headStorage = HeadPositionStorage()
     
     @State private var renderGateOpen: Bool = true
+    @State private var arkitSession = ARKitSession()
+    @State private var worldTrackingProvider = WorldTrackingProvider()
+    @State private var isWorldTrackingRunning = false
+    @State private var lastKnownHeadWorldPosition: SIMD3<Float>?
+    @State private var lastKnownHeadForward: SIMD3<Float>?
+    @State private var isDragFacingCatchupActive = false
+    @State private var dragFacingCatchupStartTime: CFTimeInterval = 0
+    @State private var dragFacingCatchupFromRotation = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
+    @State private var dragFacingCatchupToRotation = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
+    @State private var dragFacingCatchupTimer: Timer?
+    @State private var isScreenMoveDragging = false
+    @State private var dragFacingFollowTimer: Timer?
+    @State private var lastScreenMoveReleaseTime: CFTimeInterval = 0
+    @State private var lastDragFacingCatchupStartTime: CFTimeInterval = 0
+    @State private var isDragBarPinching = false
+    @State private var isDragBarScaleAnimating = false
     
     private let attachmentLayoutAspectBox = MutableBox<Float>(-1)
+    private let dragFacingCatchupDuration: CFTimeInterval = 0.36
+    private let dragFacingFollowReleaseGraceDuration: CFTimeInterval = 0.13
+    private let dragInertiaDecelerationPerSecond: Float = 6.5
+    private let dragInertiaStopSpeed: Float = 0.015
+    private let headCollisionRadius: Float = 0.42
+    private let headCollisionRestitution: Float = 0.18
+    private let headCollisionTangentialDamping: Float = 0.74
+    private let headCollisionPushoutLerp: Float = 0.32
+    private let headCollisionSoftLayerDepth: Float = 0.08
+    private let headCollisionSpringStrength: Float = 10.0
+    private let autoPitchGazeCompensation: Float = 0.42
+    private let autoPitchDeadZoneRadians: Float = (.pi / 180.0) * 3.0
+    private let autoPitchSoftZoneRadians: Float = (.pi / 180.0) * 14.0
+    private let autoPitchInnerGainUp: Float = 0.34
+    private let autoPitchInnerGainDown: Float = 0.30
+    private let autoPitchOuterGainUp: Float = 0.54
+    private let autoPitchOuterGainDown: Float = 0.48
+    private let autoPitchHeightBoostStartMeters: Float = 0.22
+    private let autoPitchHeightBoostEndMeters: Float = 1.10
+    private let autoPitchHeightGainBoost: Float = 0.58
+    private let autoPitchMinDeadZoneRadians: Float = (.pi / 180.0) * 1.0
     
     // Stats attachment sizing in meters (fixed width target)
     @State private var statsScaleInitialized = false
@@ -328,7 +371,15 @@ struct _RealityKitStreamView: View {
     var allowedScaleMax: Float { 8.0 }
     var cornerRadiusFraction: Float { viewModel.streamSettings.realitykitScreenCornerRadius }
     var swapCardWidthMeters: Float { 0.55 }
-    private var immersiveDragBarSize: SIMD3<Float> { SIMD3<Float>(0.46, 0.035, 0.024) }
+    private var immersiveDragBarLength: Float { 0.22 }
+    private var immersiveDragBarThickness: Float { 0.014 }
+    private var immersiveDragBarDepth: Float { 0.001 }
+    private var immersiveDragBarIdleOpacity: Float { 1.0 }
+    private var immersiveDragBarHoverOpacity: Float { 0.88 }
+    private var immersiveDragBarPinchOpacity: Float { 1.0 }
+    private var immersiveDragBarIdleTint: Float { 0.50 }
+    private var immersiveDragBarHoverTint: Float { 0.96 }
+    private var immersiveDragBarPinchTint: Float { immersiveDragBarHoverTint }
     
     /// Effective curvature: uses slider value from control panel, with animation multiplier
     var effectiveCurvature: Float {
@@ -560,6 +611,13 @@ struct _RealityKitStreamView: View {
         let controlStateSyncedPart1 = stateChangesApplied
             .onChange(of: tiltAngle) { _, newValue in
                 controlState.tiltAngle = newValue
+            }
+            .onChange(of: viewModel.streamSettings.realitykitAutoPitchFollow) { _, enabled in
+                if enabled {
+                    tiltAngle = 0.0
+                    controlState.tiltAngle = 0.0
+                    viewModel.streamSettings.realitykitRendererTilt = 0.0
+                }
             }
             .onChange(of: dimLevel) { _, newValue in
                 controlState.dimLevel = newValue
@@ -1023,6 +1081,7 @@ struct _RealityKitStreamView: View {
 
         // Kick off stream (internally defers heavy work with asyncAfter)
         startStreamIfNeeded()
+        startWorldTrackingIfNeeded()
 
         // Dismiss windows synchronously (no @State involved)
         dismissWindow(id: "mainView")
@@ -1047,7 +1106,12 @@ struct _RealityKitStreamView: View {
             viewModel.streamSettings.dimPassthrough = false
 
             self.targetScale = self.screenScale
-            self.tiltAngle = viewModel.streamSettings.realitykitRendererTilt
+            if viewModel.streamSettings.realitykitAutoPitchFollow {
+                self.tiltAngle = 0.0
+                viewModel.streamSettings.realitykitRendererTilt = 0.0
+            } else {
+                self.tiltAngle = viewModel.streamSettings.realitykitRendererTilt
+            }
 
             // Initialize input mode from user preference
             if UserDefaults.standard.object(forKey: "immersive.defaultControlMode") == nil {
@@ -1264,6 +1328,15 @@ struct _RealityKitStreamView: View {
         if !hasPerformedTeardown {
             performCompleteTeardown()
         }
+        isDragBarPinching = false
+        isDragBarScaleAnimating = false
+        isScreenMoveDragging = false
+        stopDragFacingFollowTimer()
+        stopDragFacingCatchupTimer()
+        stopInertiaMotion()
+        inertiaUpdateSubscription?.cancel()
+        inertiaUpdateSubscription = nil
+        stopWorldTracking()
         saveCurrentTransform()
     }
     
@@ -1309,6 +1382,8 @@ struct _RealityKitStreamView: View {
                 case .screenMove:
                     if controlState.isInteractive { return }  // Locked: ignore drag
                     guard isImmersive, !isPinnedToStage, value.entity === immersiveDragBar else { return }
+                    _ = refreshHeadWorldPosition()
+                    stopInertiaMotion()
                     // --- SCREEN MOVE LOGIC ---
                     hideTimer?.invalidate()
                     let currentGestureScenePoint = value.convert(value.location3D, from: .local, to: .scene)
@@ -1318,14 +1393,33 @@ struct _RealityKitStreamView: View {
                         currentGestureScenePoint.z
                     )
                     if startDragPosition == nil {
-                    startDragPosition = screenPosition
-                    startDragGestureScenePosition = currentGestureScenePosition
-                        }
+                        startDragPosition = screenPosition
+                        startDragGestureScenePosition = currentGestureScenePosition
+                        lastDragGestureScenePosition = currentGestureScenePosition
+                        lastDragSampleTime = CACurrentMediaTime()
+                        dragReleaseVelocity = .zero
+                        isDragBarPinching = true
+                        isDragBarScaleAnimating = true
+                        AudioServicesPlaySystemSound(1104)
+                        isScreenMoveDragging = true
+                        startDragFacingFollowTimer()
+                        startDragFacingCatchupIfNeeded()
+                    }
                     guard let startDragPosition, let startDragGestureScenePosition else { return }
                     let delta = currentGestureScenePosition - startDragGestureScenePosition
                     var proposed = startDragPosition + delta
                     proposed.x = min(max(proposed.x, -allowedLateralMax), allowedLateralMax)
                     screenPosition = proposed
+                    let now = CACurrentMediaTime()
+                    if let lastPos = lastDragGestureScenePosition {
+                        let dt = Float(max(now - lastDragSampleTime, 1e-3))
+                        let instantVelocity = (currentGestureScenePosition - lastPos) / dt
+                        // Low-pass blend to keep inertia stable but responsive.
+                        dragReleaseVelocity = dragReleaseVelocity * 0.55 + instantVelocity * 0.45
+                    }
+                    lastDragGestureScenePosition = currentGestureScenePosition
+                    lastDragSampleTime = now
+                    applyFacingRotationIfNeeded()
                     lastDragTime = CACurrentMediaTime()
                     
                 case .gazeControl:
@@ -1352,6 +1446,11 @@ struct _RealityKitStreamView: View {
                 case .screenMove:
                     startDragPosition = nil
                     startDragGestureScenePosition = nil
+                    lastDragGestureScenePosition = nil
+                    isDragBarPinching = false
+                    isScreenMoveDragging = false
+                    lastScreenMoveReleaseTime = CACurrentMediaTime()
+                    startInertiaMotionIfNeeded()
                     controlsHighlighted = false
                     startHighlightTimer()
                     // Sync position back to controlState for slider display
@@ -1939,6 +2038,14 @@ struct _RealityKitStreamView: View {
         
         content.add(screen)
         if screenOriginalParent == nil { screenOriginalParent = screen.parent }
+
+        if inertiaUpdateSubscription == nil {
+            inertiaUpdateSubscription = content.subscribe(to: SceneEvents.Update.self) { event in
+                applyInertiaStep(deltaTime: Float(event.deltaTime))
+                updateImmersiveDragBarLayout()
+                updateImmersiveDragBarInteractionVisuals()
+            }
+        }
         
         // Setup Ambilight Stack (Single layer for smooth bloom)
         if ambilightLayers.isEmpty {
@@ -1962,21 +2069,46 @@ struct _RealityKitStreamView: View {
         }
         
         if isImmersive {
-            let dragBarSize = immersiveDragBarSize
-            var dragBarMaterial = UnlitMaterial(color: UIColor.white.withAlphaComponent(0.68))
+            var dragBarMaterial = UnlitMaterial(color: UIColor(
+                white: CGFloat(immersiveDragBarIdleTint),
+                alpha: CGFloat(immersiveDragBarIdleOpacity)
+            ))
+            dragBarMaterial.readsDepth = false
+            dragBarMaterial.writesDepth = false
+            dragBarMaterial.faceCulling = .none
             dragBarMaterial.blending = .transparent(opacity: 1.0)
+            let dragBarMesh = makeRoundedDragBarMesh(width: immersiveDragBarLength, height: immersiveDragBarThickness)
             immersiveDragBar = ModelEntity(
-                mesh: .generateBox(size: dragBarSize),
+                mesh: dragBarMesh,
                 materials: [dragBarMaterial]
             )
             immersiveDragBar.name = "ImmersiveWindowDragBar"
-            immersiveDragBar.components.set(InputTargetComponent(allowedInputTypes: .all))
+            immersiveDragBar.components.set(ModelSortGroupComponent(
+                group: ModelSortGroup(depthPass: .postPass),
+                order: 100
+            ))
+            immersiveDragBar.components.set(OpacityComponent(opacity: 1.0))
+            immersiveDragBar.components.set(InputTargetComponent())
+            let dragBarHitSize = SIMD3<Float>(
+                immersiveDragBarLength + 0.08,
+                immersiveDragBarThickness + 0.07,
+                0.075
+            )
             immersiveDragBar.components.set(CollisionComponent(
-                shapes: [.generateBox(size: dragBarSize)],
+                shapes: [.generateBox(size: dragBarHitSize)],
                 isStatic: true
             ))
+            immersiveDragBar.components.set(HoverEffectComponent(.highlight(
+                HoverEffectComponent.HighlightHoverEffectStyle(
+                    color: .white,
+                    strength: 4.0,
+                    opacityFunction: .full
+                )
+            )))
             immersiveDragBar.components.set(GroundingShadowComponent(castsShadow: false))
-            if immersiveDragBar.parent !== screen { screen.addChild(immersiveDragBar) }
+            immersiveDragBar.scale = screen.scale
+            screen.components.set(OpacityComponent(opacity: 1.0))
+            if immersiveDragBar.parent == nil { content.add(immersiveDragBar) }
             updateImmersiveDragBarLayout()
         }
         
@@ -2215,11 +2347,12 @@ struct _RealityKitStreamView: View {
             }
         }
         if !isPinnedToStage {
-            let tiltRadians = tiltAngle * .pi / 180.0
-            let tiltRotation = simd_quatf(angle: tiltRadians, axis: SIMD3<Float>(1, 0, 0))
-            if isImmersive, let head = headAnchor {
-                            screen.transform.rotation = yawOnlyFacingHead(head: head) * tiltRotation
+            if isImmersive {
+                            _ = refreshHeadWorldPosition()
+                            applyFacingRotationIfNeeded()
                         } else {
+                            let tiltRadians = tiltAngle * .pi / 180.0
+                            let tiltRotation = simd_quatf(angle: tiltRadians, axis: SIMD3<Float>(1, 0, 0))
                             screen.transform.rotation = tiltRotation
                         }
         }
@@ -2247,6 +2380,7 @@ struct _RealityKitStreamView: View {
         }
         
         updateImmersiveDragBarLayout()
+        updateImmersiveDragBarInteractionVisuals()
         
         // Attachment layout: recompute when aspect changes OR when a new attachment entity gets attached.
         let hasNewAttachmentEntity =
@@ -2340,14 +2474,80 @@ struct _RealityKitStreamView: View {
         }
 
         immersiveDragBar.isEnabled = !isPinnedToStage && !isPinningTransitioning
-        guard immersiveDragBar.parent === screen else { return }
+        guard immersiveDragBar.parent != nil else { return }
 
         let screenHeight = CURVED_MAX_WIDTH_METERS * screenAspect
-        immersiveDragBar.position = SIMD3<Float>(
+        let localPosition = SIMD3<Float>(
             0,
-            -(screenHeight / 2.0) - 0.09,
-            0.09
+            -(screenHeight / 2.0) - 0.035,
+            0.012
         )
+        immersiveDragBar.setPosition(screen.convert(position: localPosition, to: nil), relativeTo: nil)
+        immersiveDragBar.setOrientation(screen.orientation(relativeTo: nil), relativeTo: nil)
+    }
+
+    private func updateImmersiveDragBarInteractionVisuals() {
+        guard isImmersive, immersiveDragBar.parent != nil, immersiveDragBar.isEnabled else { return }
+
+        if immersiveDragBar.components[OpacityComponent.self]?.opacity != 1.0 {
+            immersiveDragBar.components.set(OpacityComponent(opacity: 1.0))
+        }
+
+        let targetTint: Float = isDragBarPinching ? immersiveDragBarPinchTint : immersiveDragBarIdleTint
+        let targetAlpha: Float = isDragBarPinching ? immersiveDragBarPinchOpacity : immersiveDragBarIdleOpacity
+        if var model = immersiveDragBar.model, var mat = model.materials.first as? UnlitMaterial {
+            let currentColor = mat.color.tint
+            var white: CGFloat = 1.0
+            var alpha: CGFloat = 1.0
+            if currentColor.getWhite(&white, alpha: &alpha) {
+                let nextWhite = Float(white) + (targetTint - Float(white)) * 0.26
+                let nextAlpha = Float(alpha) + (targetAlpha - Float(alpha)) * 0.26
+                mat.color.tint = UIColor(white: CGFloat(nextWhite), alpha: CGFloat(nextAlpha))
+            } else {
+                mat.color.tint = UIColor(white: CGFloat(targetTint), alpha: CGFloat(targetAlpha))
+            }
+            model.materials = [mat]
+            immersiveDragBar.model = model
+        }
+
+        let baseScale = screen.scale
+        let pinchScale = SIMD3<Float>(
+            screen.scale.x * 0.88,
+            screen.scale.y * 0.88,
+            screen.scale.z
+        )
+
+        if !isDragBarPinching && !isDragBarScaleAnimating {
+            if simd_length(immersiveDragBar.scale - baseScale) > 0 {
+                immersiveDragBar.scale = baseScale
+            }
+            let currentScreenOpacity = screen.components[OpacityComponent.self]?.opacity ?? 1.0
+            if abs(currentScreenOpacity - 1.0) > 0.001 {
+                screen.components.set(OpacityComponent(opacity: 1.0))
+            }
+            return
+        }
+
+        let targetScale = isDragBarPinching ? pinchScale : baseScale
+        let currentScale = immersiveDragBar.scale
+        let scaleDistance = simd_length(currentScale - targetScale)
+        if scaleDistance > 0.0005 {
+            immersiveDragBar.scale = simd_mix(currentScale, targetScale, SIMD3<Float>(repeating: 0.07))
+        } else {
+            immersiveDragBar.scale = targetScale
+            if !isDragBarPinching {
+                isDragBarScaleAnimating = false
+            }
+        }
+
+        let fullShrinkDistance = max(simd_length(baseScale - pinchScale), 0.0001)
+        let remainingShrinkDistance = simd_length(immersiveDragBar.scale - pinchScale)
+        let shrinkProgress = min(max(1.0 - remainingShrinkDistance / fullShrinkDistance, 0.0), 1.0)
+        let targetScreenOpacity = 1.0 - (0.35 * shrinkProgress)
+        let currentScreenOpacity = screen.components[OpacityComponent.self]?.opacity ?? 1.0
+        if abs(currentScreenOpacity - targetScreenOpacity) > 0.001 {
+            screen.components.set(OpacityComponent(opacity: targetScreenOpacity))
+        }
     }
     
     /// Heavy attachment layout - only called when screen aspect ratio changes
@@ -3152,6 +3352,44 @@ struct _RealityKitStreamView: View {
         return try MeshResource.generate(from: [descr])
     }
 
+    private func makeRoundedDragBarMesh(width: Float, height: Float) -> MeshResource {
+        var descriptor = MeshDescriptor(name: "immersive_drag_bar_capsule")
+        let radius = height * 0.5
+        let halfStraight = max(0, (width * 0.5) - radius)
+        let segmentCount = 18
+
+        var positions: [SIMD3<Float>] = [SIMD3<Float>(0, 0, 0)]
+        var indices: [UInt32] = []
+
+        for i in 0...segmentCount {
+            let angle = (Float.pi * 0.5) - (Float(i) / Float(segmentCount)) * Float.pi
+            positions.append(SIMD3<Float>(
+                halfStraight + cos(angle) * radius,
+                sin(angle) * radius,
+                0
+            ))
+        }
+
+        for i in 0...segmentCount {
+            let angle = (-Float.pi * 0.5) - (Float(i) / Float(segmentCount)) * Float.pi
+            positions.append(SIMD3<Float>(
+                -halfStraight + cos(angle) * radius,
+                sin(angle) * radius,
+                0
+            ))
+        }
+
+        let outerCount = UInt32(positions.count - 1)
+        for i in 1...outerCount {
+            let next = (i == outerCount) ? UInt32(1) : i + 1
+            indices.append(contentsOf: [0, i, next])
+        }
+
+        descriptor.positions = MeshBuffer(positions)
+        descriptor.primitives = .triangles(indices)
+        return (try? MeshResource.generate(from: [descriptor])) ?? .generatePlane(width: width, height: height)
+    }
+
     private func normalizeAndScale(_ dx: Float, _ dy: Float, _ cornerRadius: Float) -> (Float, Float)? {
         let dist = sqrt(dx*dx + dy*dy)
         if dist > cornerRadius {
@@ -3586,24 +3824,328 @@ struct _RealityKitStreamView: View {
         screenPosition = newPos
     }
 
-    private func yawOnlyFacingHead(head: AnchorEntity) -> simd_quatf {
+    private func facingHeadRotation() -> simd_quatf {
             let screenWorldPosition = screen.position(relativeTo: nil)
-            let headWorldPosition = head.position(relativeTo: nil)
-            var direction = SIMD3<Float>(
+            guard let headWorldPosition = lastKnownHeadWorldPosition ?? refreshHeadWorldPosition() else {
+                return simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
+            }
+            let toHead = SIMD3<Float>(
                 headWorldPosition.x - screenWorldPosition.x,
-                0,
+                headWorldPosition.y - screenWorldPosition.y,
                 headWorldPosition.z - screenWorldPosition.z
             )
-
-            let length = simd_length(direction)
-            guard length > 1e-4 else {
+            let fullLength = simd_length(toHead)
+            guard fullLength > 1e-4 else {
                 return simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
             }
 
-            direction /= length
-            let yaw = atan2(direction.x, direction.z)
-            return simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
+            var horizontal = SIMD3<Float>(toHead.x, 0, toHead.z)
+            let horizontalLength = simd_length(horizontal)
+            guard horizontalLength > 1e-4 else {
+                return simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
+            }
+            horizontal /= horizontalLength
+
+            let yaw = atan2(horizontal.x, horizontal.z)
+            let yawRotation = simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
+
+            guard viewModel.streamSettings.realitykitAutoPitchFollow else {
+                return yawRotation
+            }
+
+            let positionPitch = atan2(toHead.y, horizontalLength)
+            let gazePitch: Float = {
+                guard let forward = lastKnownHeadForward else { return 0 }
+                let horizontalForwardLength = simd_length(SIMD2<Float>(forward.x, forward.z))
+                guard horizontalForwardLength > 1e-4 else { return 0 }
+                return atan2(forward.y, horizontalForwardLength)
+            }()
+            // Native-like feel: center region stays stable, then pitch response ramps up smoothly.
+            let compensatedPitch = autoPitchResponseCurve(
+                positionPitch - gazePitch * autoPitchGazeCompensation,
+                verticalOffsetMeters: abs(toHead.y)
+            )
+            let rightAxis = yawRotation.act(SIMD3<Float>(1, 0, 0))
+            let pitchRotation = simd_quatf(angle: -compensatedPitch, axis: rightAxis)
+            return pitchRotation * yawRotation
         }
+
+    private func autoPitchResponseCurve(_ input: Float, verticalOffsetMeters: Float) -> Float {
+        let sign: Float = input >= 0 ? 1 : -1
+        let magnitude = abs(input)
+
+        let boostT = min(max(
+            (verticalOffsetMeters - autoPitchHeightBoostStartMeters) /
+            max(autoPitchHeightBoostEndMeters - autoPitchHeightBoostStartMeters, 1e-4),
+            0
+        ), 1)
+        let boostSmooth = boostT * boostT * (3 - 2 * boostT)
+        let effectiveDeadZone = autoPitchDeadZoneRadians + (autoPitchMinDeadZoneRadians - autoPitchDeadZoneRadians) * boostSmooth
+        if magnitude <= effectiveDeadZone { return 0 }
+
+        let up = sign > 0
+        let innerGain = up ? autoPitchInnerGainUp : autoPitchInnerGainDown
+        let outerGain = up ? autoPitchOuterGainUp : autoPitchOuterGainDown
+
+        let shifted = magnitude - effectiveDeadZone
+        let softSpan = max(autoPitchSoftZoneRadians - autoPitchDeadZoneRadians, 1e-4)
+        let t = min(max(shifted / softSpan, 0), 1)
+        let smooth = t * t * (3 - 2 * t) // smoothstep
+        let gainBase = innerGain + (outerGain - innerGain) * smooth
+        let gain = gainBase * (1.0 + autoPitchHeightGainBoost * boostSmooth)
+        return sign * shifted * gain
+    }
+
+    private func refreshHeadWorldPosition() -> SIMD3<Float>? {
+        if let head = headAnchor {
+            var forward = head.transform.rotation.act(SIMD3<Float>(0, 0, -1))
+            let forwardLength = simd_length(forward)
+            if forwardLength > 1e-4 {
+                forward /= forwardLength
+                lastKnownHeadForward = forward
+            }
+        }
+        if isImmersive, isWorldTrackingRunning,
+           let deviceAnchor = worldTrackingProvider.queryDeviceAnchor(atTimestamp: CACurrentMediaTime()) {
+            let t = deviceAnchor.originFromAnchorTransform
+            let trackedPosition = SIMD3<Float>(t.columns.3.x, t.columns.3.y, t.columns.3.z)
+            var trackedForward = -SIMD3<Float>(t.columns.2.x, t.columns.2.y, t.columns.2.z)
+            let trackedForwardLength = simd_length(trackedForward)
+            if trackedForwardLength > 1e-4 {
+                trackedForward /= trackedForwardLength
+                lastKnownHeadForward = trackedForward
+            }
+            lastKnownHeadWorldPosition = trackedPosition
+            return trackedPosition
+        }
+        if let head = headAnchor {
+            let p = head.position(relativeTo: nil)
+            let fallback = SIMD3<Float>(p.x, p.y, p.z)
+            lastKnownHeadWorldPosition = fallback
+            return fallback
+        }
+        return lastKnownHeadWorldPosition
+    }
+
+    private func applyFacingRotationIfNeeded() {
+        guard isImmersive, !isPinnedToStage else { return }
+        let manualTilt = viewModel.streamSettings.realitykitAutoPitchFollow ? 0.0 : tiltAngle
+        let tiltRadians = manualTilt * .pi / 180.0
+        let tiltRotation = simd_quatf(angle: tiltRadians, axis: SIMD3<Float>(1, 0, 0))
+        let targetRotation = facingHeadRotation() * tiltRotation
+        guard isDragFacingCatchupActive else {
+            screen.transform.rotation = targetRotation
+            return
+        }
+
+        let elapsed = CACurrentMediaTime() - dragFacingCatchupStartTime
+        let t = min(max(Float(elapsed / dragFacingCatchupDuration), 0), 1)
+        let easedT = t * t * t * (t * (t * 6 - 15) + 10)  // smootherstep easing
+        // Follow the latest head pose during catch-up to avoid "chasing old target then snapping".
+        dragFacingCatchupToRotation = targetRotation
+        screen.transform.rotation = simd_slerp(dragFacingCatchupFromRotation, dragFacingCatchupToRotation, easedT)
+        if t >= 1.0 {
+            isDragFacingCatchupActive = false
+            stopDragFacingCatchupTimer()
+            screen.transform.rotation = targetRotation
+        }
+    }
+
+    private func startDragFacingCatchupIfNeeded() {
+        guard isImmersive, !isPinnedToStage else { return }
+        let now = CACurrentMediaTime()
+        if (now - lastDragFacingCatchupStartTime) < 0.12 {
+            return
+        }
+        let manualTilt = viewModel.streamSettings.realitykitAutoPitchFollow ? 0.0 : tiltAngle
+        let tiltRadians = manualTilt * .pi / 180.0
+        let tiltRotation = simd_quatf(angle: tiltRadians, axis: SIMD3<Float>(1, 0, 0))
+        let currentRotation = screen.transform.rotation
+        let targetRotation = facingHeadRotation() * tiltRotation
+        let alignment = abs(simd_dot(currentRotation.vector, targetRotation.vector))
+        if alignment > 0.999 {
+            isDragFacingCatchupActive = false
+            return
+        }
+        dragFacingCatchupFromRotation = currentRotation
+        dragFacingCatchupToRotation = targetRotation
+        dragFacingCatchupStartTime = now
+        lastDragFacingCatchupStartTime = now
+        isDragFacingCatchupActive = true
+        startDragFacingCatchupTimer()
+    }
+
+    private func startDragFacingCatchupTimer() {
+        guard dragFacingCatchupTimer == nil else { return }
+        dragFacingCatchupTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 90.0, repeats: true) { _ in
+            guard isDragFacingCatchupActive else {
+                stopDragFacingCatchupTimer()
+                return
+            }
+            _ = refreshHeadWorldPosition()
+            applyFacingRotationIfNeeded()
+        }
+    }
+
+    private func stopDragFacingCatchupTimer() {
+        dragFacingCatchupTimer?.invalidate()
+        dragFacingCatchupTimer = nil
+    }
+
+    private func startDragFacingFollowTimer() {
+        guard dragFacingFollowTimer == nil else { return }
+        dragFacingFollowTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 120.0, repeats: true) { _ in
+            let now = CACurrentMediaTime()
+            let inReleaseGrace = (now - lastScreenMoveReleaseTime) < dragFacingFollowReleaseGraceDuration
+            let shouldKeepFollowing = isScreenMoveDragging || isDragFacingCatchupActive || inReleaseGrace
+            guard shouldKeepFollowing else {
+                stopDragFacingFollowTimer()
+                return
+            }
+            _ = refreshHeadWorldPosition()
+            if isScreenMoveDragging || isDragFacingCatchupActive {
+                applyFacingRotationIfNeeded()
+            } else if inReleaseGrace {
+                applyReleaseFacingTailStep(now: now)
+            }
+        }
+    }
+
+    private func stopDragFacingFollowTimer() {
+        dragFacingFollowTimer?.invalidate()
+        dragFacingFollowTimer = nil
+    }
+
+    private func startInertiaMotionIfNeeded() {
+        guard isImmersive, !isPinnedToStage else { return }
+        let planarVelocity = SIMD3<Float>(dragReleaseVelocity.x, dragReleaseVelocity.y, dragReleaseVelocity.z)
+        let speed = simd_length(planarVelocity)
+        guard speed > dragInertiaStopSpeed else { return }
+
+        inertiaVelocity = planarVelocity
+    }
+
+    private func stopInertiaMotion() {
+        inertiaVelocity = .zero
+        dragReleaseVelocity = .zero
+    }
+
+    private func applyInertiaStep(deltaTime: Float) {
+        guard isImmersive, !isPinnedToStage, !isScreenMoveDragging else { return }
+        let speed = simd_length(inertiaVelocity)
+        guard speed > dragInertiaStopSpeed else { return }
+
+        let clampedDt = min(max(deltaTime, 1.0 / 240.0), 1.0 / 45.0)
+        let damping = Float(exp(Double(-dragInertiaDecelerationPerSecond * clampedDt)))
+        inertiaVelocity *= damping
+
+        let speedNow = simd_length(inertiaVelocity)
+        if speedNow <= dragInertiaStopSpeed {
+            stopInertiaMotion()
+            return
+        }
+
+        var proposed = screenPosition + inertiaVelocity * clampedDt
+        proposed.x = min(max(proposed.x, -allowedLateralMax), allowedLateralMax)
+
+        // Emulate native "face collision" feel: if inertia pushes the panel into
+        // a head-centered safety sphere, spring it back with damped reflection.
+        if let headWorldPosition = lastKnownHeadWorldPosition ?? refreshHeadWorldPosition() {
+            var toPanel = proposed - headWorldPosition
+            let distance = simd_length(toPanel)
+            if distance < headCollisionRadius {
+                if distance < 1e-4 {
+                    toPanel = SIMD3<Float>(0, 0, -1)
+                } else {
+                    toPanel /= distance
+                }
+
+                let penetration = headCollisionRadius - distance
+                let softDepth = max(headCollisionSoftLayerDepth, 1e-3)
+                let normalizedCompression = min(max((penetration - softDepth) / softDepth, 0), 1)
+                let springFactor = normalizedCompression * normalizedCompression
+
+                // Soft membrane behavior:
+                // - allow shallow penetration (shape deformation / energy absorption)
+                // - push back increasingly only after entering deeper compression.
+                if springFactor > 0 {
+                    let boundaryPoint = headWorldPosition + toPanel * headCollisionRadius
+                    let pushLerp = headCollisionPushoutLerp * springFactor
+                    proposed = simd_mix(proposed, boundaryPoint, SIMD3<Float>(repeating: pushLerp))
+                    proposed.x = min(max(proposed.x, -allowedLateralMax), allowedLateralMax)
+                }
+
+                // Rebound primarily along incoming direction (like native window feel),
+                // while heavily suppressing sideways drift.
+                let vNormal = simd_dot(inertiaVelocity, toPanel)
+                if vNormal < 0 {
+                    let speedIn = simd_length(inertiaVelocity)
+                    if speedIn > 1e-4 {
+                        let incomingDir = inertiaVelocity / speedIn
+                        let compressionBounce = headCollisionRestitution * (0.35 + 0.65 * springFactor)
+                        let reboundAlongIncoming = -incomingDir * (speedIn * compressionBounce)
+
+                        // Keep a tiny outward-normal bias so we do not re-penetrate immediately.
+                        let outwardNormalBias = toPanel * max(-vNormal, 0) * 0.12
+                        inertiaVelocity = reboundAlongIncoming + outwardNormalBias
+                    } else {
+                        let normalComponent = toPanel * vNormal
+                        let tangentialComponent = inertiaVelocity - normalComponent
+                        let compressionTangent = headCollisionTangentialDamping - 0.08 * springFactor
+                        inertiaVelocity = tangentialComponent * compressionTangent - normalComponent * headCollisionRestitution
+                    }
+                }
+
+                // Additional spring acceleration for deep compression to mimic elastic membrane restoring force.
+                if springFactor > 0 {
+                    let springAccel = toPanel * (headCollisionSpringStrength * springFactor)
+                    inertiaVelocity += springAccel * clampedDt
+                }
+            }
+        }
+
+        screenPosition = proposed
+        _ = refreshHeadWorldPosition()
+        applyFacingRotationIfNeeded()
+    }
+
+    private func applyReleaseFacingTailStep(now: CFTimeInterval) {
+        guard isImmersive, !isPinnedToStage else { return }
+        let elapsed = max(0, now - lastScreenMoveReleaseTime)
+        let progress = min(max(Float(elapsed / dragFacingFollowReleaseGraceDuration), 0), 1)
+        let easeOut = 1 - pow(1 - progress, 3)
+
+        let manualTilt = viewModel.streamSettings.realitykitAutoPitchFollow ? 0.0 : tiltAngle
+        let tiltRadians = manualTilt * .pi / 180.0
+        let tiltRotation = simd_quatf(angle: tiltRadians, axis: SIMD3<Float>(1, 0, 0))
+        let targetRotation = facingHeadRotation() * tiltRotation
+
+        // Strong response right after release, then smoothly taper off.
+        let step = 0.34 - 0.28 * easeOut
+        screen.transform.rotation = simd_slerp(screen.transform.rotation, targetRotation, step)
+    }
+
+    private func startWorldTrackingIfNeeded() {
+        guard isImmersive, WorldTrackingProvider.isSupported, !isWorldTrackingRunning else { return }
+        Task {
+            do {
+                try await arkitSession.run([worldTrackingProvider])
+                await MainActor.run {
+                    isWorldTrackingRunning = true
+                    _ = refreshHeadWorldPosition()
+                }
+            } catch {
+                await MainActor.run {
+                    isWorldTrackingRunning = false
+                    print("[RealityKitStreamView] WorldTrackingProvider failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func stopWorldTracking() {
+        isWorldTrackingRunning = false
+    }
     
     private func saveCurrentTransform() {
         var pos = screenPosition
@@ -4033,7 +4575,8 @@ struct _RealityKitStreamView: View {
     private func saveRealityKitSettings() {
         guard viewModel.streamSettings.rememberStreamSettings else { return }
         let defaults = UserDefaults.standard
-        viewModel.streamSettings.realitykitRendererTilt = tiltAngle
+        viewModel.streamSettings.realitykitRendererTilt = viewModel.streamSettings.realitykitAutoPitchFollow ? 0.0 : tiltAngle
+        defaults.set(viewModel.streamSettings.realitykitAutoPitchFollow, forKey: "realitykitAutoPitchFollow")
         if isImmersive {
             defaults.set(screenScale, forKey: "realitykitImmersiveScale")
             defaults.set(screenPosition.x, forKey: "realitykitImmersivePosX")

@@ -52,6 +52,7 @@ public class TemporarySettings: NSObject {
     @objc public var realitykitRendererAnimateOpening: Bool = false
     @objc public var realitykitRendererCurvature: Float = 0.0
     @objc public var realitykitRendererTilt: Float = 0.0
+    @objc public var realitykitAutoPitchFollow: Bool = false
     @objc public var realitykitScreenCornerRadius: Float = 0.018
     @objc public var realitykitImmersiveMode: Bool = false
     @objc public var reactiveLightingEnabled: Bool = false
@@ -107,6 +108,7 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererAnimateOpening = false
         self.realitykitRendererCurvature = 0.0
         self.realitykitRendererTilt = 0.0
+        self.realitykitAutoPitchFollow = false
         self.dimPassthrough = false
         self.macVirtualDisplayExperimental = false
         self.reactiveLightingEnabled = false
@@ -196,6 +198,7 @@ public class TemporarySettings: NSObject {
             self.realitykitRendererAnimateOpening = settings.realitykitRendererAnimateOpening == 1
             self.realitykitRendererCurvature = settings.realitykitRendererCurvature?.floatValue ?? 0
             self.realitykitRendererTilt = UserDefaults.standard.object(forKey: "realitykitRendererTilt") as? Float ?? 0.0
+            self.realitykitAutoPitchFollow = UserDefaults.standard.object(forKey: "realitykitAutoPitchFollow") as? Bool ?? false
             self.realitykitScreenCornerRadius = UserDefaults.standard.object(forKey: "realitykitScreenCornerRadius") as? Float ?? 0.018
             self.dimPassthrough = settings.dimPassthrough?.boolValue ?? false
             
@@ -241,6 +244,7 @@ public class TemporarySettings: NSObject {
         UserDefaults.standard.set(self.uikitWindowCornerRadius, forKey: "uikitWindowCornerRadius")
         UserDefaults.standard.set(self.realitykitScreenCornerRadius, forKey: "realitykitScreenCornerRadius")
         UserDefaults.standard.set(self.realitykitRendererTilt, forKey: "realitykitRendererTilt")
+        UserDefaults.standard.set(self.realitykitAutoPitchFollow, forKey: "realitykitAutoPitchFollow")
         UserDefaults.standard.set(self.spatialAudioMode, forKey: "spatialAudioMode")
         UserDefaults.standard.set(self.preferUninterruptedAudio, forKey: "preferUninterruptedAudio")
 
@@ -287,6 +291,7 @@ public class TemporarySettings: NSObject {
         // RealityKit display settings
         self.realitykitRendererCurvature = 0.0  // Default from slider
         self.realitykitRendererTilt = 0.0       // Default tilt
+        self.realitykitAutoPitchFollow = false
         self.realitykitScreenCornerRadius = 0.018  // Default screen corner radius
         
         // Reset UserDefaults for immersive screen parameters
@@ -339,6 +344,7 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererAnimateOpening = false
         self.realitykitRendererCurvature = 0.0
         self.realitykitRendererTilt = 0.0
+        self.realitykitAutoPitchFollow = false
         self.realitykitScreenCornerRadius = 0.018
         self.realitykitImmersiveMode = false
         self.reactiveLightingEnabled = false
@@ -392,6 +398,7 @@ public class TemporarySettings: NSObject {
         defaults.removeObject(forKey: "realitykitDepthOffset")
         defaults.set(0.018, forKey: "realitykitScreenCornerRadius")
         defaults.removeObject(forKey: "realitykitRendererTilt")
+        defaults.removeObject(forKey: "realitykitAutoPitchFollow")
         
         // Reset saved gamma and saturation values
         defaults.removeObject(forKey: "realitykitGamma")

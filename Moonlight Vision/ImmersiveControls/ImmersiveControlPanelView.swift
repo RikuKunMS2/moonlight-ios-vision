@@ -433,21 +433,7 @@ struct ImmersiveControlPanelView: View {
             
             // Lock and pin
             if controlState.selectedEnvironmentState == .none {
-                // Passthrough mode: Lock button centered and full width
-                HStack {
-                    ModernActionTile(
-                        icon: controlState.isInteractive ? "lock.fill" : "lock.open.fill",
-                        title: controlState.isInteractive ? viewModel.localized("locked") : viewModel.localized("lock_position"),
-                        isActive: controlState.isInteractive,
-                        disabled: controlState.isPinnedToStage
-                    ) {
-                        withAnimation { controlState.isInteractive.toggle() }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 88)
-            } else {
-                // Virtual environment: Lock button on left, Pin button on right
+                // Passthrough mode: lock + auto pitch follow
                 HStack(spacing: 12) {
                     ModernActionTile(
                         icon: controlState.isInteractive ? "lock.fill" : "lock.open.fill",
@@ -456,6 +442,35 @@ struct ImmersiveControlPanelView: View {
                         disabled: controlState.isPinnedToStage
                     ) {
                         withAnimation { controlState.isInteractive.toggle() }
+                    }
+                    ModernActionTile(
+                        icon: viewModel.streamSettings.realitykitAutoPitchFollow ? "gyroscope.circle.fill" : "gyroscope",
+                        title: viewModel.localized("auto_pitch_follow"),
+                        isActive: viewModel.streamSettings.realitykitAutoPitchFollow,
+                        disabled: controlState.isPinnedToStage
+                    ) {
+                        toggleAutoPitchFollow()
+                    }
+                }
+                .frame(height: 88)
+            } else {
+                // Virtual environment: lock + auto pitch + pin
+                HStack(spacing: 12) {
+                    ModernActionTile(
+                        icon: controlState.isInteractive ? "lock.fill" : "lock.open.fill",
+                        title: controlState.isInteractive ? viewModel.localized("locked") : viewModel.localized("lock_position"),
+                        isActive: controlState.isInteractive,
+                        disabled: controlState.isPinnedToStage
+                    ) {
+                        withAnimation { controlState.isInteractive.toggle() }
+                    }
+                    ModernActionTile(
+                        icon: viewModel.streamSettings.realitykitAutoPitchFollow ? "gyroscope.circle.fill" : "gyroscope",
+                        title: viewModel.localized("auto_pitch_follow"),
+                        isActive: viewModel.streamSettings.realitykitAutoPitchFollow,
+                        disabled: controlState.isPinnedToStage
+                    ) {
+                        toggleAutoPitchFollow()
                     }
                     
                     ModernActionTile(
@@ -545,19 +560,30 @@ struct ImmersiveControlPanelView: View {
                         format: "%.2fm",
                         step: 0.01
                     )
-                    
-                    SteppedSliderRow(
-                        title: viewModel.localized("screen_tilt"),
-                        value: $controlState.tiltAngle,
-                        range: -60.0...60.0,
-                        defaultValue: 0.0,
-                        format: "%.0f°",
-                        disabled: controlState.isPinnedToStage,
-                        step: 1.0
-                    )
+                    if !viewModel.streamSettings.realitykitAutoPitchFollow {
+                        SteppedSliderRow(
+                            title: viewModel.localized("screen_tilt"),
+                            value: $controlState.tiltAngle,
+                            range: -60.0...60.0,
+                            defaultValue: 0.0,
+                            format: "%.0f°",
+                            disabled: controlState.isPinnedToStage,
+                            step: 1.0
+                        )
+                    }
                 }
             }
         }
+    }
+
+    private func toggleAutoPitchFollow() {
+        withAnimation {
+            viewModel.streamSettings.realitykitAutoPitchFollow.toggle()
+            if viewModel.streamSettings.realitykitAutoPitchFollow {
+                controlState.tiltAngle = 0.0
+            }
+        }
+        debouncedSave()
     }
     
     // MARK: - Helper Methods
@@ -621,6 +647,7 @@ private struct ImmersivePanelSaveModifier: ViewModifier {
             .onChange(of: viewModel.streamSettings.saturation) { _, _ in debouncedSave() }
             .onChange(of: viewModel.streamSettings.pqExposure) { _, _ in debouncedSave() }
             .onChange(of: viewModel.streamSettings.realitykitRendererCurvature) { _, _ in debouncedSave() }
+            .onChange(of: viewModel.streamSettings.realitykitAutoPitchFollow) { _, _ in debouncedSave() }
             .onChange(of: viewModel.streamSettings.realitykitScreenCornerRadius) { _, _ in debouncedSave() }
             .onChange(of: viewModel.streamSettings.dimPassthrough) { _, _ in debouncedSaveDimPassthrough() }
             .onChange(of: controlState.immersiveScale) { _, _ in debouncedSave() }
