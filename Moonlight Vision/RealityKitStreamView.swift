@@ -163,6 +163,7 @@ struct _RealityKitStreamView: View {
     @State private var pinnedStageScale: Float = 1.0
     @State private var screenOriginalParent: Entity?
     @State private var screen: ModelEntity = ModelEntity()
+    @State private var immersiveDragBar: ModelEntity = ModelEntity()
     @State private var focusCatcherEntity: ModelEntity = ModelEntity()
     @State private var ambilightLayers: [ModelEntity] = []
     @State private var isInteractive = false
@@ -186,6 +187,7 @@ struct _RealityKitStreamView: View {
     @State private var screenScale: Float = 0.8
     @State private var isLocked: Bool = false
     @State private var startDragPosition: SIMD3<Float>? = nil
+    @State private var startDragGestureScenePosition: SIMD3<Float>? = nil
     @State private var hasInitializedPosition = false
     
     @State private var safeHDRSettings = ThreadSafeHDRSettings(
@@ -326,6 +328,7 @@ struct _RealityKitStreamView: View {
     var allowedScaleMax: Float { 8.0 }
     var cornerRadiusFraction: Float { viewModel.streamSettings.realitykitScreenCornerRadius }
     var swapCardWidthMeters: Float { 0.55 }
+    private var immersiveDragBarSize: SIMD3<Float> { SIMD3<Float>(0.46, 0.035, 0.024) }
     
     /// Effective curvature: uses slider value from control panel, with animation multiplier
     var effectiveCurvature: Float {
@@ -1294,7 +1297,7 @@ struct _RealityKitStreamView: View {
     /// Both modes use drag, so we combine them into a single gesture that routes based on inputMode
     var unifiedDragGesture: some Gesture {
         DragGesture(minimumDistance: 0)  // 0 for instant gaze response
-            .targetedToEntity(screen)
+            .targetedToAnyEntity()
             .onChanged { value in
                 isInputFocused = true
                 // If FPS mode is enabled, the pointer is locked and physical mouse handles movement natively.
@@ -1305,16 +1308,28 @@ struct _RealityKitStreamView: View {
                 switch inputMode {
                 case .screenMove:
                     if controlState.isInteractive { return }  // Locked: ignore drag
+                    guard isImmersive, !isPinnedToStage, value.entity === immersiveDragBar else { return }
                     // --- SCREEN MOVE LOGIC ---
                     hideTimer?.invalidate()
-                    if startDragPosition == nil { startDragPosition = screenPosition }
-                    let translation = value.convert(value.translation3D, from: .local, to: .scene)
-                    var proposed = startDragPosition! + simd_float3(translation.x, translation.y, translation.z)
+                    let currentGestureScenePoint = value.convert(value.location3D, from: .local, to: .scene)
+                    let currentGestureScenePosition = simd_float3(
+                        currentGestureScenePoint.x,
+                        currentGestureScenePoint.y,
+                        currentGestureScenePoint.z
+                    )
+                    if startDragPosition == nil {
+                    startDragPosition = screenPosition
+                    startDragGestureScenePosition = currentGestureScenePosition
+                        }
+                    guard let startDragPosition, let startDragGestureScenePosition else { return }
+                    let delta = currentGestureScenePosition - startDragGestureScenePosition
+                    var proposed = startDragPosition + delta
                     proposed.x = min(max(proposed.x, -allowedLateralMax), allowedLateralMax)
                     screenPosition = proposed
                     lastDragTime = CACurrentMediaTime()
                     
                 case .gazeControl:
+                    guard value.entity === screen else { return }
                     // --- GAZE CONTROL LOGIC ---
                     // ALWAYS use absolute Gaze mode (touchscreen physics)
                     let uv = hitToUV(value)
@@ -1336,6 +1351,7 @@ struct _RealityKitStreamView: View {
                 switch inputMode {
                 case .screenMove:
                     startDragPosition = nil
+                    startDragGestureScenePosition = nil
                     controlsHighlighted = false
                     startHighlightTimer()
                     // Sync position back to controlState for slider display
@@ -1945,6 +1961,25 @@ struct _RealityKitStreamView: View {
             hasInitializedPosition = true
         }
         
+        if isImmersive {
+            let dragBarSize = immersiveDragBarSize
+            var dragBarMaterial = UnlitMaterial(color: UIColor.white.withAlphaComponent(0.68))
+            dragBarMaterial.blending = .transparent(opacity: 1.0)
+            immersiveDragBar = ModelEntity(
+                mesh: .generateBox(size: dragBarSize),
+                materials: [dragBarMaterial]
+            )
+            immersiveDragBar.name = "ImmersiveWindowDragBar"
+            immersiveDragBar.components.set(InputTargetComponent(allowedInputTypes: .all))
+            immersiveDragBar.components.set(CollisionComponent(
+                shapes: [.generateBox(size: dragBarSize)],
+                isStatic: true
+            ))
+            immersiveDragBar.components.set(GroundingShadowComponent(castsShadow: false))
+            if immersiveDragBar.parent !== screen { screen.addChild(immersiveDragBar) }
+            updateImmersiveDragBarLayout()
+        }
+        
         if let controls = attachments.entity(for: "controls") {
             self.controlsEntity = controls
             if controls.parent !== screen { screen.addChild(controls) }
@@ -2182,7 +2217,11 @@ struct _RealityKitStreamView: View {
         if !isPinnedToStage {
             let tiltRadians = tiltAngle * .pi / 180.0
             let tiltRotation = simd_quatf(angle: tiltRadians, axis: SIMD3<Float>(1, 0, 0))
-            screen.transform.rotation = tiltRotation
+            if isImmersive, let head = headAnchor {
+                            screen.transform.rotation = yawOnlyFacingHead(head: head) * tiltRotation
+                        } else {
+                            screen.transform.rotation = tiltRotation
+                        }
         }
         
         if let head = headAnchor {
@@ -2206,6 +2245,8 @@ struct _RealityKitStreamView: View {
                 }
             }
         }
+        
+        updateImmersiveDragBarLayout()
         
         // Attachment layout: recompute when aspect changes OR when a new attachment entity gets attached.
         let hasNewAttachmentEntity =
@@ -2290,6 +2331,23 @@ struct _RealityKitStreamView: View {
                 }
             }
         }
+    }
+    
+    private func updateImmersiveDragBarLayout() {
+        guard isImmersive else {
+            immersiveDragBar.isEnabled = false
+            return
+        }
+
+        immersiveDragBar.isEnabled = !isPinnedToStage && !isPinningTransitioning
+        guard immersiveDragBar.parent === screen else { return }
+
+        let screenHeight = CURVED_MAX_WIDTH_METERS * screenAspect
+        immersiveDragBar.position = SIMD3<Float>(
+            0,
+            -(screenHeight / 2.0) - 0.09,
+            0.09
+        )
     }
     
     /// Heavy attachment layout - only called when screen aspect ratio changes
@@ -3528,6 +3586,25 @@ struct _RealityKitStreamView: View {
         screenPosition = newPos
     }
 
+    private func yawOnlyFacingHead(head: AnchorEntity) -> simd_quatf {
+            let screenWorldPosition = screen.position(relativeTo: nil)
+            let headWorldPosition = head.position(relativeTo: nil)
+            var direction = SIMD3<Float>(
+                headWorldPosition.x - screenWorldPosition.x,
+                0,
+                headWorldPosition.z - screenWorldPosition.z
+            )
+
+            let length = simd_length(direction)
+            guard length > 1e-4 else {
+                return simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
+            }
+
+            direction /= length
+            let yaw = atan2(direction.x, direction.z)
+            return simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
+        }
+    
     private func saveCurrentTransform() {
         var pos = screenPosition
         let scale = screenScale
