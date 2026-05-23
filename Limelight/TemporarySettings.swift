@@ -53,6 +53,7 @@ public class TemporarySettings: NSObject {
     @objc public var realitykitRendererCurvature: Float = 0.0
     @objc public var realitykitRendererTilt: Float = 0.0
     @objc public var realitykitAutoPitchFollow: Bool = false
+    @objc public var realitykitDynamicScale: Bool = true
     @objc public var realitykitScreenCornerRadius: Float = 0.018
     @objc public var realitykitImmersiveMode: Bool = false
     @objc public var reactiveLightingEnabled: Bool = false
@@ -70,6 +71,8 @@ public class TemporarySettings: NSObject {
     @objc public var enableHdr = false
     @objc public var btMouseSupport = false
     @objc public var fpsMouseCapture = false
+    @objc public var controllerMouseMode = false
+    @objc public var controllerMouseSpeed: Int = 1  // 0=slow, 1=medium, 2=fast
     @objc public var absoluteTouchMode = false
     @objc public var statsOverlay = false
     @objc public var dimPassthrough = true
@@ -109,6 +112,7 @@ public class TemporarySettings: NSObject {
         self.realitykitRendererCurvature = 0.0
         self.realitykitRendererTilt = 0.0
         self.realitykitAutoPitchFollow = false
+        self.realitykitDynamicScale = true
         self.dimPassthrough = false
         self.macVirtualDisplayExperimental = false
         self.reactiveLightingEnabled = false
@@ -192,6 +196,8 @@ public class TemporarySettings: NSObject {
             self.enableHdr = settings.enableHdr
             self.btMouseSupport = settings.btMouseSupport
             self.fpsMouseCapture = UserDefaults.standard.bool(forKey: "fpsMouseCapture")
+            self.controllerMouseMode = UserDefaults.standard.bool(forKey: "controllerMouseMode")
+            self.controllerMouseSpeed = UserDefaults.standard.integer(forKey: "controllerMouseSpeed")
             self.absoluteTouchMode = settings.absoluteTouchMode
             self.statsOverlay = settings.statsOverlay
 
@@ -199,6 +205,7 @@ public class TemporarySettings: NSObject {
             self.realitykitRendererCurvature = settings.realitykitRendererCurvature?.floatValue ?? 0
             self.realitykitRendererTilt = UserDefaults.standard.object(forKey: "realitykitRendererTilt") as? Float ?? 0.0
             self.realitykitAutoPitchFollow = UserDefaults.standard.object(forKey: "realitykitAutoPitchFollow") as? Bool ?? false
+            self.realitykitDynamicScale = UserDefaults.standard.object(forKey: "realitykitDynamicScale") as? Bool ?? true
             self.realitykitScreenCornerRadius = UserDefaults.standard.object(forKey: "realitykitScreenCornerRadius") as? Float ?? 0.018
             self.dimPassthrough = settings.dimPassthrough?.boolValue ?? false
             
@@ -245,8 +252,11 @@ public class TemporarySettings: NSObject {
         UserDefaults.standard.set(self.realitykitScreenCornerRadius, forKey: "realitykitScreenCornerRadius")
         UserDefaults.standard.set(self.realitykitRendererTilt, forKey: "realitykitRendererTilt")
         UserDefaults.standard.set(self.realitykitAutoPitchFollow, forKey: "realitykitAutoPitchFollow")
+        UserDefaults.standard.set(self.realitykitDynamicScale, forKey: "realitykitDynamicScale")
         UserDefaults.standard.set(self.spatialAudioMode, forKey: "spatialAudioMode")
         UserDefaults.standard.set(self.preferUninterruptedAudio, forKey: "preferUninterruptedAudio")
+        UserDefaults.standard.set(self.controllerMouseMode, forKey: "controllerMouseMode")
+        UserDefaults.standard.set(self.controllerMouseSpeed, forKey: "controllerMouseSpeed")
 
         // save settings to parent via DataManager
         let dataManager = DataManager()
@@ -358,6 +368,8 @@ public class TemporarySettings: NSObject {
         self.optimizeGames = false
         self.enableHdr = false
         self.btMouseSupport = false
+        self.controllerMouseMode = false
+        self.controllerMouseSpeed = 1
         self.absoluteTouchMode = false
         self.statsOverlay = false
         self.dimPassthrough = true
@@ -383,7 +395,9 @@ public class TemporarySettings: NSObject {
         defaults.set(false, forKey: "macVirtualDisplayExperimental")
         defaults.set(false, forKey: "autoResumeStreamOnReopen")
         defaults.set(true, forKey: "rememberStreamSettings")
-        
+        defaults.set(false, forKey: "controllerMouseMode")
+        defaults.set(1, forKey: "controllerMouseSpeed")
+
         // Reset immersive screen parameters in UserDefaults
         defaults.removeObject(forKey: "realitykitImmersiveScale")
         defaults.removeObject(forKey: "realitykitImmersivePosX")

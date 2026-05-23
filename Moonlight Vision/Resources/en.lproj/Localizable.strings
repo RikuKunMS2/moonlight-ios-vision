@@ -252,11 +252,17 @@
 "switched_to_screen_adjust" = "Switched to Screen Adjust Mode";
 "input_mode_screen_adjust" = "Screen Adjust Mode";
 "input_mode_controller" = "Controller Mode";
+"input_mode_mouse" = "Mouse Mode";
 "input_mode_gaze" = "Gaze Control Mode";
 "input_mode_touch" = "Touch Control Mode";
+"controller_mouse_mode" = "Controller Mouse";
+"mouse_speed_slow" = "Slow";
+"mouse_speed_medium" = "Medium";
+"mouse_speed_fast" = "Fast";
 "standard_display" = "Standard Display";
 "3d_short" = "3D";
 "hide_stats" = "Hide Stats";
 "show_stats" = "Show Stats";
 "hide_keyboard" = "Hide Keyboard";
 "show_keyboard" = "Show Keyboard";
+"dynamic_scale" = "Dynamic Scale";

@@ -27,6 +27,8 @@
 @interface ControllerSupport : NSObject
 @property (nonatomic, assign) BOOL relativeMouseMode;
 @property (nonatomic, assign) BOOL fpsMouseCaptureEnabled;
+@property (nonatomic, assign) BOOL controllerMouseMode;
+@property (nonatomic, assign) NSInteger controllerMouseSpeed;
 // Add these properties
 
 // Keyboard Reality Kit Stuff
@@ -36,6 +38,7 @@
 -(id) initWithConfig:(StreamConfiguration*)streamConfig delegate:(id<ControllerSupportDelegate>)delegate;
 -(void) connectionEstablished;
 -(void) registerMouseCallbacks:(GCMouse*) mouse API_AVAILABLE(ios(14.0));
+-(void) disableControllerCallbacks;
 
 -(void) initAutoOnScreenControlMode:(OnScreenControls*)osc;
 -(void) cleanup;

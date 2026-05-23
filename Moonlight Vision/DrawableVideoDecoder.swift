@@ -722,7 +722,11 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
         var handle: VIDEO_FRAME_HANDLE?
         var du: PDECODE_UNIT?
 
-        while LiPollNextVideoFrame(&handle, &du) {
+        let maxFramesPerTick = 5
+        var framesProcessed = 0
+
+        while framesProcessed < maxFramesPerTick, LiPollNextVideoFrame(&handle, &du) {
+            framesProcessed += 1
             guard let handle = handle, let du = du else {
                 continue
             }
@@ -785,7 +789,10 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
                         attributes[kCVPixelBufferPixelFormatTypeKey] = decodingFormat
                     }
                 }
-                
+                if let oldSession = session {
+                    VTDecompressionSessionInvalidate(oldSession)
+                    session = nil
+                }
                 VTDecompressionSessionCreate(allocator: kCFAllocatorDefault, formatDescription: formatDesc, decoderSpecification: decoderConfiguration as CFDictionary, imageBufferAttributes: attributes as CFDictionary, outputCallback: &decoderCallback, decompressionSessionOut: &session)
 
                 AudioHelpers.fixAudioForSurroundForCurrentWindow()
