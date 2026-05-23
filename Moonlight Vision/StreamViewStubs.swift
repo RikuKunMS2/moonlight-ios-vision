@@ -35,13 +35,35 @@ class DummyControllerDelegate: NSObject, ControllerSupportDelegate {
 struct CenterHintOverlay: View {
     var text: String
     var icon: String
-    
+    var text2: String = ""
+    var icon2: String = ""
+
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 36))
-            Text(text)
-                .font(.headline)
+            if icon2.isEmpty {
+                Image(systemName: icon)
+                    .font(.system(size: 36))
+                Text(text)
+                    .font(.headline)
+            } else {
+                HStack(spacing: 16) {
+                    VStack(spacing: 4) {
+                        Image(systemName: icon)
+                            .font(.system(size: 28))
+                        Text(text)
+                            .font(.subheadline)
+                    }
+                    Text("/")
+                        .font(.title)
+                        .foregroundStyle(.secondary)
+                    VStack(spacing: 4) {
+                        Image(systemName: icon2)
+                            .font(.system(size: 28))
+                        Text(text2)
+                            .font(.subheadline)
+                    }
+                }
+            }
         }
         .padding(24)
         .glassBackgroundEffect(in: RoundedRectangle(cornerRadius: 16, style: .continuous))

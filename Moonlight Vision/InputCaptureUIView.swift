@@ -50,34 +50,30 @@ func UpdatePhysicalMouseActivityTime() {
 }
 
 enum InputMode: Int, CaseIterable {
-    case screenMove = 0
-    case controller = 1
-    case gazeControl = 2
-    
+    case controller = 0
+    case gazeControl = 1
+
     var localizedKey: String {
         switch self {
-        case .screenMove: return "input_mode_screen_adjust"
         case .controller: return "input_mode_controller"
         case .gazeControl: return "input_mode_gaze"
         }
     }
-    
+
     var displayName: String {
         switch self {
-        case .screenMove: return "Screen Adjust Mode"
         case .controller: return "Controller Mode"
         case .gazeControl: return "Gaze Control Mode"
         }
     }
-    
+
     var icon: String {
         switch self {
-        case .screenMove: return "arrow.up.and.down.and.arrow.left.and.right"
         case .controller: return "gamecontroller.fill"
         case .gazeControl: return "eye.fill"
         }
     }
-    
+
     func next() -> InputMode {
         let allCases = InputMode.allCases
         let idx = allCases.firstIndex(of: self) ?? 0
@@ -93,7 +89,8 @@ struct InputCaptureView: UIViewControllerRepresentable {
     var streamConfig: StreamConfiguration
     let headStorage: HeadPositionStorage
     var fpsMouseCapture: Bool
-    
+    var controllerMouseMode: Bool = false
+
     func makeUIViewController(context: Context) -> InputCaptureViewController {
         let vc = InputCaptureViewController()
         let view = vc.captureView
@@ -103,14 +100,15 @@ struct InputCaptureView: UIViewControllerRepresentable {
         view.streamConfig = streamConfig
         view.headStorage = headStorage
         view.allowTouchPassthrough = !showKeyboard && !isControllerMode
-        
+
         controllerSupport.fpsMouseCaptureEnabled = fpsMouseCapture
+        controllerSupport.controllerMouseMode = controllerMouseMode
         controllerSupport.relativeMouseMode = isControllerMode
-        
+
         vc.fpsMouseCaptureEnabled = fpsMouseCapture
         return vc
     }
-    
+
     func updateUIViewController(_ uiViewController: InputCaptureViewController, context: Context) {
         let view = uiViewController.captureView
         view.curvature = curvature
@@ -118,10 +116,11 @@ struct InputCaptureView: UIViewControllerRepresentable {
         view.headStorage = headStorage
         view.allowTouchPassthrough = !showKeyboard && !isControllerMode
         view.showVirtualKeyboard = showKeyboard
-        
+
         controllerSupport.fpsMouseCaptureEnabled = fpsMouseCapture
+        controllerSupport.controllerMouseMode = controllerMouseMode
         controllerSupport.relativeMouseMode = isControllerMode
-        
+
         uiViewController.fpsMouseCaptureEnabled = fpsMouseCapture
         
         // ONLY aggressively reclaim first responder if Mac Virtual Display mode is OFF
@@ -155,15 +154,17 @@ struct SwiftUIAbsoluteMouseTracker: View {
     var streamConfig: StreamConfiguration
     var headStorage: HeadPositionStorage
     var fpsMouseCapture: Bool
+    var controllerMouseMode: Bool = false
+    var isImmersive: Bool = false
     
     @State private var longPressTimer: Timer?
     @State private var isDragging: Bool = false
-    
+
     private let BUTTON_ACTION_PRESS: Int8 = 0x07
     private let BUTTON_ACTION_RELEASE: Int8 = 0x08
     private let BUTTON_LEFT: Int32 = 0x01
     private let BUTTON_RIGHT: Int32 = 0x03
-    
+
     var body: some View {
         GeometryReader { geo in
             InputCaptureView(
@@ -173,13 +174,20 @@ struct SwiftUIAbsoluteMouseTracker: View {
                 curvature: curvature,
                 streamConfig: streamConfig,
                 headStorage: headStorage,
-                fpsMouseCapture: fpsMouseCapture
+                fpsMouseCapture: fpsMouseCapture,
+                controllerMouseMode: controllerMouseMode
             )
             .onContinuousHover(coordinateSpace: .local) { phase in
                 guard isControllerMode && !fpsMouseCapture else { return }
                 switch phase {
                 case .active(let location):
-                    GlobalInputState.shared.lastPhysicalMouseActivityTime = CACurrentMediaTime()
+                    // Only update physical mouse timestamp when a mouse is actually connected.
+                    // On visionOS, onContinuousHover fires for eye gaze too; without this
+                    // guard, eye gaze would always reset the timer and hand-pinch would
+                    // never be detected.
+                    if GCMouse.mice().count > 0 {
+                        GlobalInputState.shared.lastPhysicalMouseActivityTime = CACurrentMediaTime()
+                    }
                     updateCursorFromSystemPointer(location: location, bounds: geo.size)
                 case .ended:
                     break
@@ -189,9 +197,8 @@ struct SwiftUIAbsoluteMouseTracker: View {
                 DragGesture(minimumDistance: 0, coordinateSpace: .local)
                     .onChanged { value in
                         guard isControllerMode && !fpsMouseCapture else { return }
-                        
+
                         let now = CACurrentMediaTime()
-                        // If physical mouse hasn't moved or clicked in the last 0.5 seconds, it's a hand pinch!
                         if now - GlobalInputState.shared.lastPhysicalMouseActivityTime > 0.5 {
                             if !GlobalInputState.shared.activeTouchIsHand {
                                 GlobalInputState.shared.activeTouchIsHand = true
@@ -201,16 +208,15 @@ struct SwiftUIAbsoluteMouseTracker: View {
                         } else {
                             GlobalInputState.shared.activeTouchIsHand = false
                         }
-                        
+
                         updateCursorFromSystemPointer(location: value.location, bounds: geo.size)
-                        
+
                         if !isDragging {
                             isDragging = true
                             LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT)
-                            
+
                             longPressTimer?.invalidate()
                             longPressTimer = Timer.scheduledTimer(withTimeInterval: 0.650, repeats: false) { _ in
-                                // Right click emulation
                                 LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT)
                                 LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT)
                             }
@@ -222,7 +228,7 @@ struct SwiftUIAbsoluteMouseTracker: View {
                             isDragging = false
                             longPressTimer?.invalidate()
                             longPressTimer = nil
-                            
+
                             LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT)
                             LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT)
                         }
@@ -291,35 +297,42 @@ struct SwiftUIAbsoluteMouseTracker: View {
     }
     
     private func updateCursorFromSystemPointer(location: CGPoint, bounds: CGSize) {
-        // This must perfectly match the sizing in RealityKitStreamView:
-        // targetWidth: CURVED_MAX_WIDTH_METERS * 1.05
-        let overscaleX: CGFloat = 1.05
-        
         let rawNormX = location.x / bounds.width
         let rawNormY = location.y / bounds.height
-        
-        // Scale out from the exact center (0.5)
-        let correctedNormX = (rawNormX - 0.5) * overscaleX + 0.5
-        
-        // Apply a non-linear curve for the Y axis to allow reaching the top and bottom of the host screen.
-        // The physical visionOS volume limits vertical movement, clipping rawNormY before it reaches 0 or 1.
-        // We use a cubic curve y = a*x + b*x^3 to maintain reasonable center sensitivity while 
-        // aggressively scaling the edges so the user can easily reach the full [-0.5, 0.5] range.
-        let dy = rawNormY - 0.5
-        let a: CGFloat = 1.5
-        let b: CGFloat = 50.0
-        let nonLinearY = (a * dy) + (b * (dy * dy * dy))
-        let correctedNormY = nonLinearY + 0.5
-        
+
+        let correctedNormX: CGFloat
+        let correctedNormY: CGFloat
+        if isImmersive {
+            // Overlay is 1.02× the screen — small overscan gives the visionOS cursor
+            // room past the visible edge so the host cursor can reach the boundary
+            // before the system cursor hits the overlay limit. No dead zones on X.
+            // Y: same overscan × 1.15 system-slowness compensation.
+            let expansion: CGFloat = 1.02
+            correctedNormX = (rawNormX - 0.5) * expansion + 0.5
+            correctedNormY = (rawNormY - 0.5) * expansion * 1.15 + 0.5
+        } else {
+            // Volume window: overlay is 1.05x wider and 1.5x taller than screen to
+            // prevent volume clipping. X scale-out from center, Y boost for geometry
+            // mismatch + system Y-slowness + cubic stretch for edge reach.
+            let overscaleX: CGFloat = 1.05
+            correctedNormX = (rawNormX - 0.5) * overscaleX + 0.5
+            let dy = rawNormY - 0.5
+            let yBoost: CGFloat = 2.0
+            let a: CGFloat = 1.0
+            let b: CGFloat = 1.5
+            let nonLinearY = yBoost * ((a * dy) + (b * (dy * dy * dy)))
+            correctedNormY = nonLinearY + 0.5
+        }
+
         var hostX = correctedNormX * CGFloat(streamConfig.width)
         var hostY = correctedNormY * CGFloat(streamConfig.height)
-        
-        // Clamp to bounds to prevent host cursor from wrapping or snapping
+
         hostX = min(max(hostX, 0), CGFloat(streamConfig.width))
         hostY = min(max(hostY, 0), CGFloat(streamConfig.height))
-        
+
         LiSendMousePositionEvent(Int16(hostX), Int16(hostY), Int16(streamConfig.width), Int16(streamConfig.height))
     }
+
 }
 
 class GlobalPointerLock {
@@ -567,8 +580,9 @@ class InputCaptureUIView: UIView, UIKeyInput {
     
     func deleteBackward() {
         LiSendKeyboardEvent(0x08, 0x03, 0)
-        usleep(50 * 1000)
-        LiSendKeyboardEvent(0x08, 0x04, 0)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            LiSendKeyboardEvent(0x08, 0x04, 0)
+        }
     }
     
     // Handle special keys like Return/Enter

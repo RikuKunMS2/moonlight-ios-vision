@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		93BBCCF217574FB7A3254B3F /* ControllerInputManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ADF25363E574BB08700EC2B /* ControllerInputManager.swift */; };
+
 		043BC9892EDE1D00007792A3 /* EnvironmentStateHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 043BC9862EDE1D00007792A3 /* EnvironmentStateHandler.swift */; };
 		043BC98A2EDE1D00007792A3 /* ImmersiveEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 043BC9872EDE1D00007792A3 /* ImmersiveEnvironment.swift */; };
 		04C67C1F2EDE002500B41E6A /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = 04C67C1E2EDE002500B41E6A /* RealityKitContent */; };
@@ -308,6 +310,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		9ADF25363E574BB08700EC2B /* ControllerInputManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControllerInputManager.swift; sourceTree = "<group>"; };
+
 		043BC9862EDE1D00007792A3 /* EnvironmentStateHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentStateHandler.swift; sourceTree = "<group>"; };
 		043BC9872EDE1D00007792A3 /* ImmersiveEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersiveEnvironment.swift; sourceTree = "<group>"; };
 		04F5EC582EDF6B74009FF87D /* MoonlightVisionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoonlightVisionApp.swift; sourceTree = "<group>"; };
@@ -821,6 +825,7 @@
 				F1E2D3C4B5A6978869504132 /* StreamViewStubs.swift */,
 				B1EDB1342D4D95A700EB1839 /* UIKitStreamView.swift */,
 				3E86FC1C2D4FFDED0016BB8E /* UpdatesView.swift */,
+				9ADF25363E574BB08700EC2B /* ControllerInputManager.swift */,
 				6581B5F02D5434100022400F /* VideoTypes.swift */,
 			);
 			path = "Moonlight Vision";
@@ -1448,6 +1453,7 @@
 				04F5ECA62EE09B4E009FF87D /* StreamControlState.swift in Sources */,
 				F7A119152B5DDF73001E8686 /* Connection.m in Sources */,
 				3E3791CA2ED2A4F5004B22A2 /* RealityKitStreamView.swift in Sources */,
+				93BBCCF217574FB7A3254B3F /* ControllerInputManager.swift in Sources */,
 				04F5ECAF2EE37A7F009FF87D /* StandardControlPanelView.swift in Sources */,
 				04F5ECB12EE37A80009FF87D /* VolumeControlPanelView.swift in Sources */,
 				E77582EB2D5550D500948545 /* AudioHelpers.swift in Sources */,
@@ -1703,6 +1709,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 22;
 				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = UHY653Z667;
 				ENABLE_MODULE_VERIFIER = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
@@ -1751,7 +1758,7 @@
 				MARKETING_VERSION = 11.0.22;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu99 gnu++11";
 				OTHER_LDFLAGS = "-ld64";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma-linggan14";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1784,6 +1791,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 22;
 				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = UHY653Z667;
 				ENABLE_MODULE_VERIFIER = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
@@ -1832,7 +1840,7 @@
 				MARKETING_VERSION = 11.0.22;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu99 gnu++11";
 				OTHER_LDFLAGS = "-ld64";
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma-linggan14";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				PROVISIONING_PROFILE_SPECIFIER = "";

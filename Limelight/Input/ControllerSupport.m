@@ -509,10 +509,16 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                 rightStickY = MAX_MAGNITUDE(rightStickY, controller.mergedWithController.lastRightStickY);
             }
             
-            // Player 1 is always present for OSC
-            LiSendMultiControllerEvent(_multiController ? controller.playerIndex : 0, [self getActiveGamepadMask],
-                                       buttonFlags, leftTrigger, rightTrigger,
-                                       leftStickX, leftStickY, rightStickX, rightStickY);
+            // When controller mouse mode is active, skip sending ALL gamepad events
+            // to the host — sticks/triggers are mapped to mouse movement/buttons by
+            // ControllerInputManager, and button flags must also be suppressed to
+            // avoid conflicting inputs (e.g. A button clicking the host while the
+            // trigger-synthesized mouse click also fires).
+            if (!self.controllerMouseMode) {
+                LiSendMultiControllerEvent(_multiController ? controller.playerIndex : 0, [self getActiveGamepadMask],
+                                           buttonFlags, leftTrigger, rightTrigger,
+                                           leftStickX, leftStickY, rightStickX, rightStickY);
+            }
         }
     }
     [_controllerStreamLock unlock];
@@ -536,6 +542,12 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
+-(void) disableControllerCallbacks {
+    for (GCController* controller in [GCController controllers]) {
+        [self unregisterControllerCallbacks:controller];
+    }
+}
 
 -(void) unregisterControllerCallbacks:(GCController*) controller
 {
@@ -1464,12 +1476,20 @@ extern void UpdatePhysicalMouseActivityTime(void);
     
     _gcEventInteraction = [[GCEventInteraction alloc] init];
     _gcEventInteraction.handledEventTypes = GCUIEventTypeGamepad;
-    
+
+    // If controller mouse mode was left on from a previous session,
+    // the CADisplayLink-based ControllerInputManager will poll raw
+    // gamepad state — skip registering valueChangedHandler callbacks
+    // so we don't double-send gamepad events to the host.
+    _controllerMouseMode = [[NSUserDefaults standardUserDefaults] boolForKey:@"controllerMouseMode"];
+
     for (GCController* controller in [GCController controllers]) {
         if ([ControllerSupport isSupportedGamepad:controller]) {
             [self assignController:controller];
-            [self registerControllerCallbacks:controller];
-            
+            if (!_controllerMouseMode) {
+                [self registerControllerCallbacks:controller];
+            }
+
             // Note: We cannot report controller arrival to the host here,
             // because the connection has not been established yet.
         }
@@ -1497,10 +1517,12 @@ extern void UpdatePhysicalMouseActivityTime(void);
         if (![ControllerSupport isSupportedGamepad:controller]) {
             return;
         }
-        
+
         Controller* limeController = [strongSelf assignController:controller];
         if (limeController) {
-            [strongSelf registerControllerCallbacks:controller];
+            if (!strongSelf.controllerMouseMode) {
+                [strongSelf registerControllerCallbacks:controller];
+            }
             [strongSelf reportControllerArrival:limeController];
             [strongSelf updateAutoOnScreenControlMode];
             [strongSelf->_delegate gamepadPresenceChanged];

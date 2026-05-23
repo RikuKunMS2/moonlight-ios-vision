@@ -38,13 +38,15 @@ struct ImmersiveControlPanelView: View {
     private var mainContent: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: 0) {
-                leftSection
-                    .frame(width: 420)
-                    .padding(40)
-                
+                ScrollView(.vertical, showsIndicators: false) {
+                    leftSection
+                        .padding(40)
+                }
+                .frame(width: 500)
+
                 Divider()
                     .padding(.vertical, 40)
-                
+
                 mainCenterColumn
             }
             
@@ -82,7 +84,7 @@ struct ImmersiveControlPanelView: View {
     }
     private var styledContent: some View {
         mainContent
-            .frame(width: isHdrEnabled ? 1600 : 1100, height: controlState.isPinnedToStage ? (showPinnedSliders ? 730 : 650) : 1050)
+            .frame(width: isHdrEnabled ? 1600 : 1100, height: controlState.isPinnedToStage ? (showPinnedSliders ? 730 : 650) : 1150)
             .glassBackgroundEffect()
             .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
             .overlay(alignment: .topTrailing) {
@@ -219,14 +221,13 @@ struct ImmersiveControlPanelView: View {
                         Button(action: { inputMode = .gazeControl }) { Label("Gaze Control", systemImage: "eye") }
                         Button(action: { inputMode = .controller; viewModel.streamSettings.fpsMouseCapture = false; viewModel.streamSettings.save() }) { Label("Absolute Mouse", systemImage: "cursorarrow") }
                         Button(action: { inputMode = .controller; viewModel.streamSettings.fpsMouseCapture = true; viewModel.streamSettings.save() }) { Label("FPS Locked Mouse", systemImage: "cursorarrow.and.square.on.square.dashed") }
-                        Button(action: { inputMode = .screenMove }) { Label("Screen Adjust", systemImage: "arrow.up.and.down.and.arrow.left.and.right") }
                     } label: {
                         VStack(spacing: 10) {
-                            Image(systemName: inputMode == .gazeControl ? "eye" : (inputMode == .screenMove ? "arrow.up.and.down.and.arrow.left.and.right" : (viewModel.streamSettings.fpsMouseCapture ? "cursorarrow.and.square.on.square.dashed" : "cursorarrow")))
+                            Image(systemName: inputMode == .gazeControl ? "eye" : (viewModel.streamSettings.fpsMouseCapture ? "cursorarrow.and.square.on.square.dashed" : "cursorarrow"))
                                 .font(.system(size: 24))
                                 .foregroundStyle(Color.black)
-                            
-                            Text(inputMode == .gazeControl ? "Gaze Mode" : (inputMode == .screenMove ? "Screen Adjust" : (viewModel.streamSettings.fpsMouseCapture ? "FPS Mouse" : "Absolute Mouse")))
+
+                            Text(inputMode == .gazeControl ? "Gaze Mode" : (viewModel.streamSettings.fpsMouseCapture ? "FPS Mouse" : "Absolute Mouse"))
                                 .font(.caption)
                                 .fontWeight(.medium)
                                 .foregroundStyle(Color.black.opacity(0.8))
@@ -239,7 +240,29 @@ struct ImmersiveControlPanelView: View {
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(.lift)
-                    
+
+                    // Controller Mouse Mode toggle
+                    ModernActionTile(
+                        icon: viewModel.streamSettings.controllerMouseMode ? "gamecontroller.fill" : "gamecontroller",
+                        title: viewModel.localized("controller_mouse_mode"),
+                        isActive: viewModel.streamSettings.controllerMouseMode
+                    ) {
+                        viewModel.streamSettings.controllerMouseMode.toggle()
+                        viewModel.streamSettings.save()
+                    }
+
+                    // Controller Mouse Speed (only shown when mode is active)
+                    if viewModel.streamSettings.controllerMouseMode {
+                        ModernActionTile(
+                            icon: controllerMouseSpeedIcon(viewModel.streamSettings.controllerMouseSpeed),
+                            title: viewModel.localized(controllerMouseSpeedKey(viewModel.streamSettings.controllerMouseSpeed)),
+                            keepUniformStyle: true
+                        ) {
+                            viewModel.streamSettings.controllerMouseSpeed = (viewModel.streamSettings.controllerMouseSpeed + 1) % 3
+                            viewModel.streamSettings.save()
+                        }
+                    }
+
                     // Spatial audio
                     let currentMode = SpatialAudioMode(rawValue: viewModel.streamSettings.spatialAudioMode) ?? .window
                     let fallback = controlState.isAudioFallbackModeActive
@@ -433,21 +456,7 @@ struct ImmersiveControlPanelView: View {
             
             // Lock and pin
             if controlState.selectedEnvironmentState == .none {
-                // Passthrough mode: Lock button centered and full width
-                HStack {
-                    ModernActionTile(
-                        icon: controlState.isInteractive ? "lock.fill" : "lock.open.fill",
-                        title: controlState.isInteractive ? viewModel.localized("locked") : viewModel.localized("lock_position"),
-                        isActive: controlState.isInteractive,
-                        disabled: controlState.isPinnedToStage
-                    ) {
-                        withAnimation { controlState.isInteractive.toggle() }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 88)
-            } else {
-                // Virtual environment: Lock button on left, Pin button on right
+                // Passthrough mode: lock + auto pitch follow
                 HStack(spacing: 12) {
                     ModernActionTile(
                         icon: controlState.isInteractive ? "lock.fill" : "lock.open.fill",
@@ -456,6 +465,35 @@ struct ImmersiveControlPanelView: View {
                         disabled: controlState.isPinnedToStage
                     ) {
                         withAnimation { controlState.isInteractive.toggle() }
+                    }
+                    ModernActionTile(
+                        icon: viewModel.streamSettings.realitykitAutoPitchFollow ? "gyroscope.circle.fill" : "gyroscope",
+                        title: viewModel.localized("auto_pitch_follow"),
+                        isActive: viewModel.streamSettings.realitykitAutoPitchFollow,
+                        disabled: controlState.isPinnedToStage
+                    ) {
+                        toggleAutoPitchFollow()
+                    }
+                }
+                .frame(height: 88)
+            } else {
+                // Virtual environment: lock + auto pitch + pin
+                HStack(spacing: 12) {
+                    ModernActionTile(
+                        icon: controlState.isInteractive ? "lock.fill" : "lock.open.fill",
+                        title: controlState.isInteractive ? viewModel.localized("locked") : viewModel.localized("lock_position"),
+                        isActive: controlState.isInteractive,
+                        disabled: controlState.isPinnedToStage
+                    ) {
+                        withAnimation { controlState.isInteractive.toggle() }
+                    }
+                    ModernActionTile(
+                        icon: viewModel.streamSettings.realitykitAutoPitchFollow ? "gyroscope.circle.fill" : "gyroscope",
+                        title: viewModel.localized("auto_pitch_follow"),
+                        isActive: viewModel.streamSettings.realitykitAutoPitchFollow,
+                        disabled: controlState.isPinnedToStage
+                    ) {
+                        toggleAutoPitchFollow()
                     }
                     
                     ModernActionTile(
@@ -469,7 +507,22 @@ struct ImmersiveControlPanelView: View {
                 }
                 .frame(height: 88)
             }
-            
+
+            // Dynamic scale toggle — like visionOS native windows,
+            // the screen scales up when further away and down when closer.
+            HStack(spacing: 12) {
+                ModernActionTile(
+                    icon: "arrow.up.backward.and.arrow.down.forward",
+                    title: viewModel.localized("dynamic_scale"),
+                    isActive: viewModel.streamSettings.realitykitDynamicScale,
+                    disabled: controlState.isPinnedToStage
+                ) {
+                    viewModel.streamSettings.realitykitDynamicScale.toggle()
+                    debouncedSave()
+                }
+            }
+            .frame(height: 88)
+
             Grid(horizontalSpacing: 20, verticalSpacing: 24) {
                 // Passthrough environment brightness - only shown in passthrough mode
                 if controlState.selectedEnvironmentState == .none {
@@ -545,19 +598,30 @@ struct ImmersiveControlPanelView: View {
                         format: "%.2fm",
                         step: 0.01
                     )
-                    
-                    SteppedSliderRow(
-                        title: viewModel.localized("screen_tilt"),
-                        value: $controlState.tiltAngle,
-                        range: -60.0...60.0,
-                        defaultValue: 0.0,
-                        format: "%.0f°",
-                        disabled: controlState.isPinnedToStage,
-                        step: 1.0
-                    )
+                    if !viewModel.streamSettings.realitykitAutoPitchFollow {
+                        SteppedSliderRow(
+                            title: viewModel.localized("screen_tilt"),
+                            value: $controlState.tiltAngle,
+                            range: -60.0...60.0,
+                            defaultValue: 0.0,
+                            format: "%.0f°",
+                            disabled: controlState.isPinnedToStage,
+                            step: 1.0
+                        )
+                    }
                 }
             }
         }
+    }
+
+    private func toggleAutoPitchFollow() {
+        withAnimation {
+            viewModel.streamSettings.realitykitAutoPitchFollow.toggle()
+            if viewModel.streamSettings.realitykitAutoPitchFollow {
+                controlState.tiltAngle = 0.0
+            }
+        }
+        debouncedSave()
     }
     
     // MARK: - Helper Methods
@@ -573,7 +637,23 @@ struct ImmersiveControlPanelView: View {
             }
         }
     }
-    
+
+    private func controllerMouseSpeedKey(_ speed: Int) -> String {
+        switch speed {
+        case 0: return "mouse_speed_slow"
+        case 2: return "mouse_speed_fast"
+        default: return "mouse_speed_medium"
+        }
+    }
+
+    private func controllerMouseSpeedIcon(_ speed: Int) -> String {
+        switch speed {
+        case 0: return "tortoise.fill"
+        case 2: return "bolt.fill"
+        default: return "hare.fill"
+        }
+    }
+
     // MARK: - Volume Control
     private var volumeControl: some View {
         VStack(spacing: 16) {
@@ -621,6 +701,7 @@ private struct ImmersivePanelSaveModifier: ViewModifier {
             .onChange(of: viewModel.streamSettings.saturation) { _, _ in debouncedSave() }
             .onChange(of: viewModel.streamSettings.pqExposure) { _, _ in debouncedSave() }
             .onChange(of: viewModel.streamSettings.realitykitRendererCurvature) { _, _ in debouncedSave() }
+            .onChange(of: viewModel.streamSettings.realitykitAutoPitchFollow) { _, _ in debouncedSave() }
             .onChange(of: viewModel.streamSettings.realitykitScreenCornerRadius) { _, _ in debouncedSave() }
             .onChange(of: viewModel.streamSettings.dimPassthrough) { _, _ in debouncedSaveDimPassthrough() }
             .onChange(of: controlState.immersiveScale) { _, _ in debouncedSave() }
