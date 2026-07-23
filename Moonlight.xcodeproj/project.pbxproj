@@ -1722,35 +1722,13 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/libs/opus/lib",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/libs/opus/lib/iOS",
-					"$(PROJECT_DIR)/libs/SDL2/lib/iOS",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/libs/opus/lib/iOS-Sim",
-					"$(PROJECT_DIR)/libs/SDL2/lib/iOS-Sim",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=xros*]" = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/libs/opus/lib/visionOS",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
+					"$(PROJECT_DIR)/libs/FFmpeg/lib/visionOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=xrsimulator*]" = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/libs/opus/lib/visionOS-Sim",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
-					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS-Sim",
+					"$(PROJECT_DIR)/libs/opus/lib/visionOS",
 				);
 				MARKETING_VERSION = 11.0.22;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu99 gnu++11";
-				OTHER_LDFLAGS = "-ld64";
+				OTHER_LDFLAGS = "-Wl,-ld_classic";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
@@ -1803,35 +1781,13 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/libs/opus/lib",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/libs/opus/lib/iOS",
-					"$(PROJECT_DIR)/libs/SDL2/lib/iOS",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/libs/opus/lib/iOS-Sim",
-					"$(PROJECT_DIR)/libs/SDL2/lib/iOS-Sim",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=xros*]" = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/libs/opus/lib/visionOS",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
+					"$(PROJECT_DIR)/libs/FFmpeg/lib/visionOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=xrsimulator*]" = (
-					"$(inherited)",
-					"$(PROJECT_DIR)/libs/opus/lib/visionOS-Sim",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
-					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS-Sim",
+					"$(PROJECT_DIR)/libs/opus/lib/visionOS",
 				);
 				MARKETING_VERSION = 11.0.22;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu99 gnu++11";
-				OTHER_LDFLAGS = "-ld64";
+				OTHER_LDFLAGS = "-Wl,-ld_classic";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-beta.Moonlight-Vision-luma";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
@@ -2118,15 +2074,15 @@
 				);
 				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/libs/opus/lib/iOS",
-					"$(PROJECT_DIR)/libs/SDL2/lib/iOS",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
+					"$(PROJECT_DIR)/libs/opus/lib/visionOS",
+					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS",
+					"$(PROJECT_DIR)/libs/FFmpeg/lib/visionOS",
 				);
 				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/libs/opus/lib/iOS-Sim",
-					"$(PROJECT_DIR)/libs/SDL2/lib/iOS-Sim",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
+					"$(PROJECT_DIR)/libs/opus/lib/visionOS-Sim",
+					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS-Sim",
+					"$(PROJECT_DIR)/libs/FFmpeg/lib/visionOS-Sim",
 				);
 				MARKETING_VERSION = 9.0.1;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu99 gnu++11";
@@ -2172,15 +2128,15 @@
 				);
 				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/libs/opus/lib/iOS",
-					"$(PROJECT_DIR)/libs/SDL2/lib/iOS",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS",
+					"$(PROJECT_DIR)/libs/opus/lib/visionOS",
+					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS",
+					"$(PROJECT_DIR)/libs/FFmpeg/lib/visionOS",
 				);
 				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/libs/opus/lib/iOS-Sim",
-					"$(PROJECT_DIR)/libs/SDL2/lib/iOS-Sim",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
+					"$(PROJECT_DIR)/libs/opus/lib/visionOS-Sim",
+					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS-Sim",
+					"$(PROJECT_DIR)/libs/FFmpeg/lib/visionOS-Sim",
 				);
 				MARKETING_VERSION = 9.0.1;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu99 gnu++11";
