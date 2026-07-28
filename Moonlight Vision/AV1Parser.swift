@@ -149,6 +149,11 @@ public func CMVideoFormatDescriptionCreateFromAV1SequenceHeaderOBUWithAV1C(_ obu
         TC_BT_709 : kCVImageBufferTransferFunction_ITU_R_709_2,
         TC_BT_2020_10_BIT : kCVImageBufferTransferFunction_ITU_R_2020,
         TC_BT_2020_12_BIT : kCVImageBufferTransferFunction_ITU_R_2020,
+        // HDR transfer functions. Without these, a PQ (ST.2084) AV1 stream falls through to the
+        // ITU_R_709_2 default below, VideoToolbox tags the decoded buffers as SDR, and
+        // DrawableVideoDecoder never sets isPQ — so the PQ curve is never applied and HDR is lost.
+        TC_SMPTE_2084 : kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ,
+        TC_HLG : kCVImageBufferTransferFunction_ITU_R_2100_HLG,
         TC_BT_601 : kCVImageBufferTransferFunction_sRGB,
         TC_SRGB : kCVImageBufferTransferFunction_sRGB,
     ]
@@ -630,5 +635,53 @@ extension UnsafeMutableBufferPointer {
         let start = self.baseAddress!.advanced(by: range.lowerBound)
         let count = range.upperBound - range.lowerBound
         return UnsafeMutableBufferPointer(start: start, count: count)
+    }
+}
+
+// MARK: - Objective-C bridge for the UIKit video path
+
+/// Exposes this parser to VideoDecoderRenderer.m. The UIKit path historically built its AV1
+/// CMVideoFormatDescription through FFmpeg's coded bitstream reader; FFmpeg libraries built
+/// without CONFIG_CBS_AV1 make ff_cbs_init() fail with EINVAL on every IDR frame, leaving the
+/// stream stuck requesting IDRs forever. This parser has no FFmpeg dependency.
+@objc(AV1FormatDescriptionBridge)
+public class AV1FormatDescriptionBridge: NSObject {
+
+    /// Named without a create/copy prefix so the generated ObjC interface is
+    /// cf_returns_not_retained: the ObjC caller must CFRetain if it stores the result.
+    @objc public static func formatDescription(
+        fromIDRFrame frameData: Data,
+        masteringDisplayColorVolume mdcv: Data?,
+        contentLightLevelInfo clli: Data?
+    ) -> CMFormatDescription? {
+        var mutable = frameData
+        let baseDesc: CMFormatDescription? = mutable.withUnsafeMutableBytes { raw in
+            let typed = raw.bindMemory(to: UInt8.self)
+            let buffer = UnsafeMutableBufferPointer(start: typed.baseAddress, count: typed.count)
+            return try? CMVideoFormatDescriptionCreateFromAV1SequenceHeaderOBUWithAV1C(buffer)
+        }
+        guard let desc = baseDesc else { return nil }
+        guard mdcv != nil || clli != nil else { return desc }
+
+        let extensions = ((CMFormatDescriptionGetExtensions(desc) as NSDictionary?)?
+            .mutableCopy() as? NSMutableDictionary) ?? NSMutableDictionary()
+        if let mdcv {
+            extensions[kCMFormatDescriptionExtension_MasteringDisplayColorVolume as NSString] = mdcv as NSData
+        }
+        if let clli {
+            extensions[kCMFormatDescriptionExtension_ContentLightLevelInfo as NSString] = clli as NSData
+        }
+
+        let dimensions = CMVideoFormatDescriptionGetDimensions(desc)
+        var enriched: CMFormatDescription?
+        let status = CMVideoFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            codecType: kCMVideoCodecType_AV1,
+            width: dimensions.width,
+            height: dimensions.height,
+            extensions: extensions as CFDictionary,
+            formatDescriptionOut: &enriched
+        )
+        return status == noErr ? (enriched ?? desc) : desc
     }
 }

@@ -9,6 +9,7 @@
 #import "VideoDecoderRenderer.h"
 #import "StreamView.h"
 #import "NSData+Conversion.h"
+#import "Moonlight-Swift.h"
 
 #include <libavcodec/avcodec.h>
 #include <libavcodec/cbs.h>
@@ -515,9 +516,22 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         }
         else if (videoFormat & VIDEO_FORMAT_MASK_AV1) {
             NSData* fullFrameData = [NSData dataWithBytesNoCopy:data length:length freeWhenDone:NO];
-            
+
             Log(LOG_I, @"Constructing new AV1 format description");
-            formatDesc = [self createAV1FormatDescriptionForIDRFrame:fullFrameData];
+            // Prefer the FFmpeg-free Swift parser: the bundled FFmpeg libs may lack
+            // CONFIG_CBS_AV1, in which case ff_cbs_init() fails with EINVAL on every
+            // IDR frame and the stream never starts. FFmpeg remains the fallback.
+            CMVideoFormatDescriptionRef swiftDesc =
+                [AV1FormatDescriptionBridge formatDescriptionFromIDRFrame:fullFrameData
+                                             masteringDisplayColorVolume:masteringDisplayColorVolume
+                                                   contentLightLevelInfo:contentLightLevelInfo];
+            if (swiftDesc != NULL) {
+                formatDesc = (CMVideoFormatDescriptionRef)CFRetain(swiftDesc);
+            }
+            else {
+                Log(LOG_W, @"Swift AV1 parser failed, falling back to FFmpeg");
+                formatDesc = [self createAV1FormatDescriptionForIDRFrame:fullFrameData];
+            }
         }
         else {
             // Unsupported codec!
