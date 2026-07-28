@@ -2260,12 +2260,32 @@ struct _RealityKitStreamView: View {
         let screenHalfHeight = (CURVED_MAX_WIDTH_METERS * screenAspect * scaleFactor) / 2
         let volHalfHeight = volSize.y / 2
         let safePadding: Float = 0.05
-        let maxY = max(0, volHalfHeight - screenHalfHeight - safePadding)
+        // The hide/controls bar hangs 0.08 (screen-local) above the screen's top edge
+        // and the stats card 0.07 below the bottom edge; leave room for them so they
+        // are never clipped by the volume bounds at max height.
+        let attachmentClearance: Float = 0.15 * scaleFactor
+        let maxY = max(0, volHalfHeight - screenHalfHeight - attachmentClearance - safePadding)
         let newYLimits: ClosedRange<Float> = -maxY...maxY
         let volHalfDepth = volSize.z / 2
-        let maxZ = volHalfDepth - safePadding
-        let scaledCurveDepth = curveDepth * scaleFactor
-        let minZ = -volHalfDepth + scaledCurveDepth + safePadding
+        // Exact forward bulge of the curved mesh. Its vertices span z ∈ [0, sagitta]
+        // (edges bow toward the viewer): sagitta = R(1 - cos(angle/2)) with
+        // R = width/angle. The `curveDepth` estimate passed in scales with the screen
+        // *height*, which badly underestimates the bulge for wide aspect ratios.
+        let curveAngle = CURVED_MAX_ANGLE * max(0.0, min(effectiveCurvature, 2.0))
+        let sagitta: Float = curveAngle < 0.0001
+            ? 0
+            : (CURVED_MAX_WIDTH_METERS / curveAngle) * (1 - cos(curveAngle / 2))
+        let scaledSagitta = sagitta * scaleFactor
+        // Matches the zCorrection applied at placement time (screen.position).
+        let zCorrection = curveDepth * scaleFactor * 0.5
+        // The control panel is a child of the screen 0.22 (screen-local) in front of
+        // its origin. Whatever protrudes furthest — panel or curved edges — must stay
+        // inside the volume's front face: visionOS clips anything outside the bounds,
+        // and a clipped control panel is a soft-lock, since the only UI that could
+        // pull the screen back is itself invisible.
+        let frontExtent = max(0.22 * scaleFactor, scaledSagitta)
+        let maxZ = volHalfDepth - safePadding - zCorrection - frontExtent
+        let minZ = -volHalfDepth + safePadding - zCorrection
         let safeMaxZ = max(minZ, maxZ)
         let newZLimits: ClosedRange<Float> = minZ...safeMaxZ
         // Use epsilon comparison to avoid @State writes on every RealityView.update call
