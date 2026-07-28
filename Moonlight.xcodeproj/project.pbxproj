@@ -84,6 +84,7 @@
 		B1EDB13D2D4D95BF00EB1839 /* StreamConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB13B2D4D95BF00EB1839 /* StreamConfiguration.swift */; };
 		B1EDB13E2D4D95BF00EB1839 /* StreamConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1EDB13B2D4D95BF00EB1839 /* StreamConfiguration.swift */; };
 		C2769339D74B457E85143624 /* AV1Parser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5924693D218D4AB18BB554DD /* AV1Parser.swift */; };
+		B2936465EFD347E4BA5FFD28 /* SystemVideoRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D08CA15DC719441F8D881F87 /* SystemVideoRenderer.swift */; };
 		DC1F5A07206436B20037755F /* ConnectionHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = DC1F5A06206436B20037755F /* ConnectionHelper.m */; };
 		E77582CD2D53F3EB00948545 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = E77582CC2D53F3E500948545 /* Shaders.metal */; };
 		E77582CF2D54020700948545 /* CVMetalHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = E77582CE2D54020300948545 /* CVMetalHelpers.swift */; };
@@ -346,6 +347,7 @@
 		3EBD94A62F9D41190016D2AF /* SharePlayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePlayManager.swift; sourceTree = "<group>"; };
 		566E9D2B2770B23A00EF7BFE /* Moonlight v1.7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.7.xcdatamodel"; sourceTree = "<group>"; };
 		5924693D218D4AB18BB554DD /* AV1Parser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AV1Parser.swift; sourceTree = "<group>"; };
+		D08CA15DC719441F8D881F87 /* SystemVideoRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemVideoRenderer.swift; sourceTree = "<group>"; };
 		6581B5F02D5434100022400F /* VideoTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTypes.swift; sourceTree = "<group>"; };
 		659789EB2D55A93A00B88B25 /* SBSMaterial.usda */ = {isa = PBXFileReference; lastKnownFileType = text; path = SBSMaterial.usda; sourceTree = "<group>"; };
 		693B3A9A218638CD00982F7B /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
@@ -792,6 +794,7 @@
 				3E8100A52ED566510011CB9F /* AV1Helper.h */,
 				3E8100A62ED5666B0011CB9F /* AV1Helper.m */,
 				5924693D218D4AB18BB554DD /* AV1Parser.swift */,
+				D08CA15DC719441F8D881F87 /* SystemVideoRenderer.swift */,
 				F77B58B12B5EFC9000482BD5 /* ComputerView.swift */,
 				3E4F94682DC2E2D6006CF0C1 /* ComputerViewWrapper.swift */,
 				04F5ECAE2EE37A7F009FF87D /* ControlPanel */,
@@ -1455,6 +1458,7 @@
 				F7A119172B5DDF73001E8686 /* WakeOnLanManager.m in Sources */,
 				B1EDB1352D4D95A700EB1839 /* StreamControls.swift in Sources */,
 				C2769339D74B457E85143624 /* AV1Parser.swift in Sources */,
+				B2936465EFD347E4BA5FFD28 /* SystemVideoRenderer.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* StreamViewStubs.swift in Sources */,
 				B1EDB1362D4D95A700EB1839 /* DrawableVideoDecoder.swift in Sources */,
 				3E86FC1D2D4FFDF20016BB8E /* UpdatesView.swift in Sources */,

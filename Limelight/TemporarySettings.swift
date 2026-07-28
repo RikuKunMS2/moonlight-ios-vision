@@ -55,6 +55,9 @@ public class TemporarySettings: NSObject {
     @objc public var realitykitScreenCornerRadius: Float = 0.018
     @objc public var realitykitImmersiveMode: Bool = false
     @objc public var reactiveLightingEnabled: Bool = false
+    /// RealityKit mode: render through AVSampleBufferVideoRenderer + VideoMaterial (system pipeline, true HDR/EDR)
+    /// instead of the Metal texture path (custom shaders, but compositor-clamped to ~1.2x SDR).
+    @objc public var useSystemVideoRenderer: Bool = true
 
     @objc public var gazeTouchMode = false
     @objc public var gazeCursorOffsetX: Int = 0
@@ -110,6 +113,7 @@ public class TemporarySettings: NSObject {
         self.dimPassthrough = false
         self.macVirtualDisplayExperimental = false
         self.reactiveLightingEnabled = false
+        self.useSystemVideoRenderer = true
         
         // HDR defaults: 1.0 = neutral (correct for shader)
         self.brightness = 1.0
@@ -201,6 +205,7 @@ public class TemporarySettings: NSObject {
             
             self.realitykitImmersiveMode = UserDefaults.standard.bool(forKey: "realitykitImmersiveMode")
             self.reactiveLightingEnabled = UserDefaults.standard.bool(forKey: "reactiveLightingEnabled")
+            self.useSystemVideoRenderer = UserDefaults.standard.object(forKey: "useSystemVideoRenderer") as? Bool ?? true
             self.macVirtualDisplayExperimental = UserDefaults.standard.bool(forKey: "macVirtualDisplayExperimental")
             
             // --- HDR / COLOR LOADING ---
@@ -234,6 +239,7 @@ public class TemporarySettings: NSObject {
     @objc public func save() {
         UserDefaults.standard.set(self.realitykitImmersiveMode, forKey: "realitykitImmersiveMode")
         UserDefaults.standard.set(self.reactiveLightingEnabled, forKey: "reactiveLightingEnabled")
+        UserDefaults.standard.set(self.useSystemVideoRenderer, forKey: "useSystemVideoRenderer")
         UserDefaults.standard.set(self.macVirtualDisplayExperimental, forKey: "macVirtualDisplayExperimental")
         UserDefaults.standard.set(self.autoResumeStreamOnReopen, forKey: "autoResumeStreamOnReopen")
         UserDefaults.standard.set(self.fpsMouseCapture, forKey: "fpsMouseCapture")
@@ -342,6 +348,7 @@ public class TemporarySettings: NSObject {
         self.realitykitScreenCornerRadius = 0.018
         self.realitykitImmersiveMode = false
         self.reactiveLightingEnabled = false
+        self.useSystemVideoRenderer = true
         self.macVirtualDisplayExperimental = false
         
         // Stream settings

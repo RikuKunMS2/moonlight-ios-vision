@@ -134,6 +134,12 @@ struct _RealityKitStreamView: View {
     @State private var volumeZLimits: ClosedRange<Float> = -0.5...0.5
     
     @State private var streamMan: StreamManager?
+    /// Non-nil when the stream renders through the system media pipeline
+    /// (AVSampleBufferVideoRenderer + VideoMaterial) instead of the Metal texture path.
+    @State private var systemRenderer: SystemVideoRenderer?
+    /// Created once per stream: an AVSampleBufferVideoRenderer feeds a single output,
+    /// so instantiating a second VideoMaterial for it steals the first one's video.
+    @State private var systemVideoMaterial: VideoMaterial?
     @State private var streamOpQueue = OperationQueue()
     @State private var controllerSupport: ControllerSupport?
     @StateObject var connectionCallbacks: ObservableConnectionManager = .init()
@@ -1781,6 +1787,22 @@ struct _RealityKitStreamView: View {
     }
     
     private func updateScreenMaterial() {
+        // System renderer: the mesh shows the system pipeline's video directly.
+        // Ambilight has no readable texture on this path, keep its planes hidden.
+        if let systemRenderer {
+            if systemVideoMaterial == nil {
+                systemVideoMaterial = VideoMaterial(videoRenderer: systemRenderer.sampleRenderer)
+            }
+            print("[StreamView] Binding VideoMaterial (screen.model=\(screen.model != nil ? "present" : "NIL"), parent=\(screen.parent != nil ? "attached" : "DETACHED"))")
+            if let systemVideoMaterial {
+                screen.model?.materials = [systemVideoMaterial]
+            }
+            for ambPlane in ambilightLayers {
+                ambPlane.components.set(OpacityComponent(opacity: 0.0))
+            }
+            return
+        }
+
         let mat = makeVideoUnlitMaterial(self.texture)
         if videoMode == .sideBySide3D {
             if var sMat = surfaceMaterial {
@@ -2402,11 +2424,43 @@ struct _RealityKitStreamView: View {
                 if !self.firstFrameReceived { LiRequestIdrFrame() }
             }
             
+            // System renderer path: decode + tone map through the system media pipeline
+            // (AVSampleBufferVideoRenderer → VideoMaterial) for true HDR/EDR output.
+            // Side-by-side 3D needs the Metal shader, so it forces the Metal path.
+            if self.viewModel.streamSettings.useSystemVideoRenderer && self.videoMode != .sideBySide3D {
+                self.connectionCallbacks.controllerSupport = self.controllerSupport
+                let renderer = SystemVideoRenderer(callbacks: self.connectionCallbacks) {
+                    guard !self.firstFrameReceived else { return }
+                    self.firstFrameReceived = true
+                    self.idrWatchdogTimer1?.invalidate(); self.idrWatchdogTimer1 = nil
+                    self.idrWatchdogTimer2?.invalidate(); self.idrWatchdogTimer2 = nil
+                    // Rebind after the first frame like the Metal path's rebind timer:
+                    // the screen entity may have been (re)built since the initial bind.
+                    self.updateScreenMaterial()
+                    self.controllerSupport?.connectionEstablished()
+                    self.startHideTimer()
+                }
+                self.systemRenderer = renderer
+                // Drop any material cached from a previous stream: it feeds the old
+                // renderer's sink and would leave the new stream black.
+                self.systemVideoMaterial = nil
+                self.updateScreenMaterial()
+                self.streamMan = StreamManager(
+                    config: self.streamConfig,
+                    rendererProvider: { renderer },
+                    connectionCallbacks: self.connectionCallbacks
+                )
+                if let streamMan = self.streamMan {
+                    self.streamOpQueue.addOperation(streamMan)
+                }
+                return
+            }
+
             self.recreateStreamTexture()
-            
+
             // Set controller support reference for rumble forwarding
             self.connectionCallbacks.controllerSupport = self.controllerSupport
-            
+
             // Capture texture locally for thread-safe background access
             let localTexture = self.texture
             
@@ -2709,7 +2763,9 @@ struct _RealityKitStreamView: View {
         postFirstFrameRebindTimer?.invalidate(); postFirstFrameRebindTimer = nil
         firstFrameReceived = false
         ambilightTexture = nil
-        
+        systemRenderer = nil
+        systemVideoMaterial = nil
+
         controllerSupport?.cleanup()
         controllerSupport = nil
         

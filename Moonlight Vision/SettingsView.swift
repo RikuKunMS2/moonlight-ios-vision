@@ -311,6 +311,20 @@ struct SettingsView: View {
                         Label(viewModel.localized("dim_passthrough"), systemImage: "moon.fill")
                     }
                     .onChange(of: settings.dimPassthrough) { _, _ in settings.save() }
+
+                    Toggle(isOn: $settings.useSystemVideoRenderer) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("System video renderer (true HDR)")
+                                Text("Full HDR brightness via the system media pipeline. Disables Ambilight, color grading and 3D modes.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "sun.max.fill")
+                        }
+                    }
+                    .onChange(of: settings.useSystemVideoRenderer) { _, _ in settings.save() }
                 }
                 
                 Section(header: Label(viewModel.localized("input_audio_settings"), systemImage: "gamecontroller")) {
