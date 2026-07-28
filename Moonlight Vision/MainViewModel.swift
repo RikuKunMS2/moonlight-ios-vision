@@ -734,7 +734,11 @@ class MainViewModel: NSObject, ObservableObject, DiscoveryCallback, PairCallback
                     print("stream - Adding H265_MAIN10 support for HDR.")
                 }
             }
-            if av1_supported && streamSettings.enableHdr && hdr10_supported {
+            // Respect the user's codec preference: only offer AV1 Main10 when AV1 was already
+            // in the offered formats. Otherwise "preferred codec: HEVC" + HDR still advertises
+            // AV1_MAIN10 and the host picks AV1 anyway.
+            if av1_supported && streamSettings.enableHdr && hdr10_supported
+                && (config.supportedVideoFormats & AV1_MAIN8) != 0 {
                 config.supportedVideoFormats |= AV1_MAIN10
                 print("stream - Adding AV1_MAIN10 support for HDR.")
             }
