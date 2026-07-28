@@ -82,7 +82,9 @@ struct MoonlightVisionApp: SwiftUI.App {
                      }
                 }
                 .windowStyle(.volumetric)
-                .defaultSize(width: 1.2, height: 1.2, depth: 1.2, in: .meters)
+                // The screen is scaled to fill the volume's width, so this is
+                // effectively the maximum screen size in volume mode.
+                .defaultSize(width: 2.0, height: 1.5, depth: 1.2, in: .meters)
 
                 // 2. Unbounded Immersive Space (New)
                 ImmersiveSpace(id: "realitykitImmersiveSpace", for: StreamConfiguration.self) { streamConfig in
