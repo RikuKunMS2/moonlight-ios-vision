@@ -267,6 +267,14 @@ class DrawableVideoDecoder: NSObject, AnyVideoDecoderRenderer {
             isPQ = looksLikeBt2020TenBitStream
         }
 
+        // Safety net for streams whose transfer function is mis-tagged as SDR upstream of us.
+        // Gated on the *negotiated* 10-bit format, so 8-bit SDR streams in HDR mode still take
+        // the SDR path and never get decoded through pqInv().
+        if !isPQ && hdrEnabled && looksLikeBt2020TenBitStream
+            && (videoFormat & VIDEO_FORMAT_MASK_10BIT) != 0 {
+            isPQ = true
+        }
+
         var primariesType: UInt32 = 0 // 0=709, 1=2020, 2=SMPTE-C(601)
         if let primVal = CVBufferGetAttachment(imageBuffer, kCVImageBufferColorPrimariesKey, nil)?.takeUnretainedValue(),
            CFGetTypeID(primVal) == CFStringGetTypeID() {
