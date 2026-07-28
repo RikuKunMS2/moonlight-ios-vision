@@ -149,6 +149,11 @@ public func CMVideoFormatDescriptionCreateFromAV1SequenceHeaderOBUWithAV1C(_ obu
         TC_BT_709 : kCVImageBufferTransferFunction_ITU_R_709_2,
         TC_BT_2020_10_BIT : kCVImageBufferTransferFunction_ITU_R_2020,
         TC_BT_2020_12_BIT : kCVImageBufferTransferFunction_ITU_R_2020,
+        // HDR transfer functions. Without these, a PQ (ST.2084) AV1 stream falls through to the
+        // ITU_R_709_2 default below, VideoToolbox tags the decoded buffers as SDR, and
+        // DrawableVideoDecoder never sets isPQ — so the PQ curve is never applied and HDR is lost.
+        TC_SMPTE_2084 : kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ,
+        TC_HLG : kCVImageBufferTransferFunction_ITU_R_2100_HLG,
         TC_BT_601 : kCVImageBufferTransferFunction_sRGB,
         TC_SRGB : kCVImageBufferTransferFunction_sRGB,
     ]
