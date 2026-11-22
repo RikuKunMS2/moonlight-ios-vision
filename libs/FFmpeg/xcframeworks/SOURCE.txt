@@ -1,0 +1,7 @@
+FFmpeg static libraries for visionOS (device and simulator).
+
+Source:   https://github.com/FFmpeg/FFmpeg/archive/3f890fbfd9014843c51408c8f7ab3ba4aef7d354.tar.gz
+SHA-256:  4e30c1ffa93b7bfe329032877d969d4811a5ac4c872125d334262f5158048899
+Commit:   3f890fbfd9014843c51408c8f7ab3ba4aef7d354 (libavcodec 60.32.102)
+Licence:  LGPL version 2.1 or later
+Built by: BuildScripts/build-ffmpeg-visionos.sh

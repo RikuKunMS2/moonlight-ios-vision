@@ -147,17 +147,17 @@
 		F7A119432B5DDF73001E8686 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB290CF319B2C406004C83CF /* CoreGraphics.framework */; };
 		F7A119442B5DDF73001E8686 /* CoreData.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB290CF719B2C406004C83CF /* CoreData.framework */; };
 		F7A119452B5DDF73001E8686 /* CoreMotion.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BEC2791281100E43572 /* CoreMotion.framework */; };
-		F7A119462B5DDF73001E8686 /* libavformat.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98882A052AF60F5300C5A11C /* libavformat.a */; };
+		F7A119462B5DDF73001E8686 /* libavformat.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = FF5A1C0E2F0A000100C0FFEE /* libavformat.xcframework */; };
 		F7A119482B5DDF73001E8686 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB290CF119B2C406004C83CF /* Foundation.framework */; };
 		F7A119492B5DDF73001E8686 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB4679001A57048000377732 /* CoreFoundation.framework */; };
 		F7A1194A2B5DDF73001E8686 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BE82791275D00E43572 /* libSDL2.a */; };
-		F7A1194B2B5DDF73001E8686 /* libavcodec.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98882A032AF60F5300C5A11C /* libavcodec.a */; };
+		F7A1194B2B5DDF73001E8686 /* libavcodec.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = FF5A1C0D2F0A000100C0FFEE /* libavcodec.xcframework */; };
 		F7A1194E2B5DDF73001E8686 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = FB290CFC19B2C406004C83CF /* InfoPlist.strings */; };
 		F7A119502B5DDF73001E8686 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FB290D0819B2C406004C83CF /* Images.xcassets */; };
 		F7A1195D2B5DE1FD001E8686 /* MainContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A1195C2B5DE1FD001E8686 /* MainContentView.swift */; };
 		F7A1195E2B5DE1FD001E8687 /* LanguagePromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A1195F2B5DE1FD001E8687 /* LanguagePromptView.swift */; };
 		F7A119622B5DE1FD001E8689 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = F7A119662B5DE1FD001E868B /* Localizable.strings */; };
-		F7A119F62B5DE71C001E8686 /* libavutil.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98882A042AF60F5300C5A11C /* libavutil.a */; };
+		F7A119F62B5DE71C001E8686 /* libavutil.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = FF5A1C0F2F0A000100C0FFEE /* libavutil.xcframework */; };
 		F7A119F72B5DE725001E8686 /* libopus.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FB8946EA19F6AFB800339C8A /* libopus.a */; };
 		F7A11A1E2B5DF457001E8686 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F7A11A1D2B5DF457001E8686 /* UIKit.framework */; };
 		F7A11A202B5DF46B001E8686 /* RealityKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F7A11A1F2B5DF46B001E8686 /* RealityKit.framework */; };
@@ -372,6 +372,9 @@
 		98882A032AF60F5300C5A11C /* libavcodec.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavcodec.a; path = libs/FFmpeg/lib/iOS/libavcodec.a; sourceTree = "<group>"; };
 		98882A042AF60F5300C5A11C /* libavutil.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavutil.a; path = libs/FFmpeg/lib/iOS/libavutil.a; sourceTree = "<group>"; };
 		98882A052AF60F5300C5A11C /* libavformat.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavformat.a; path = libs/FFmpeg/lib/iOS/libavformat.a; sourceTree = "<group>"; };
+		FF5A1C0D2F0A000100C0FFEE /* libavcodec.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavcodec.xcframework; path = libs/FFmpeg/xcframeworks/libavcodec.xcframework; sourceTree = "<group>"; };
+		FF5A1C0E2F0A000100C0FFEE /* libavformat.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavformat.xcframework; path = libs/FFmpeg/xcframeworks/libavformat.xcframework; sourceTree = "<group>"; };
+		FF5A1C0F2F0A000100C0FFEE /* libavutil.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavutil.xcframework; path = libs/FFmpeg/xcframeworks/libavutil.xcframework; sourceTree = "<group>"; };
 		98882A092AF60F9000C5A11C /* libavutil.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavutil.a; path = libs/FFmpeg/lib/tvOS/libavutil.a; sourceTree = "<group>"; };
 		98882A0A2AF60F9000C5A11C /* libavcodec.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavcodec.a; path = libs/FFmpeg/lib/tvOS/libavcodec.a; sourceTree = "<group>"; };
 		98882A0B2AF60F9000C5A11C /* libavformat.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavformat.a; path = libs/FFmpeg/lib/tvOS/libavformat.a; sourceTree = "<group>"; };
@@ -618,19 +621,19 @@
 				F7A119402B5DDF73001E8686 /* libmoonlight-common.a in Frameworks */,
 				F7A119432B5DDF73001E8686 /* CoreGraphics.framework in Frameworks */,
 				F7A119442B5DDF73001E8686 /* CoreData.framework in Frameworks */,
-				F7A119F62B5DE71C001E8686 /* libavutil.a in Frameworks */,
+				F7A119F62B5DE71C001E8686 /* libavutil.xcframework in Frameworks */,
 				F718014F2B657DB600A9336B /* OrderedCollections in Frameworks */,
 				04C67C1F2EDE002500B41E6A /* RealityKitContent in Frameworks */,
 				F7A11A1E2B5DF457001E8686 /* UIKit.framework in Frameworks */,
 				F7A119452B5DDF73001E8686 /* CoreMotion.framework in Frameworks */,
-				F7A119462B5DDF73001E8686 /* libavformat.a in Frameworks */,
+				F7A119462B5DDF73001E8686 /* libavformat.xcframework in Frameworks */,
 				F7A11A202B5DF46B001E8686 /* RealityKit.framework in Frameworks */,
 				F7A119F72B5DE725001E8686 /* libopus.a in Frameworks */,
 				3E9440F62D4EB9ED0047E0C2 /* OpenSSL in Frameworks */,
 				F7A119482B5DDF73001E8686 /* Foundation.framework in Frameworks */,
 				F7A119492B5DDF73001E8686 /* CoreFoundation.framework in Frameworks */,
 				F7A1194A2B5DDF73001E8686 /* libSDL2.a in Frameworks */,
-				F7A1194B2B5DDF73001E8686 /* libavcodec.a in Frameworks */,
+				F7A1194B2B5DDF73001E8686 /* libavcodec.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -884,6 +887,9 @@
 				98882A0A2AF60F9000C5A11C /* libavcodec.a */,
 				98882A0B2AF60F9000C5A11C /* libavformat.a */,
 				98882A042AF60F5300C5A11C /* libavutil.a */,
+				FF5A1C0D2F0A000100C0FFEE /* libavcodec.xcframework */,
+				FF5A1C0E2F0A000100C0FFEE /* libavformat.xcframework */,
+				FF5A1C0F2F0A000100C0FFEE /* libavutil.xcframework */,
 				98882A092AF60F9000C5A11C /* libavutil.a */,
 				98B9CE6C27B2144B00B473C4 /* AVKit.framework */,
 				98181BEC2791281100E43572 /* CoreMotion.framework */,
@@ -1722,7 +1728,6 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/libs/opus/lib",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/visionOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS",
 					"$(PROJECT_DIR)/libs/opus/lib/visionOS",
 				);
@@ -1781,7 +1786,6 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(PROJECT_DIR)/libs/opus/lib",
-					"$(PROJECT_DIR)/libs/FFmpeg/lib/visionOS",
 					"$(PROJECT_DIR)/libs/SDL2/lib/visionOS",
 					"$(PROJECT_DIR)/libs/opus/lib/visionOS",
 				);
